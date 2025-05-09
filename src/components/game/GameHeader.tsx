@@ -41,7 +41,6 @@ export default function GameHeader({
 }: GameHeaderProps) {
   return (
     <div className="w-full">
-      {/* Top header with player stats */}
       <header className={`text-white p-4 shadow-md transition-colors duration-700 ${
         timeOfDay === 'morning' ? 'bg-gradient-to-r from-amber-500 to-amber-600' :
         timeOfDay === 'day' ? 'bg-gradient-to-r from-emerald-600 to-teal-700' :
@@ -107,7 +106,6 @@ export default function GameHeader({
         </div>
       </header>
       
-      {/* Sub header with player level and buttons */}
       <div className="container mx-auto px-4 py-3 flex items-center justify-between bg-white bg-opacity-10 backdrop-filter backdrop-blur-lg border-b border-white border-opacity-10">
         <div className="flex items-center">
           <motion.div 

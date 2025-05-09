@@ -10,6 +10,8 @@ export interface Building {
   residentCapacity?: number;
   isOccupied?: boolean;
   occupantId?: number;
+  levelRequired?: number;
+  unlocked?: boolean;
 }
 
 export interface UnlockCondition {
