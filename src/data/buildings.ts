@@ -3,52 +3,52 @@ import type { Building } from "../types/game";
 export const buildings: Building[] = [
   { 
     id: 'house', 
-    name: 'House', 
+    name: 'house', 
     icon: 'Home', 
     cost: 200, 
     happiness: 10, 
     income: 25,
-    color: '#4ade80' 
+    color: '#10b981' 
   },
   { 
     id: 'park', 
-    name: 'Park', 
+    name: 'park', 
     icon: 'Smile', 
     cost: 150, 
     happiness: 15, 
     income: 10,
-    color: '#22c55e' 
+    color: '#059669' 
   },
   { 
     id: 'cafe', 
-    name: 'Café', 
+    name: 'café', 
     icon: 'Coffee', 
     cost: 300, 
     happiness: 12, 
     income: 40,
-    color: '#f59e0b' 
+    color: '#d97706' 
   },
   { 
     id: 'library', 
-    name: 'Library', 
+    name: 'library', 
     icon: 'Book', 
     cost: 350, 
     happiness: 8, 
     income: 15,
-    color: '#8b5cf6' 
+    color: '#7c3aed' 
   },
   { 
     id: 'music_venue', 
-    name: 'Music Venue', 
+    name: 'music venue', 
     icon: 'Music', 
     cost: 400, 
     happiness: 20, 
     income: 50,
-    color: '#ec4899' 
+    color: '#db2777' 
   },
   { 
     id: 'charging_station', 
-    name: 'EV Charging', 
+    name: 'ev charging', 
     icon: 'Zap', 
     cost: 250, 
     happiness: 5, 
