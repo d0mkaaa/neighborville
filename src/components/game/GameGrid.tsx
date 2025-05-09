@@ -1,5 +1,5 @@
 import type { Building } from "../../types/game";
-import { Plus, Trash2, Home, Smile, Coffee, Book, Music, Zap, Lock } from "lucide-react";
+import { Plus, Trash2, Home, Smile, Coffee, Book, Music, Zap, Lock, Sun } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 type GameGridProps = {
@@ -29,6 +29,7 @@ export default function GameGrid({
       case 'Book': return <Book size={size} />;
       case 'Music': return <Music size={size} />;
       case 'Zap': return <Zap size={size} />;
+      case 'Sun': return <Sun size={size} />;
       default: return null;
     }
   };
@@ -46,7 +47,7 @@ export default function GameGrid({
 
   return (
     <div className="bg-white rounded-xl shadow-md p-4">
-      <h2 className="font-medium mb-4 lowercase text-emerald-800">your neighborhood</h2>
+      <h2 className="font-medium mb-4 lowercase text-gray-800">your neighborhood</h2>
       
       <div 
         className="grid gap-2"
@@ -78,6 +79,10 @@ export default function GameGrid({
             );
           }
           
+          const isOccupiedHouse = grid[index] && 
+                                (grid[index]?.id === 'house' || grid[index]?.id === 'apartment') && 
+                                grid[index]?.isOccupied;
+          
           return (
             <motion.div
               key={index}
@@ -103,6 +108,15 @@ export default function GameGrid({
                 >
                   {getIcon(grid[index].icon)}
                   <span className="text-xs mt-1 lowercase font-medium">{grid[index].name}</span>
+                  
+                  {isOccupiedHouse && (
+                    <motion.div 
+                      className="absolute top-1 right-1 bg-white bg-opacity-90 rounded-full p-0.5"
+                      whileHover={{ scale: 1.2 }}
+                    >
+                      <div className="text-xs">👤</div>
+                    </motion.div>
+                  )}
                 </motion.div>
               ) : (
                 selectedBuilding && (
@@ -139,10 +153,19 @@ export default function GameGrid({
                   {grid[selectedTile]?.icon && getIcon(grid[selectedTile]!.icon, 16)}
                 </motion.div>
                 <div>
-                  <div className="font-medium lowercase text-emerald-800">{grid[selectedTile]?.name}</div>
-                  <div className="text-xs text-gray-500 lowercase">
-                    value: {Math.floor((grid[selectedTile]?.cost || 0) * 0.5)} coins | 
-                    happiness: +{grid[selectedTile]?.happiness}
+                  <div className="font-medium lowercase text-gray-800">{grid[selectedTile]?.name}</div>
+                  <div className="text-xs text-gray-700 lowercase flex flex-wrap gap-x-2">
+                    <span>value: {Math.floor((grid[selectedTile]?.cost || 0) * 0.5)} coins</span>
+                    <span>happiness: +{grid[selectedTile]?.happiness}</span>
+                    <span>income: {grid[selectedTile]?.income} coins/day</span>
+                    {grid[selectedTile]?.energyUsage !== undefined && (
+                      <span>energy: {grid[selectedTile]?.energyUsage > 0 ? '+' : ''}{grid[selectedTile]?.energyUsage} units</span>
+                    )}
+                    {(grid[selectedTile]?.id === 'house' || grid[selectedTile]?.id === 'apartment') && (
+                      <span>
+                        {grid[selectedTile]?.isOccupied ? 'occupied' : 'vacant'}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>

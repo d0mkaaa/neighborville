@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Sun, Moon, Sunset } from "lucide-react";
+import { Sun, Moon, Sunrise, Sunset } from "lucide-react";
 
 type TimeOfDay = 'morning' | 'day' | 'evening' | 'night';
 
@@ -48,22 +48,22 @@ export default function DayNightCycle({ day, gameTime, onTimeChange }: DayNightC
   const getSkyColor = () => {
     switch (timeOfDay) {
       case 'morning':
-        return 'linear-gradient(to bottom, #88c8ff, #b8e1fc)';
+        return 'linear-gradient(to bottom, #fde68a, #fef3c7)';
       case 'day':
-        return 'linear-gradient(to bottom, #4a9ff5, #7cc0ff)';
+        return 'linear-gradient(to bottom, #93c5fd, #bfdbfe)';
       case 'evening':
-        return 'linear-gradient(to bottom, #ff7e5f, #feb47b)';
+        return 'linear-gradient(to bottom, #f87171, #fca5a5)';
       case 'night':
-        return 'linear-gradient(to bottom, #0f2027, #203a43)';
+        return 'linear-gradient(to bottom, #312e81, #4338ca)';
     }
   };
   
   const getIcon = () => {
     switch (timeOfDay) {
       case 'morning':
-        return <Sunset size={20} className="text-yellow-400" />;
+        return <Sunrise size={20} className="text-amber-500" />;
       case 'day':
-        return <Sun size={20} className="text-yellow-500" />;
+        return <Sun size={20} className="text-amber-500" />;
       case 'evening':
         return <Sunset size={20} className="text-orange-500" />;
       case 'night':
@@ -86,6 +86,19 @@ export default function DayNightCycle({ day, gameTime, onTimeChange }: DayNightC
       return `${day}rd`;
     } else {
       return `${day}th`;
+    }
+  };
+  
+  const getTimeEffects = () => {
+    switch (timeOfDay) {
+      case 'morning':
+        return "Morning: Cafés earn more income";
+      case 'day':
+        return "Day: Parks increase happiness, solar panels generate more energy";
+      case 'evening':
+        return "Evening: Music venues earn more income, libraries boost happiness";
+      case 'night':
+        return "Night: Houses provide extra happiness";
     }
   };
   
@@ -115,11 +128,16 @@ export default function DayNightCycle({ day, gameTime, onTimeChange }: DayNightC
             initial={{ opacity: 0, y: 5 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 5 }}
-            className="absolute top-full mt-1 left-0 right-0 bg-white rounded-md p-2 shadow-lg text-xs text-gray-700 z-10"
+            className="absolute top-full mt-1 left-0 right-0 bg-white rounded-md p-2 shadow-lg text-xs text-gray-700 z-10 min-w-48"
           >
             <div className="font-medium">day {getFormattedDay()}</div>
-            <div className="text-gray-500">{timeOfDay} time</div>
-            <div className="mt-1 text-gray-500 text-xs">
+            <div className="text-gray-900">{timeOfDay} time</div>
+            
+            <div className="mt-1 text-gray-700 text-xs border-t border-gray-100 pt-1">
+              {getTimeEffects()}
+            </div>
+            
+            <div className="mt-1 text-emerald-600 text-xs">
               {autoTimeProgress ? "auto time advancing" : "click to toggle auto time"}
             </div>
           </motion.div>

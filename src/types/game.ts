@@ -6,6 +6,10 @@ export interface Building {
   happiness: number;
   income: number;
   color: string;
+  energyUsage?: number;
+  residentCapacity?: number;
+  isOccupied?: boolean;
+  occupantId?: number;
 }
 
 export interface UnlockCondition {
@@ -26,6 +30,9 @@ export interface Neighbor {
   dislikes: string;
   unlocked: boolean;
   unlockCondition: UnlockCondition | null;
+  hasHome?: boolean;
+  houseIndex?: number;
+  dailyRent?: number;
 }
 
 export interface EventOption {
@@ -42,6 +49,7 @@ export interface GameEvent {
   options: EventOption[];
   weight?: number;
   minimumDay?: number;
+  timeOfDay?: TimeOfDay;
 }
 
 export interface ScheduledEvent {
@@ -70,6 +78,24 @@ export interface RecentEvent {
   day: number;
 }
 
+export interface Bill {
+  id: string;
+  name: string;
+  amount: number;
+  dayDue: number;
+  isPaid: boolean;
+  icon: string;
+}
+
+export type TimeOfDay = 'morning' | 'day' | 'evening' | 'night';
+
+export interface TimeBasedBonus {
+  buildingId: string;
+  timeOfDay: TimeOfDay;
+  incomeMultiplier?: number;
+  happinessMultiplier?: number;
+}
+
 export interface GameProgress {
   playerName: string;
   coins: number;
@@ -84,6 +110,10 @@ export interface GameProgress {
   events: ScheduledEvent[];
   unlockedNeighborIds?: number[];
   gameTime?: number;
-  timeOfDay?: 'morning' | 'day' | 'evening' | 'night';
+  timeOfDay?: TimeOfDay;
   recentEvents?: RecentEvent[];
+  bills?: Bill[];
+  energyRate?: number;
+  totalEnergyUsage?: number;
+  lastBillDay?: number;
 }

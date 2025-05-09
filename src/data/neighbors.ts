@@ -9,7 +9,9 @@ export const neighborProfiles: Neighbor[] = [
     likes: 'parks', 
     dislikes: 'noise',
     unlocked: true,
-    unlockCondition: null
+    unlockCondition: null,
+    hasHome: false,
+    dailyRent: 25
   },
   { 
     id: 2, 
@@ -19,7 +21,9 @@ export const neighborProfiles: Neighbor[] = [
     likes: 'music venues', 
     dislikes: 'traffic',
     unlocked: true,
-    unlockCondition: null
+    unlockCondition: null,
+    hasHome: false,
+    dailyRent: 30
   },
   { 
     id: 3, 
@@ -29,7 +33,9 @@ export const neighborProfiles: Neighbor[] = [
     likes: 'libraries', 
     dislikes: 'pollution',
     unlocked: true,
-    unlockCondition: null
+    unlockCondition: null,
+    hasHome: false,
+    dailyRent: 20
   },
   { 
     id: 4, 
@@ -44,7 +50,9 @@ export const neighborProfiles: Neighbor[] = [
       buildingId: 'charging_station',
       count: 2,
       description: 'build 2 ev charging stations'
-    }
+    },
+    hasHome: false,
+    dailyRent: 35
   },
   { 
     id: 5, 
@@ -59,7 +67,9 @@ export const neighborProfiles: Neighbor[] = [
       buildingId: 'cafe',
       count: 3,
       description: 'build 3 cafés'
-    }
+    },
+    hasHome: false,
+    dailyRent: 28
   },
   { 
     id: 6, 
@@ -73,7 +83,9 @@ export const neighborProfiles: Neighbor[] = [
       type: 'level',
       level: 5,
       description: 'reach level 5'
-    }
+    },
+    hasHome: false,
+    dailyRent: 40
   },
   { 
     id: 7, 
@@ -87,7 +99,9 @@ export const neighborProfiles: Neighbor[] = [
       type: 'happiness',
       level: 90,
       description: 'reach 90% happiness'
-    }
+    },
+    hasHome: false,
+    dailyRent: 45
   },
   { 
     id: 8, 
@@ -101,6 +115,8 @@ export const neighborProfiles: Neighbor[] = [
       type: 'day',
       day: 15,
       description: 'reach day 15'
-    }
+    },
+    hasHome: false,
+    dailyRent: 32
   }
 ];

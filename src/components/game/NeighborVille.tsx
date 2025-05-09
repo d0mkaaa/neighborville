@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { User, Save, Award } from "lucide-react";
+import { User, Save, Award, AlertCircle } from "lucide-react";
 import { buildings } from "../../data/buildings";
 import { neighborProfiles } from "../../data/neighbors";
 import { possibleEvents, getRandomEvent } from "../../data/events";
 import { ACHIEVEMENTS } from "../../data/achievements";
+import { timeBasedBonuses } from "../../data/timeBonus";
 import type { 
   Building, GameEvent, Neighbor, ScheduledEvent,
-  GameProgress, Achievement, RecentEvent
+  GameProgress, Achievement, RecentEvent, Bill, TimeOfDay, TimeBasedBonus
 } from "../../types/game";
 import type { ExtendedNotification } from "./NotificationSystem";
 import BuildingOption from "./BuildingOption";
@@ -22,9 +23,16 @@ import NeighborUnlockModal from "./NeighborUnlockModal";
 import DayNightCycle from "./DayNightCycle";
 import PlotExpansion from "./PlotExpansion";
 import HappinessAnalytics from "./HappinessAnalytics";
+import EnergyUsagePanel from "./EnergyUsagePanel";
+import BillsPanel from "./BillsPanel";
+import TimeBonus from "./TimeBonus";
+import ResidentAssignment from "./ResidentAssignment";
+import EventModal from "./EventModal";
 
 const generateId = () => Math.random().toString(36).substring(2, 9);
 const SAVE_KEY = "neighborville_save";
+const DEFAULT_ENERGY_RATE = 2;
+const BILL_CYCLE_DAYS = 7;
 
 export default function neighborville() {
   const [loading, setLoading] = useState(true);
@@ -55,10 +63,17 @@ export default function neighborville() {
   const [grid, setGrid] = useState<(Building | null)[]>(Array(64).fill(null)); 
   const [justUnlockedNeighbor, setJustUnlockedNeighbor] = useState<Neighbor | null>(null);
   const [gameTime, setGameTime] = useState<number>(12); 
-  const [timeOfDay, setTimeOfDay] = useState<'morning' | 'day' | 'evening' | 'night'>('day');
+  const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>('day');
   const [recentEvents, setRecentEvents] = useState<RecentEvent[]>([]);
   const [randomEventProbability, setRandomEventProbability] = useState<number>(0.3);
   const [randomEventDay, setRandomEventDay] = useState<number>(0);
+  
+  const [energyRate, setEnergyRate] = useState<number>(DEFAULT_ENERGY_RATE);
+  const [totalEnergyUsage, setTotalEnergyUsage] = useState<number>(0);
+  const [bills, setBills] = useState<Bill[]>([]);
+  const [lastBillDay, setLastBillDay] = useState<number>(0);
+  const [daysUntilBill, setDaysUntilBill] = useState<number>(BILL_CYCLE_DAYS);
+  const [activeBonuses, setActiveBonuses] = useState<TimeBasedBonus[]>([]);
   
   const gridRef = useRef<HTMLDivElement>(null);
   
@@ -96,6 +111,8 @@ export default function neighborville() {
       } else {
         addNotification('welcome to your new neighborhood', 'info');
       }
+      
+      calculateTotalEnergyUsage();
     }
   }, [gameStarted, tutorialCompleted]);
   
@@ -105,12 +122,21 @@ export default function neighborville() {
       if (todayEvent) {
         const eventDetails = possibleEvents.find(e => e.id === todayEvent.eventId);
         if (eventDetails) {
-          setCurrentEvent(eventDetails);
-          setModalOpen(true);
+          if (!eventDetails.timeOfDay || eventDetails.timeOfDay === timeOfDay) {
+            setCurrentEvent(eventDetails);
+            setModalOpen(true);
+          }
         }
       }
     }
-  }, [day, events, gameStarted]);
+  }, [day, events, gameStarted, timeOfDay]);
+
+  useEffect(() => {
+    if (gameStarted) {
+      const currentBonuses = timeBasedBonuses.filter(bonus => bonus.timeOfDay === timeOfDay);
+      setActiveBonuses(currentBonuses);
+    }
+  }, [timeOfDay, gameStarted]);
   
   useEffect(() => {
     if (gameStarted && autoSaveEnabled && day > 1) {
@@ -121,6 +147,20 @@ export default function neighborville() {
       return () => clearTimeout(autoSaveTimer);
     }
   }, [gameStarted, day, autoSaveEnabled]);
+  
+  useEffect(() => {
+    if (gameStarted) {
+      const nextBillDay = lastBillDay + BILL_CYCLE_DAYS;
+      const daysRemaining = nextBillDay - day;
+      setDaysUntilBill(daysRemaining > 0 ? daysRemaining : 0);
+    }
+  }, [day, lastBillDay, gameStarted]);
+
+  useEffect(() => {
+    if (gameStarted) {
+      calculateTotalEnergyUsage();
+    }
+  }, [grid, gameStarted]);
   
   useEffect(() => {
     if (gameStarted) {
@@ -237,6 +277,162 @@ export default function neighborville() {
     }
   }, [grid, happiness, day, coins, level, gameStarted, achievements, neighbors, gridSize]);
   
+  const calculateTotalEnergyUsage = () => {
+    let usage = 0;
+    grid.forEach(building => {
+      if (building && building.energyUsage !== undefined) {
+        usage += building.energyUsage;
+      }
+    });
+    setTotalEnergyUsage(usage);
+  };
+  
+  const generateEnergyBill = () => {
+    const billAmount = totalEnergyUsage * energyRate;
+    
+    if (billAmount <= 0) return;
+    
+    const newBill: Bill = {
+      id: `energy_${generateId()}`,
+      name: 'Energy Bill',
+      amount: billAmount,
+      dayDue: day + 1,
+      isPaid: false,
+      icon: 'Energy'
+    };
+    
+    setBills(prevBills => [...prevBills, newBill]);
+    setLastBillDay(day);
+    addNotification(`Energy bill generated: ${billAmount} coins due tomorrow`, 'warning');
+  };
+  
+  const handlePayBill = (billId: string) => {
+    const billToPay = bills.find(bill => bill.id === billId);
+    
+    if (!billToPay || billToPay.isPaid) return;
+    
+    if (coins >= billToPay.amount) {
+      setCoins(coins - billToPay.amount);
+      
+      setBills(prevBills => 
+        prevBills.map(bill => 
+          bill.id === billId ? { ...bill, isPaid: true } : bill
+        )
+      );
+      
+      addNotification(`Paid ${billToPay.name}: ${billToPay.amount} coins`, 'success');
+    } else {
+      addNotification('Not enough coins to pay this bill', 'error');
+    }
+  };
+  
+  const checkUnpaidBills = () => {
+    const unpaidDueBills = bills.filter(bill => !bill.isPaid && bill.dayDue <= day);
+    
+    if (unpaidDueBills.length > 0) {
+      const totalPenalty = unpaidDueBills.length * 5;
+      setHappiness(Math.max(0, happiness - totalPenalty));
+      
+      addNotification(`Unpaid bills reduced happiness by ${totalPenalty}%`, 'error');
+      
+      const veryOverdueBills = unpaidDueBills.filter(bill => day - bill.dayDue > 3);
+      
+      if (veryOverdueBills.length > 0) {
+        setBills(prevBills => 
+          prevBills.map(bill => 
+            veryOverdueBills.some(overdue => overdue.id === bill.id) 
+              ? { ...bill, isPaid: true } 
+              : bill
+          )
+        );
+        
+        const overduePenalty = veryOverdueBills.length * 5;
+        setHappiness(Math.max(0, happiness - overduePenalty));
+        
+        addNotification('Some bills were seriously overdue and damaged your reputation!', 'error');
+      }
+    }
+  };
+  
+  const handleAssignResident = (neighborId: number, houseIndex: number) => {
+    const updatedNeighbors = neighbors.map(neighbor => {
+      if (neighbor.id === neighborId) {
+        return {
+          ...neighbor,
+          hasHome: true,
+          houseIndex
+        };
+      }
+      return neighbor;
+    });
+    
+    const updatedGrid = [...grid];
+    if (updatedGrid[houseIndex]) {
+      updatedGrid[houseIndex] = {
+        ...updatedGrid[houseIndex]!,
+        isOccupied: true,
+        occupantId: neighborId
+      };
+    }
+    
+    setNeighbors(updatedNeighbors);
+    setGrid(updatedGrid);
+    
+    const neighbor = neighbors.find(n => n.id === neighborId);
+    if (neighbor) {
+      addNotification(`${neighbor.name} moved into house #${houseIndex}`, 'success');
+      setHappiness(Math.min(100, happiness + 5));
+    }
+  };
+  
+  const collectRent = () => {
+    const housedNeighbors = neighbors.filter(n => n.unlocked && n.hasHome);
+    let totalRent = 0;
+    
+    housedNeighbors.forEach(neighbor => {
+      if (neighbor.dailyRent) {
+        totalRent += neighbor.dailyRent;
+      }
+    });
+    
+    if (totalRent > 0) {
+      setCoins(coins + totalRent);
+      addNotification(`Collected ${totalRent} coins in rent from ${housedNeighbors.length} neighbors`, 'success');
+    }
+    
+    return totalRent;
+  };
+  
+  const calculateTimeBonuses = (baseIncome: number) => {
+    let bonusIncome = 0;
+    let bonusHappiness = 0;
+    
+    grid.forEach(building => {
+      if (!building) return;
+      
+      const bonus = activeBonuses.find(b => b.buildingId === building.id);
+      
+      if (bonus) {
+        if (bonus.incomeMultiplier) {
+          const incomeBonus = building.income * (bonus.incomeMultiplier - 1);
+          bonusIncome += incomeBonus;
+        }
+        
+        if (bonus.happinessMultiplier) {
+          const happinessBonus = building.happiness * (bonus.happinessMultiplier - 1);
+          bonusHappiness += happinessBonus;
+        }
+      }
+    });
+    
+    if (bonusHappiness > 0) {
+      setHappiness(Math.min(100, happiness + bonusHappiness));
+      addNotification(`${timeOfDay} time bonus: +${Math.round(bonusHappiness)}% happiness`, 'success');
+    }
+    
+    return Math.round(bonusIncome);
+  };
+  
   const addExperience = (amount: number) => {
     const newExperience = experience + amount;
     const experienceToNextLevel = level * 100;
@@ -289,13 +485,20 @@ export default function neighborville() {
     setGameTime(gameData.gameTime || 12);
     setTimeOfDay(gameData.timeOfDay || 'day');
     setRecentEvents(gameData.recentEvents || []);
+    setBills(gameData.bills || []);
+    setEnergyRate(gameData.energyRate || DEFAULT_ENERGY_RATE);
+    setTotalEnergyUsage(gameData.totalEnergyUsage || 0);
+    setLastBillDay(gameData.lastBillDay || 0);
     
     const updatedNeighbors = neighborProfiles.map(baseNeighbor => {
       const savedNeighbor = gameData.neighbors.find(n => n.id === baseNeighbor.id);
       if (savedNeighbor) {
         return {
           ...baseNeighbor,
-          unlocked: savedNeighbor.unlocked
+          unlocked: savedNeighbor.unlocked,
+          hasHome: savedNeighbor.hasHome || false,
+          houseIndex: savedNeighbor.houseIndex,
+          dailyRent: savedNeighbor.dailyRent || baseNeighbor.dailyRent
         };
       }
       return baseNeighbor;
@@ -349,6 +552,31 @@ export default function neighborville() {
     const buildingToDelete = grid[index];
     if (!buildingToDelete) return;
     
+    if (buildingToDelete.isOccupied && buildingToDelete.occupantId) {
+      const occupantNeighbor = neighbors.find(n => n.id === buildingToDelete.occupantId);
+      
+      if (occupantNeighbor) {
+        const confirmed = window.confirm(`${occupantNeighbor.name} lives here! Are you sure you want to demolish their home?`);
+        
+        if (!confirmed) return;
+        
+        const updatedNeighbors = neighbors.map(neighbor => {
+          if (neighbor.id === buildingToDelete.occupantId) {
+            return {
+              ...neighbor,
+              hasHome: false,
+              houseIndex: undefined
+            };
+          }
+          return neighbor;
+        });
+        
+        setNeighbors(updatedNeighbors);
+        setHappiness(Math.max(0, happiness - 10)); 
+        addNotification(`${occupantNeighbor.name} was evicted! Neighborhood happiness decreased.`, 'warning');
+      }
+    }
+    
     const newGrid = [...grid];
     newGrid[index] = null;
     
@@ -373,35 +601,66 @@ export default function neighborville() {
   };
   
   const handleEndDay = () => {
-    const income = grid.slice(0, gridSize).reduce((total, building) => {
+    checkUnpaidBills();
+    
+    const baseIncome = grid.slice(0, gridSize).reduce((total, building) => {
       if (building) {
         return total + building.income;
       }
       return total;
     }, 0);
+
+    const bonusIncome = calculateTimeBonuses(baseIncome);
     
-    setCoins(coins + income);
+    const rentIncome = collectRent();
+
+    const totalIncome = baseIncome + bonusIncome + rentIncome;
+    
+    setCoins(coins + totalIncome);
     setDay(day + 1);
     addExperience(10);
-    
+
+    if ((day - lastBillDay) >= BILL_CYCLE_DAYS) {
+      generateEnergyBill();
+    }
+
     const newGameTime = (gameTime + 8) % 24;
     setGameTime(newGameTime);
+
+    let newTimeOfDay: TimeOfDay;
+    if (newGameTime >= 5 && newGameTime < 10) {
+      newTimeOfDay = 'morning';
+    } else if (newGameTime >= 10 && newGameTime < 17) {
+      newTimeOfDay = 'day';
+    } else if (newGameTime >= 17 && newGameTime < 21) {
+      newTimeOfDay = 'evening';
+    } else {
+      newTimeOfDay = 'night';
+    }
+    
+    setTimeOfDay(newTimeOfDay);
     
     const todayScheduledEvent = events.find(e => e.dayTrigger === day + 1);
     
     if (!todayScheduledEvent && day > randomEventDay && Math.random() < randomEventProbability) {
       const randomEvent = getRandomEvent(day + 1);
       if (randomEvent) {
-        setCurrentEvent(randomEvent);
-        setModalOpen(true);
-        setRandomEventDay(day + 1);
-        setRandomEventProbability(Math.min(0.7, randomEventProbability + 0.1));
+        if (!randomEvent.timeOfDay || randomEvent.timeOfDay === newTimeOfDay) {
+          setCurrentEvent(randomEvent);
+          setModalOpen(true);
+          setRandomEventDay(day + 1);
+          setRandomEventProbability(Math.min(0.7, randomEventProbability + 0.1));
+        }
       }
     } else {
       setRandomEventProbability(Math.max(0.2, randomEventProbability - 0.05));
     }
     
-    addNotification(`day ${day} complete! earned ${income} coins`, 'success');
+    let incomeBreakdown = `Buildings: ${baseIncome} coins`;
+    if (bonusIncome > 0) incomeBreakdown += ` | ${timeOfDay} bonus: ${bonusIncome}`;
+    if (rentIncome > 0) incomeBreakdown += ` | Rent: ${rentIncome}`;
+    
+    addNotification(`day ${day} complete! earned ${totalIncome} coins (${incomeBreakdown})`, 'success');
     
     if (day % 3 === 0 && autoSaveEnabled) {
       saveGame('autosave');
@@ -455,7 +714,11 @@ export default function neighborville() {
       events,
       gameTime,
       timeOfDay,
-      recentEvents
+      recentEvents,
+      bills,
+      energyRate,
+      totalEnergyUsage,
+      lastBillDay
     };
     
     try {
@@ -479,6 +742,10 @@ export default function neighborville() {
   
   const handleOpenSaveManager = () => {
     setShowSaveManager(true);
+  };
+  
+  const hasUnpaidDueBills = () => {
+    return bills.some(bill => !bill.isPaid && bill.dayDue <= day);
   };
   
   if (loading) {
@@ -636,6 +903,20 @@ export default function neighborville() {
                 {achievements.filter(a => a.completed).length}/{achievements.length}
               </span>
             </motion.div>
+            
+            {hasUnpaidDueBills() && (
+              <motion.div
+                initial={{ scale: 0.9 }}
+                animate={{ scale: [1, 1.05, 1] }}
+                transition={{ repeat: Infinity, duration: 2 }}
+                className="bg-red-100 rounded-lg shadow-sm p-1.5 mr-2 flex items-center justify-center"
+              >
+                <AlertCircle size={16} className="text-red-600 mr-1" />
+                <span className="text-red-600 text-sm lowercase">
+                  unpaid bills
+                </span>
+              </motion.div>
+            )}
           </div>
           
           <div className="flex items-center">
@@ -662,7 +943,7 @@ export default function neighborville() {
       </div>
       
       <main className="container mx-auto p-4 grid grid-cols-1 lg:grid-cols-4 gap-6">
-        <div className="lg:col-span-1 space-y-6">
+        <div className="lg:col-span-1 space-y-4">
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -688,6 +969,31 @@ export default function neighborville() {
               end day
             </motion.button>
           </motion.div>
+          
+          <TimeBonus 
+            timeOfDay={timeOfDay}
+            activeBonuses={activeBonuses}
+          />
+          
+          <BillsPanel 
+            bills={bills}
+            onPayBill={handlePayBill}
+            coins={coins}
+            currentDay={day}
+          />
+          
+          <EnergyUsagePanel
+            grid={grid}
+            energyRate={energyRate}
+            totalEnergyUsage={totalEnergyUsage}
+            daysUntilBill={daysUntilBill}
+          />
+          
+          <ResidentAssignment
+            neighbors={neighbors}
+            grid={grid}
+            onAssignResident={handleAssignResident}
+          />
           
           <HappinessAnalytics 
             happiness={happiness}
@@ -783,6 +1089,16 @@ export default function neighborville() {
                 <div>
                   <h2 className="text-xl font-medium lowercase text-emerald-800">{showNeighborInfo.name}</h2>
                   <div className="text-gray-500 lowercase">{showNeighborInfo.trait}</div>
+                  
+                  {showNeighborInfo.hasHome ? (
+                    <div className="mt-1 text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full inline-block">
+                      has a home • pays {showNeighborInfo.dailyRent} coins/day
+                    </div>
+                  ) : (
+                    <div className="mt-1 text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full inline-block">
+                      needs a home
+                    </div>
+                  )}
                 </div>
               </div>
               
@@ -821,38 +1137,10 @@ export default function neighborville() {
       
       <AnimatePresence>
         {modalOpen && currentEvent && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
-            style={{ backdropFilter: "blur(8px)", backgroundColor: "rgba(0,0,0,0.3)" }}
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              transition={{ type: "spring", damping: 20 }}
-              className="bg-white rounded-xl p-6 max-w-md w-full shadow-xl mx-4"
-            >
-              <h2 className="text-xl font-medium mb-3 lowercase text-emerald-800">{currentEvent.title}</h2>
-              <p className="mb-6 lowercase">{currentEvent.description}</p>
-              
-              <div className="space-y-3">
-                {currentEvent.options.map((option, index) => (
-                  <motion.button
-                    key={index}
-                    whileHover={{ scale: 1.02, backgroundColor: "#f0fdf4" }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => handleEventOption(option)}
-                    className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-emerald-50 rounded-lg transition-colors lowercase"
-                  >
-                    {option.text.toLowerCase()}
-                  </motion.button>
-                ))}
-              </div>
-            </motion.div>
-          </motion.div>
+          <EventModal
+            event={currentEvent}
+            onOptionSelect={handleEventOption}
+          />
         )}
       </AnimatePresence>
       
@@ -946,7 +1234,11 @@ export default function neighborville() {
           events,
           gameTime,
           timeOfDay,
-          recentEvents
+          recentEvents,
+          bills,
+          energyRate,
+          totalEnergyUsage,
+          lastBillDay
         }}
       />
       

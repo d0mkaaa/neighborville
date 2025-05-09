@@ -8,7 +8,22 @@ export const buildings: Building[] = [
     cost: 200, 
     happiness: 10, 
     income: 25,
-    color: '#10b981' 
+    color: '#10b981',
+    energyUsage: 10,
+    residentCapacity: 1,
+    isOccupied: false
+  },
+  { 
+    id: 'apartment', 
+    name: 'apartment', 
+    icon: 'Home', 
+    cost: 500, 
+    happiness: 15, 
+    income: 60,
+    color: '#3b82f6',
+    energyUsage: 25,
+    residentCapacity: 3,
+    isOccupied: false
   },
   { 
     id: 'park', 
@@ -17,7 +32,8 @@ export const buildings: Building[] = [
     cost: 150, 
     happiness: 15, 
     income: 10,
-    color: '#059669' 
+    color: '#059669',
+    energyUsage: 5
   },
   { 
     id: 'cafe', 
@@ -26,7 +42,8 @@ export const buildings: Building[] = [
     cost: 300, 
     happiness: 12, 
     income: 40,
-    color: '#d97706' 
+    color: '#d97706',
+    energyUsage: 20
   },
   { 
     id: 'library', 
@@ -35,7 +52,8 @@ export const buildings: Building[] = [
     cost: 350, 
     happiness: 8, 
     income: 15,
-    color: '#7c3aed' 
+    color: '#7c3aed',
+    energyUsage: 15
   },
   { 
     id: 'music_venue', 
@@ -44,7 +62,8 @@ export const buildings: Building[] = [
     cost: 400, 
     happiness: 20, 
     income: 50,
-    color: '#db2777' 
+    color: '#db2777',
+    energyUsage: 30
   },
   { 
     id: 'charging_station', 
@@ -53,6 +72,17 @@ export const buildings: Building[] = [
     cost: 250, 
     happiness: 5, 
     income: 35,
-    color: '#3b82f6' 
+    color: '#3b82f6',
+    energyUsage: 50
+  },
+  { 
+    id: 'solar_panel', 
+    name: 'solar panel', 
+    icon: 'Sun', 
+    cost: 300, 
+    happiness: 10, 
+    income: 15,
+    color: '#eab308',
+    energyUsage: -30
   }
 ];
