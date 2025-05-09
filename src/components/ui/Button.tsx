@@ -6,7 +6,7 @@ type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'success' |
 type ButtonSize = 'sm' | 'md' | 'lg';
 
 interface ButtonProps extends HTMLMotionProps<"button"> {
-  children: React.ReactNode;
+  children?: React.ReactNode;
   variant?: ButtonVariant;
   size?: ButtonSize;
   fullWidth?: boolean;

@@ -11,7 +11,10 @@ export const neighborProfiles: Neighbor[] = [
     unlocked: true,
     unlockCondition: null,
     hasHome: false,
-    dailyRent: 25
+    dailyRent: 25,
+    happiness: 70,
+    housingPreference: 'house',
+    maxNeighbors: 1
   },
   { 
     id: 2, 
@@ -23,7 +26,10 @@ export const neighborProfiles: Neighbor[] = [
     unlocked: true,
     unlockCondition: null,
     hasHome: false,
-    dailyRent: 30
+    dailyRent: 30,
+    happiness: 75,
+    housingPreference: 'any',
+    maxNeighbors: 2
   },
   { 
     id: 3, 
@@ -35,7 +41,10 @@ export const neighborProfiles: Neighbor[] = [
     unlocked: true,
     unlockCondition: null,
     hasHome: false,
-    dailyRent: 20
+    dailyRent: 20,
+    happiness: 65,
+    housingPreference: 'house',
+    maxNeighbors: 1
   },
   { 
     id: 4, 
@@ -52,7 +61,10 @@ export const neighborProfiles: Neighbor[] = [
       description: 'build 2 ev charging stations'
     },
     hasHome: false,
-    dailyRent: 35
+    dailyRent: 35,
+    happiness: 80,
+    housingPreference: 'apartment',
+    maxNeighbors: 3
   },
   { 
     id: 5, 
@@ -69,7 +81,10 @@ export const neighborProfiles: Neighbor[] = [
       description: 'build 3 cafés'
     },
     hasHome: false,
-    dailyRent: 28
+    dailyRent: 28,
+    happiness: 85,
+    housingPreference: 'apartment',
+    maxNeighbors: 4
   },
   { 
     id: 6, 
@@ -85,7 +100,10 @@ export const neighborProfiles: Neighbor[] = [
       description: 'reach level 5'
     },
     hasHome: false,
-    dailyRent: 40
+    dailyRent: 40,
+    happiness: 90,
+    housingPreference: 'any',
+    maxNeighbors: 2
   },
   { 
     id: 7, 
@@ -101,7 +119,10 @@ export const neighborProfiles: Neighbor[] = [
       description: 'reach 90% happiness'
     },
     hasHome: false,
-    dailyRent: 45
+    dailyRent: 45,
+    happiness: 95,
+    housingPreference: 'house',
+    maxNeighbors: 1
   },
   { 
     id: 8, 
@@ -117,6 +138,88 @@ export const neighborProfiles: Neighbor[] = [
       description: 'reach day 15'
     },
     hasHome: false,
-    dailyRent: 32
+    dailyRent: 32,
+    happiness: 78,
+    housingPreference: 'apartment',
+    maxNeighbors: 3
+  },
+  { 
+    id: 9, 
+    name: 'zara the mysterious', 
+    avatar: '🎭', 
+    trait: 'enigmatic', 
+    likes: 'music venues', 
+    dislikes: 'noise',
+    unlocked: false,
+    unlockCondition: {
+      type: 'building',
+      buildingId: 'music_venue',
+      count: 3,
+      description: 'build 3 music venues'
+    },
+    hasHome: false,
+    dailyRent: 60,
+    happiness: 50,
+    housingPreference: 'any',
+    maxNeighbors: 1
+  },
+  { 
+    id: 10, 
+    name: 'dr. solar', 
+    avatar: '👨‍🔬', 
+    trait: 'scientific', 
+    likes: 'solar panels', 
+    dislikes: 'pollution',
+    unlocked: false,
+    unlockCondition: {
+      type: 'building',
+      buildingId: 'solar_panel',
+      count: 5,
+      description: 'build 5 solar panels'
+    },
+    hasHome: false,
+    dailyRent: 50,
+    happiness: 85,
+    housingPreference: 'house',
+    maxNeighbors: 1
+  },
+  { 
+    id: 11, 
+    name: 'the silent gardener', 
+    avatar: '👺', 
+    trait: 'mysterious', 
+    likes: 'parks', 
+    dislikes: 'technology',
+    unlocked: false,
+    unlockCondition: {
+      type: 'building',
+      buildingId: 'park',
+      count: 4,
+      description: 'build 4 parks'
+    },
+    hasHome: false,
+    dailyRent: 70,
+    happiness: 60,
+    housingPreference: 'house',
+    maxNeighbors: 1
+  },
+  { 
+    id: 12, 
+    name: 'time traveler joe', 
+    avatar: '🕰️', 
+    trait: 'temporal', 
+    likes: 'libraries', 
+    dislikes: 'clocks',
+    unlocked: false,
+    unlockCondition: {
+      type: 'day',
+      day: 50,
+      description: 'survive 50 days'
+    },
+    hasHome: false,
+    dailyRent: 100,
+    happiness: 100,
+    housingPreference: 'any',
+    maxNeighbors: 3
   }
 ];

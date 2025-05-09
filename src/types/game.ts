@@ -8,8 +8,7 @@ export interface Building {
   color: string;
   energyUsage?: number;
   residentCapacity?: number;
-  isOccupied?: boolean;
-  occupantId?: number;
+  occupants?: number[];
   levelRequired?: number;
   unlocked?: boolean;
 }
@@ -35,6 +34,9 @@ export interface Neighbor {
   hasHome?: boolean;
   houseIndex?: number;
   dailyRent?: number;
+  happiness?: number;
+  housingPreference?: 'house' | 'apartment' | 'any';
+  maxNeighbors?: number;
 }
 
 export interface EventOption {
@@ -42,6 +44,10 @@ export interface EventOption {
   outcome: string;
   coins: number;
   happiness: number;
+  neighborEffects?: {
+    neighborId?: number;
+    happinessChange: number;
+  }[];
 }
 
 export interface GameEvent {
@@ -52,6 +58,7 @@ export interface GameEvent {
   weight?: number;
   minimumDay?: number;
   timeOfDay?: TimeOfDay;
+  affectedNeighbors?: number[];
 }
 
 export interface ScheduledEvent {

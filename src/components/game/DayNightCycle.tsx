@@ -48,26 +48,26 @@ export default function DayNightCycle({ day, gameTime, onTimeChange }: DayNightC
   const getSkyColor = () => {
     switch (timeOfDay) {
       case 'morning':
-        return 'linear-gradient(to bottom, #fde68a, #fef3c7)';
+        return 'bg-gradient-to-r from-amber-500 to-amber-600';
       case 'day':
-        return 'linear-gradient(to bottom, #93c5fd, #bfdbfe)';
+        return 'bg-gradient-to-r from-emerald-500 to-teal-600';
       case 'evening':
-        return 'linear-gradient(to bottom, #f87171, #fca5a5)';
+        return 'bg-gradient-to-r from-orange-500 to-red-600';
       case 'night':
-        return 'linear-gradient(to bottom, #312e81, #4338ca)';
+        return 'bg-gradient-to-r from-indigo-800 to-purple-900';
     }
   };
   
   const getIcon = () => {
     switch (timeOfDay) {
       case 'morning':
-        return <Sunrise size={20} className="text-amber-500" />;
+        return <Sunrise size={20} className="text-white" />;
       case 'day':
-        return <Sun size={20} className="text-amber-500" />;
+        return <Sun size={20} className="text-white" />;
       case 'evening':
-        return <Sunset size={20} className="text-orange-500" />;
+        return <Sunset size={20} className="text-white" />;
       case 'night':
-        return <Moon size={20} className="text-indigo-200" />;
+        return <Moon size={20} className="text-white" />;
     }
   };
   
@@ -110,8 +110,7 @@ export default function DayNightCycle({ day, gameTime, onTimeChange }: DayNightC
       onHoverEnd={() => setShowTimeIndicator(false)}
     >
       <motion.div
-        className="time-indicator cursor-pointer rounded-lg shadow-md flex items-center p-1 px-2"
-        style={{ background: getSkyColor() }}
+        className={`time-indicator cursor-pointer rounded-lg shadow-md flex items-center p-1 px-2 ${getSkyColor()}`}
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
         onClick={() => setAutoTimeProgress(!autoTimeProgress)}
@@ -130,8 +129,8 @@ export default function DayNightCycle({ day, gameTime, onTimeChange }: DayNightC
             exit={{ opacity: 0, y: 5 }}
             className="absolute top-full mt-1 left-0 right-0 bg-white rounded-md p-2 shadow-lg text-xs text-gray-700 z-10 min-w-48"
           >
-            <div className="font-medium">day {getFormattedDay()}</div>
-            <div className="text-gray-900">{timeOfDay} time</div>
+            <div className="font-medium text-gray-900">day {getFormattedDay()}</div>
+            <div className="text-gray-600">{timeOfDay} time</div>
             
             <div className="mt-1 text-gray-700 text-xs border-t border-gray-100 pt-1">
               {getTimeEffects()}
@@ -156,7 +155,7 @@ function AnimatedTimeBar({ autoTimeProgress, gameTime }: AnimatedTimeBarProps) {
   if (!autoTimeProgress) return null;
   
   return (
-    <div className="ml-1.5 w-8 h-1.5 bg-black bg-opacity-20 rounded-full overflow-hidden">
+    <div className="ml-1.5 w-8 h-1.5 bg-white bg-opacity-20 rounded-full overflow-hidden">
       <motion.div
         className="h-full bg-white bg-opacity-50"
         initial={{ width: "0%" }}

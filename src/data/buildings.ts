@@ -11,7 +11,9 @@ export const buildings: Building[] = [
     color: '#10b981',
     energyUsage: 10,
     residentCapacity: 1,
+    residenceTier: 'basic',
     isOccupied: false,
+    occupantIds: [],
     unlocked: true
   },
   { 
@@ -23,8 +25,10 @@ export const buildings: Building[] = [
     income: 60,
     color: '#3b82f6',
     energyUsage: 25,
-    residentCapacity: 3,
+    residentCapacity: 4,
+    residenceTier: 'basic',
     isOccupied: false,
+    occupantIds: [],
     unlocked: true
   },
   { 
@@ -128,5 +132,21 @@ export const buildings: Building[] = [
     energyUsage: 80,
     unlocked: false,
     levelRequired: 5
+  },
+  { 
+    id: 'condo', 
+    name: 'luxury condo', 
+    icon: 'Home', 
+    cost: 1500, 
+    happiness: 25, 
+    income: 150,
+    color: '#6d28d9',
+    energyUsage: 40,
+    residentCapacity: 2,
+    residenceTier: 'premium',
+    isOccupied: false,
+    occupantIds: [],
+    unlocked: false,
+    levelRequired: 6
   }
 ];

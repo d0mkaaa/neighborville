@@ -18,7 +18,7 @@ export default function NotificationSystem({
   removeNotification 
 }: NotificationSystemProps) {
   return (
-    <div className="fixed bottom-6 right-6 z-50 w-72 space-y-2 pointer-events-none">
+    <div className="fixed top-24 right-6 z-50 w-72 space-y-2 pointer-events-none">
       <AnimatePresence>
         {notifications.map((notification) => (
           <NotificationItem 

@@ -1,18 +1,20 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Home, User, ChevronDown, ChevronUp, UserCheck, AlertCircle } from "lucide-react";
+import { Home, User, ChevronDown, ChevronUp, UserCheck, AlertCircle, Users } from "lucide-react";
 import type { Building, Neighbor } from "../../types/game";
 
 type ResidentAssignmentProps = {
   neighbors: Neighbor[];
   grid: (Building | null)[];
   onAssignResident: (neighborId: number, houseIndex: number) => void;
+  onRemoveResident: (neighborId: number) => void;
 };
 
 export default function ResidentAssignment({
   neighbors,
   grid,
-  onAssignResident
+  onAssignResident,
+  onRemoveResident
 }: ResidentAssignmentProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [selectedNeighbor, setSelectedNeighbor] = useState<number | null>(null);
@@ -24,9 +26,35 @@ export default function ResidentAssignment({
     .map((building, index) => ({ building, index }))
     .filter(
       item => item.building && 
-      (item.building.id === 'house' || item.building.id === 'apartment') && 
-      !item.building.isOccupied
+      (item.building.id === 'house' || item.building.id === 'apartment')
     );
+
+  const getAvailableSpaces = (buildingIndex: number) => {
+    const building = grid[buildingIndex];
+    if (!building || (!building.residentCapacity && building.id !== 'house')) return 0;
+    
+    const capacity = building.residentCapacity || 1;
+    const currentOccupants = building.occupants?.length || 0;
+    return capacity - currentOccupants;
+  };
+
+  const isNeighborCompatibleWithBuilding = (neighbor: Neighbor, building: Building) => {
+    if (neighbor.housingPreference === 'house' && building.id === 'apartment') {
+      return false;
+    }
+    if (neighbor.housingPreference === 'apartment' && building.id === 'house') {
+      return false;
+    }
+    return true;
+  };
+
+  const getNeighborHappinessIndicator = (neighbor: Neighbor) => {
+    const happiness = neighbor.happiness || 70;
+    if (happiness >= 80) return '😊';
+    if (happiness >= 60) return '😐';
+    if (happiness >= 40) return '😕';
+    return '😢';
+  };
 
   return (
     <div className="bg-white rounded-xl shadow-md overflow-hidden">
@@ -103,8 +131,18 @@ export default function ResidentAssignment({
                       <div className="flex items-center">
                         <div className="text-2xl mr-2">{neighbor.avatar}</div>
                         <div>
-                          <div className="text-sm font-medium text-gray-700 lowercase">{neighbor.name}</div>
-                          <div className="text-xs text-gray-500">rent: {neighbor.dailyRent} coins/day</div>
+                          <div className="text-sm font-medium text-gray-700 lowercase flex items-center gap-2">
+                            {neighbor.name} {getNeighborHappinessIndicator(neighbor)}
+                          </div>
+                          <div className="text-xs text-gray-500 flex items-center gap-2">
+                            <span>rent: {neighbor.dailyRent} coins/day</span>
+                            <span>prefers: {neighbor.housingPreference}</span>
+                            {neighbor.maxNeighbors && neighbor.maxNeighbors > 1 && (
+                              <span className="bg-blue-100 text-blue-600 px-2 py-0.5 rounded">
+                                social: max {neighbor.maxNeighbors} roommates
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                       <div>
@@ -124,37 +162,68 @@ export default function ResidentAssignment({
               <div className="mt-3">
                 <h4 className="text-sm font-medium text-gray-700 mb-2 lowercase">available housing</h4>
                 <div className="grid grid-cols-2 gap-2">
-                  {residentialBuildings.map(({ building, index }) => (
-                    <motion.div
-                      key={index}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => {
-                        if (selectedNeighbor) {
-                          onAssignResident(selectedNeighbor, index);
-                          setSelectedNeighbor(null);
-                        }
-                      }}
-                      className={`p-2 rounded-lg border ${
-                        selectedNeighbor 
-                          ? 'bg-white border-emerald-300 cursor-pointer' 
-                          : 'bg-gray-50 border-gray-200 cursor-not-allowed'
-                      }`}
-                    >
-                      <div className="flex items-center">
-                        <div 
-                          className="w-8 h-8 rounded-full flex items-center justify-center mr-2"
-                          style={{ backgroundColor: building?.color }}
-                        >
-                          <Home size={16} className="text-white" />
+                  {residentialBuildings.map(({ building, index }) => {
+                    const availableSpaces = getAvailableSpaces(index);
+                    const currentOccupants = building?.occupants || [];
+                    const selectedNeighborObj = selectedNeighbor ? neighbors.find(n => n.id === selectedNeighbor) : null;
+                    const isCompatible = selectedNeighborObj ? isNeighborCompatibleWithBuilding(selectedNeighborObj, building!) : true;
+                    
+                    return (
+                      <motion.div
+                        key={index}
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => {
+                          if (selectedNeighbor && availableSpaces > 0 && isCompatible) {
+                            onAssignResident(selectedNeighbor, index);
+                            setSelectedNeighbor(null);
+                          }
+                        }}
+                        className={`p-2 rounded-lg border ${
+                          selectedNeighbor && availableSpaces > 0 && isCompatible
+                            ? 'bg-white border-emerald-300 cursor-pointer' 
+                            : selectedNeighbor && !isCompatible
+                            ? 'bg-red-50 border-red-200 cursor-not-allowed'
+                            : 'bg-gray-50 border-gray-200 cursor-not-allowed'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center">
+                            <div 
+                              className="w-8 h-8 rounded-full flex items-center justify-center mr-2"
+                              style={{ backgroundColor: building?.color }}
+                            >
+                              <Home size={16} className="text-white" />
+                            </div>
+                            <div>
+                              <div className="text-sm text-gray-700 lowercase flex items-center gap-1">
+                                {building?.name} #{index}
+                                {currentOccupants.length > 0 && (
+                                  <div className="flex -space-x-1">
+                                    {currentOccupants.map(occupantId => {
+                                      const occupant = neighbors.find(n => n.id === occupantId);
+                                      return occupant ? (
+                                        <div key={occupantId} className="w-4 h-4 text-xs">
+                                          {occupant.avatar}
+                                        </div>
+                                      ) : null;
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="text-xs text-gray-500 flex items-center gap-1">
+                                <Users size={10} />
+                                {availableSpaces}/{building?.residentCapacity || 1} spaces
+                                {selectedNeighbor && !isCompatible && (
+                                  <span className="text-red-500">incompatible</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
                         </div>
-                        <div>
-                          <div className="text-sm text-gray-700 lowercase">{building?.name} at {index}</div>
-                          <div className="text-xs text-gray-500">capacity: {building?.residentCapacity}</div>
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))}
+                      </motion.div>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -164,27 +233,48 @@ export default function ResidentAssignment({
                 <h4 className="text-sm font-medium text-gray-700 mb-2 lowercase">housed neighbors</h4>
                 <div className="space-y-2">
                   {housedNeighbors.map(neighbor => {
-                    const house = grid[neighbor.houseIndex!];
+                    const house = neighbor.houseIndex !== undefined ? grid[neighbor.houseIndex] : null;
+                    const roommates = house?.occupants?.filter(id => id !== neighbor.id).map(id => 
+                      neighbors.find(n => n.id === id)
+                    ).filter(Boolean) || [];
+                    
                     return (
                       <div 
                         key={neighbor.id}
-                        className="flex justify-between items-center p-2 rounded-lg bg-emerald-50 border border-emerald-100"
+                        className="p-2 bg-emerald-50 border border-emerald-100 rounded-lg"
                       >
-                        <div className="flex items-center">
-                          <div className="text-2xl mr-2">{neighbor.avatar}</div>
-                          <div>
-                            <div className="text-sm font-medium text-gray-700 lowercase">{neighbor.name}</div>
-                            <div className="text-xs text-emerald-600">pays {neighbor.dailyRent} coins/day</div>
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center">
+                            <div className="text-2xl mr-3">{neighbor.avatar}</div>
+                            <div>
+                              <div className="text-sm font-medium text-gray-700 lowercase flex items-center gap-2">
+                                {neighbor.name} {getNeighborHappinessIndicator(neighbor)}
+                              </div>
+                              <div className="text-xs text-emerald-600 flex items-center gap-2">
+                                <span>pays {neighbor.dailyRent} coins/day</span>
+                                {roommates.length > 0 && (
+                                  <span>roommates: {roommates.map(r => r?.avatar).join(' ')}</span>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                        <div className="flex items-center bg-white px-2 py-1 rounded text-xs">
-                          <div 
-                            className="w-4 h-4 rounded-full mr-1 flex items-center justify-center"
-                            style={{ backgroundColor: house?.color }}
-                          >
-                            <Home size={10} className="text-white" />
+                          <div className="flex items-center gap-2">
+                            <div className="flex items-center bg-white px-2 py-1 rounded text-xs">
+                              <div 
+                                className="w-4 h-4 rounded-full mr-1 flex items-center justify-center"
+                                style={{ backgroundColor: house?.color }}
+                              >
+                                <Home size={10} className="text-white" />
+                              </div>
+                              <span className="text-gray-600">{house?.name} #{neighbor.houseIndex}</span>
+                            </div>
+                            <button
+                              onClick={() => onRemoveResident(neighbor.id)}
+                              className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded hover:bg-red-200"
+                            >
+                              evict
+                            </button>
                           </div>
-                          <span className="text-gray-600">{house?.name} #{neighbor.houseIndex}</span>
                         </div>
                       </div>
                     );

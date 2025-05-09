@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { User, Save, Award, AlertCircle } from 'lucide-react';
+import { User, Save, Award, AlertCircle, Calendar, Clock, Settings, Play, Pause } from 'lucide-react';
 import DayNightCycle from './DayNightCycle';
 import ProgressBar from './ProgressBar';
 import Button from '../ui/Button';
@@ -14,12 +14,18 @@ interface GameHeaderProps {
   level: number;
   experience: number;
   gameTime: number;
+  gameMinutes: number;
+  timePaused: boolean;
   timeOfDay: TimeOfDay;
+  weather: 'sunny' | 'rainy' | 'cloudy' | 'stormy';
   hasUnpaidBills: boolean;
   achievements: { completed: boolean }[];
+  onEndDay: () => void;
   onOpenSaveManager: () => void;
+  onShowSettings: () => void;
   onShowTutorial: () => void;
   onShowAchievements: () => void;
+  onToggleTimePause: () => void;
   onTimeChange: (newTime: number, newTimeOfDay: TimeOfDay) => void;
 }
 
@@ -31,22 +37,48 @@ export default function GameHeader({
   level,
   experience,
   gameTime,
+  gameMinutes,
+  timePaused,
   timeOfDay,
+  weather,
   hasUnpaidBills,
   achievements,
+  onEndDay,
   onOpenSaveManager,
+  onShowSettings,
   onShowTutorial,
   onShowAchievements,
+  onToggleTimePause,
   onTimeChange
 }: GameHeaderProps) {
+  const getTimeOfDayColor = () => {
+    switch(timeOfDay) {
+      case 'morning': return 'from-amber-500 to-amber-600';
+      case 'day': return 'from-emerald-600 to-teal-700';
+      case 'evening': return 'from-orange-500 to-red-600';
+      case 'night': return 'from-indigo-800 to-purple-900';
+    }
+  };
+
+  const getFormattedTime = () => {
+    const hours = gameTime % 12 || 12;
+    const minutes = gameMinutes.toString().padStart(2, '0');
+    const ampm = gameTime >= 12 ? 'pm' : 'am';
+    return `${hours}:${minutes} ${ampm}`;
+  };
+
+  const getWeatherIcon = () => {
+    switch(weather) {
+      case 'sunny': return '☀️';
+      case 'rainy': return '🌧️';
+      case 'cloudy': return '☁️';
+      case 'stormy': return '⛈️';
+    }
+  };
+
   return (
     <div className="w-full">
-      <header className={`text-white p-4 shadow-md transition-colors duration-700 ${
-        timeOfDay === 'morning' ? 'bg-gradient-to-r from-amber-500 to-amber-600' :
-        timeOfDay === 'day' ? 'bg-gradient-to-r from-emerald-600 to-teal-700' :
-        timeOfDay === 'evening' ? 'bg-gradient-to-r from-orange-500 to-red-600' :
-        'bg-gradient-to-r from-indigo-800 to-purple-900'
-      }`}>
+      <header className={`text-white p-4 shadow-lg transition-colors duration-700 bg-gradient-to-r ${getTimeOfDayColor()}`}>
         <div className="container mx-auto flex justify-between items-center">
           <motion.h1 
             initial={{ opacity: 0, x: -20 }}
@@ -55,23 +87,26 @@ export default function GameHeader({
           >
             <span className="text-2xl mr-2">🏙️</span> neighborville
           </motion.h1>
-          <div className="flex items-center space-x-6">
+          
+          <div className="flex items-center gap-3">
             <motion.div 
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
-              className="flex items-center bg-black bg-opacity-20 px-3 py-1.5 rounded-full"
+              className="flex items-center rounded-full bg-black bg-opacity-20 px-3 py-1.5"
             >
-              <div className="mr-2 text-xl">💰</div>
+              <span className="mr-2 text-xl">💰</span>
               <span className="font-medium lowercase text-base">{coins} coins</span>
             </motion.div>
+            
             <motion.div 
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
-              className="flex items-center bg-black bg-opacity-20 px-3 py-1.5 rounded-full"
+              className="flex items-center bg-black bg-opacity-20 px-3 py-1.5 rounded-full cursor-pointer"
+              onClick={() => onShowAchievements()}
             >
-              <div className="mr-2 text-xl">😊</div>
+              <span className="mr-2 text-xl">😊</span>
               <div className="w-24 h-4 bg-black bg-opacity-30 rounded-full overflow-hidden shadow-inner">
                 <motion.div
                   initial={{ width: "0%" }}
@@ -85,15 +120,35 @@ export default function GameHeader({
               </div>
               <span className="ml-2 font-medium lowercase text-base">{happiness}%</span>
             </motion.div>
+            
             <motion.div 
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
-              className="flex items-center space-x-3"
+              className="flex items-center gap-3"
             >
               <div className="flex items-center bg-black bg-opacity-20 px-3 py-1.5 rounded-full">
-                <div className="mr-2 text-xl">📅</div>
+                <Calendar size={18} className="mr-2" />
                 <span className="font-medium lowercase text-base">day {day}</span>
+              </div>
+
+              <div className="flex items-center bg-black bg-opacity-20 px-3 py-1.5 rounded-full">
+                <Clock size={18} className="mr-2" />
+                <span className="font-medium lowercase text-base">{getFormattedTime()}</span>
+                <button 
+                  className="ml-2 p-0.5 bg-black bg-opacity-20 rounded-full"
+                  onClick={onToggleTimePause}
+                >
+                  {timePaused ? 
+                    <Play size={14} className="text-white" /> : 
+                    <Pause size={14} className="text-white" />
+                  }
+                </button>
+              </div>
+
+              <div className="flex items-center bg-black bg-opacity-20 px-3 py-1.5 rounded-full">
+                <span className="mr-2 text-xl">{getWeatherIcon()}</span>
+                <span className="font-medium lowercase text-base capitalize">{weather}</span>
               </div>
 
               <DayNightCycle 
@@ -106,68 +161,80 @@ export default function GameHeader({
         </div>
       </header>
       
-      <div className="container mx-auto px-4 py-3 flex items-center justify-between bg-white bg-opacity-10 backdrop-filter backdrop-blur-lg border-b border-white border-opacity-10">
-        <div className="flex items-center">
-          <motion.div 
-            whileHover={{ scale: 1.05 }}
-            className="bg-white bg-opacity-80 rounded-lg shadow-sm px-3 py-1.5 mr-2 flex items-center justify-center"
-          >
-            <User size={16} className="text-emerald-800 mr-1" />
-            <span className="text-emerald-800 font-medium mr-2 text-sm lowercase">{playerName} • level {level}</span>
-            <ProgressBar 
-              value={experience} 
-              maxValue={level * 100} 
-              width={80}
-              color="#10b981"
-              bgColor="#e2e8f0"
-            />
-          </motion.div>
-          
-          <motion.div
-            whileHover={{ scale: 1.05 }}
-            className="bg-white bg-opacity-80 rounded-lg shadow-sm p-1.5 mr-2 flex items-center justify-center cursor-pointer"
-            onClick={onShowAchievements}
-          >
-            <Award size={16} className="text-emerald-700 mr-1" />
-            <span className="text-emerald-800 text-sm lowercase">
-              {achievements.filter(a => a.completed).length}/{achievements.length}
-            </span>
-          </motion.div>
-          
-          {hasUnpaidBills && (
-            <motion.div
-              initial={{ scale: 0.9 }}
-              animate={{ scale: [1, 1.05, 1] }}
-              transition={{ repeat: Infinity, duration: 2 }}
-              className="bg-red-100 rounded-lg shadow-sm p-1.5 mr-2 flex items-center justify-center"
+      <div className="bg-white/80 backdrop-blur-sm shadow-sm border-b border-gray-200 sticky top-0 z-30">
+        <div className="container mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <motion.div 
+              whileHover={{ scale: 1.05 }}
+              className="bg-emerald-50 rounded-lg shadow-sm px-3 py-1.5 flex items-center"
             >
-              <AlertCircle size={16} className="text-red-600 mr-1" />
-              <span className="text-red-600 text-sm lowercase">
-                unpaid bills
+              <User size={16} className="text-emerald-700 mr-2" />
+              <span className="text-emerald-800 font-medium mr-2 text-sm lowercase">{playerName} • level {level}</span>
+              <ProgressBar 
+                value={experience} 
+                maxValue={level * 100} 
+                width={80}
+                color="#10b981"
+                bgColor="#e2e8f0"
+                showText
+                textPosition="inside"
+              />
+            </motion.div>
+            
+            <motion.div
+              whileHover={{ scale: 1.05 }}
+              className="bg-emerald-50 rounded-lg shadow-sm p-1.5 flex items-center justify-center cursor-pointer"
+              onClick={onShowAchievements}
+            >
+              <Award size={16} className="text-emerald-700 mr-1" />
+              <span className="text-emerald-800 text-sm lowercase">
+                {achievements.filter(a => a.completed).length}/{achievements.length}
               </span>
             </motion.div>
-          )}
-        </div>
-        
-        <div className="flex items-center">
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={<Save size={16} />}
-            onClick={onOpenSaveManager}
-            className="mr-2"
-          >
-            save
-          </Button>
+            
+            {hasUnpaidBills && (
+              <motion.div
+                initial={{ scale: 0.9 }}
+                animate={{ scale: [1, 1.05, 1] }}
+                transition={{ repeat: Infinity, duration: 2 }}
+                className="bg-red-100 rounded-lg shadow-sm p-1.5 flex items-center justify-center"
+              >
+                <AlertCircle size={16} className="text-red-600 mr-1" />
+                <span className="text-red-600 text-sm lowercase">
+                  unpaid bills
+                </span>
+              </motion.div>
+            )}
+          </div>
           
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={<Award size={16} />}
-            onClick={onShowTutorial}
-          >
-            help
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<Calendar size={16} />}
+              onClick={onEndDay}
+              className="bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+            >
+              end day
+            </Button>
+            
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<Save size={16} />}
+              onClick={onOpenSaveManager}
+            >
+              save
+            </Button>
+            
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<Settings size={16} />}
+              onClick={onShowSettings}
+            >
+            </Button>
+          </div>
         </div>
       </div>
     </div>
