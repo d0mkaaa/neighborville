@@ -1,9 +1,9 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { User, Save, Award, AlertCircle, Calendar, Clock, Settings, Play, Pause } from 'lucide-react';
-import DayNightCycle from './DayNightCycle';
 import ProgressBar from './ProgressBar';
 import Button from '../ui/Button';
+import WeatherForecast from './WeatherForecast';
 import type { TimeOfDay } from '../../types/game';
 
 interface GameHeaderProps {
@@ -20,6 +20,8 @@ interface GameHeaderProps {
   weather: 'sunny' | 'rainy' | 'cloudy' | 'stormy';
   hasUnpaidBills: boolean;
   achievements: { completed: boolean }[];
+  weatherForecast: string[];
+  showWeatherForecast: boolean;
   onEndDay: () => void;
   onOpenSaveManager: () => void;
   onShowSettings: () => void;
@@ -27,6 +29,9 @@ interface GameHeaderProps {
   onShowAchievements: () => void;
   onToggleTimePause: () => void;
   onTimeChange: (newTime: number, newTimeOfDay: TimeOfDay) => void;
+  onShowHappinessAnalytics: () => void;
+  onShowCalendar: () => void;
+  onToggleWeatherForecast: () => void;
 }
 
 export default function GameHeader({
@@ -43,13 +48,18 @@ export default function GameHeader({
   weather,
   hasUnpaidBills,
   achievements,
+  weatherForecast,
+  showWeatherForecast,
   onEndDay,
   onOpenSaveManager,
   onShowSettings,
   onShowTutorial,
   onShowAchievements,
   onToggleTimePause,
-  onTimeChange
+  onTimeChange,
+  onShowHappinessAnalytics,
+  onShowCalendar,
+  onToggleWeatherForecast
 }: GameHeaderProps) {
   const getTimeOfDayColor = () => {
     switch(timeOfDay) {
@@ -67,17 +77,8 @@ export default function GameHeader({
     return `${hours}:${minutes} ${ampm}`;
   };
 
-  const getWeatherIcon = () => {
-    switch(weather) {
-      case 'sunny': return '☀️';
-      case 'rainy': return '🌧️';
-      case 'cloudy': return '☁️';
-      case 'stormy': return '⛈️';
-    }
-  };
-
   return (
-    <div className="w-full">
+    <div className="w-full z-30">
       <header className={`text-white p-4 shadow-lg transition-colors duration-700 bg-gradient-to-r ${getTimeOfDayColor()}`}>
         <div className="container mx-auto flex justify-between items-center">
           <motion.h1 
@@ -93,7 +94,7 @@ export default function GameHeader({
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
-              className="flex items-center rounded-full bg-black bg-opacity-20 px-3 py-1.5"
+              className="flex items-center rounded-lg bg-white/10 backdrop-blur-sm px-3 py-1.5 border border-white/20"
             >
               <span className="mr-2 text-xl">💰</span>
               <span className="font-medium lowercase text-base">{coins} coins</span>
@@ -103,11 +104,11 @@ export default function GameHeader({
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
-              className="flex items-center bg-black bg-opacity-20 px-3 py-1.5 rounded-full cursor-pointer"
-              onClick={() => onShowAchievements()}
+              className="flex items-center bg-white/10 backdrop-blur-sm border border-white/20 px-3 py-1.5 rounded-lg cursor-pointer"
+              onClick={() => onShowHappinessAnalytics()}
             >
               <span className="mr-2 text-xl">😊</span>
-              <div className="w-24 h-4 bg-black bg-opacity-30 rounded-full overflow-hidden shadow-inner">
+              <div className="w-24 h-4 bg-black/20 rounded-full overflow-hidden shadow-inner">
                 <motion.div
                   initial={{ width: "0%" }}
                   animate={{ width: `${happiness}%` }}
@@ -127,16 +128,20 @@ export default function GameHeader({
               transition={{ delay: 0.3 }}
               className="flex items-center gap-3"
             >
-              <div className="flex items-center bg-black bg-opacity-20 px-3 py-1.5 rounded-full">
+              <motion.div 
+                className="flex items-center bg-white/10 backdrop-blur-sm border border-white/20 px-3 py-1.5 rounded-lg cursor-pointer"
+                whileHover={{ scale: 1.05 }}
+                onClick={onShowCalendar}
+              >
                 <Calendar size={18} className="mr-2" />
                 <span className="font-medium lowercase text-base">day {day}</span>
-              </div>
+              </motion.div>
 
-              <div className="flex items-center bg-black bg-opacity-20 px-3 py-1.5 rounded-full">
+              <div className="flex items-center bg-white/10 backdrop-blur-sm border border-white/20 px-3 py-1.5 rounded-lg">
                 <Clock size={18} className="mr-2" />
                 <span className="font-medium lowercase text-base">{getFormattedTime()}</span>
                 <button 
-                  className="ml-2 p-0.5 bg-black bg-opacity-20 rounded-full"
+                  className="ml-2 p-0.5 bg-white/10 rounded-full"
                   onClick={onToggleTimePause}
                 >
                   {timePaused ? 
@@ -146,22 +151,18 @@ export default function GameHeader({
                 </button>
               </div>
 
-              <div className="flex items-center bg-black bg-opacity-20 px-3 py-1.5 rounded-full">
-                <span className="mr-2 text-xl">{getWeatherIcon()}</span>
-                <span className="font-medium lowercase text-base capitalize">{weather}</span>
-              </div>
-
-              <DayNightCycle 
-                day={day} 
-                gameTime={gameTime}
-                onTimeChange={onTimeChange}
+              <WeatherForecast
+                currentWeather={weather}
+                forecast={weatherForecast as any}
+                isExpanded={showWeatherForecast}
+                onToggle={onToggleWeatherForecast}
               />
             </motion.div>
           </div>
         </div>
       </header>
       
-      <div className="bg-white/80 backdrop-blur-sm shadow-sm border-b border-gray-200 sticky top-0 z-30">
+      <div className="bg-white/80 backdrop-blur-sm shadow-sm border-b border-gray-200 sticky top-0 z-20">
         <div className="container mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <motion.div 
@@ -208,16 +209,6 @@ export default function GameHeader({
           </div>
           
           <div className="flex items-center gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={<Calendar size={16} />}
-              onClick={onEndDay}
-              className="bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
-            >
-              end day
-            </Button>
-            
             <Button
               variant="secondary"
               size="sm"

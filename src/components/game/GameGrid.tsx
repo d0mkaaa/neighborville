@@ -10,6 +10,7 @@ type GameGridProps = {
   selectedTile: number | null;
   onTileClick: (index: number) => void;
   onDeleteBuilding: (index: number) => void;
+  onBuildingManage: (building: Building, index: number) => void;
 };
 
 export default function GameGrid({
@@ -19,7 +20,8 @@ export default function GameGrid({
   selectedBuilding,
   selectedTile,
   onTileClick,
-  onDeleteBuilding
+  onDeleteBuilding,
+  onBuildingManage
 }: GameGridProps) {
   const getIcon = (iconName: string, size: number = 20) => {
     switch(iconName) {
@@ -83,14 +85,22 @@ export default function GameGrid({
                                 (grid[index]?.id === 'house' || grid[index]?.id === 'apartment') && 
                                 grid[index]?.isOccupied;
           
+          const handleClick = () => {
+            if (grid[index] && !selectedBuilding) {
+              onBuildingManage(grid[index]!, index);
+            } else {
+              onTileClick(index);
+            }
+          };
+          
           return (
             <motion.div
               key={index}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               layout
-              onClick={() => onTileClick(index)}
-              className={`aspect-ratio-1 rounded-lg flex flex-col items-center justify-center ${
+              onClick={handleClick}
+              className={`aspect-ratio-1 rounded-lg flex flex-col items-center justify-center cursor-pointer ${
                 selectedTile === index ? 'ring-2 ring-emerald-500' : ''
               } ${
                 !grid[index] ? 'bg-emerald-50 hover:bg-emerald-100' : 'text-white'
@@ -104,7 +114,7 @@ export default function GameGrid({
                   initial={{ scale: 0, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   transition={{ type: "spring", damping: 12 }}
-                  className="flex flex-col items-center"
+                  className="flex flex-col items-center relative w-full h-full justify-center"
                 >
                   {getIcon(grid[index].icon)}
                   <span className="text-xs mt-1 lowercase font-medium">{grid[index].name}</span>
@@ -114,7 +124,16 @@ export default function GameGrid({
                       className="absolute top-1 right-1 bg-white bg-opacity-90 rounded-full p-0.5"
                       whileHover={{ scale: 1.2 }}
                     >
-                      <div className="text-xs">👤</div>
+                      <div className="text-xs">👥</div>
+                    </motion.div>
+                  )}
+                  
+                  {grid[index].income > 0 && (
+                    <motion.div 
+                      className="absolute bottom-1 right-1 bg-white bg-opacity-90 rounded-full p-0.5"
+                      whileHover={{ scale: 1.2 }}
+                    >
+                      <div className="text-xs">💰</div>
                     </motion.div>
                   )}
                 </motion.div>
@@ -170,14 +189,25 @@ export default function GameGrid({
                 </div>
               </div>
               
-              <motion.button
-                whileHover={{ scale: 1.1, backgroundColor: "#fee2e2" }}
-                whileTap={{ scale: 0.9 }}
-                onClick={() => onDeleteBuilding(selectedTile)}
-                className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
-              >
-                <Trash2 size={16} />
-              </motion.button>
+              <div className="flex gap-2">
+                <motion.button
+                  whileHover={{ scale: 1.1, backgroundColor: "#f0fdf4" }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => onBuildingManage(grid[selectedTile]!, selectedTile)}
+                  className="p-2 bg-emerald-100 text-emerald-600 rounded-lg hover:bg-emerald-200 transition-colors"
+                >
+                  <Home size={16} />
+                </motion.button>
+                
+                <motion.button
+                  whileHover={{ scale: 1.1, backgroundColor: "#fee2e2" }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => onDeleteBuilding(selectedTile)}
+                  className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
+                >
+                  <Trash2 size={16} />
+                </motion.button>
+              </div>
             </div>
           </motion.div>
         )}

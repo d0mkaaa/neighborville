@@ -11,6 +11,10 @@ export interface Building {
   occupants?: number[];
   levelRequired?: number;
   unlocked?: boolean;
+  isOccupied?: boolean;
+  occupantId?: number;
+  residenceTier?: 'basic' | 'premium';
+  occupantIds?: number[];
 }
 
 export interface UnlockCondition {
@@ -119,6 +123,7 @@ export interface GameProgress {
   events: ScheduledEvent[];
   unlockedNeighborIds?: number[];
   gameTime?: number;
+  gameMinutes?: number;
   timeOfDay?: TimeOfDay;
   recentEvents?: RecentEvent[];
   bills?: Bill[];

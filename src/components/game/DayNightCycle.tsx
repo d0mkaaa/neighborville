@@ -13,7 +13,6 @@ type DayNightCycleProps = {
 export default function DayNightCycle({ day, gameTime, onTimeChange }: DayNightCycleProps) {
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>('day');
   const [showTimeIndicator, setShowTimeIndicator] = useState(false);
-  const [autoTimeProgress, setAutoTimeProgress] = useState(false);
   
   useEffect(() => {
     let newTimeOfDay: TimeOfDay;
@@ -33,17 +32,6 @@ export default function DayNightCycle({ day, gameTime, onTimeChange }: DayNightC
       onTimeChange && onTimeChange(gameTime, newTimeOfDay);
     }
   }, [gameTime, timeOfDay, onTimeChange]);
-  
-  useEffect(() => {
-    if (!autoTimeProgress) return;
-    
-    const interval = setInterval(() => {
-      const nextTime = (gameTime + 1) % 24;
-      onTimeChange && onTimeChange(nextTime, timeOfDay);
-    }, 60000);
-    
-    return () => clearInterval(interval);
-  }, [autoTimeProgress, gameTime, timeOfDay, onTimeChange]);
   
   const getSkyColor = () => {
     switch (timeOfDay) {
@@ -113,12 +101,9 @@ export default function DayNightCycle({ day, gameTime, onTimeChange }: DayNightC
         className={`time-indicator cursor-pointer rounded-lg shadow-md flex items-center p-1 px-2 ${getSkyColor()}`}
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
-        onClick={() => setAutoTimeProgress(!autoTimeProgress)}
       >
         <div className="mr-1.5">{getIcon()}</div>
         <div className="text-xs font-medium text-white">{getTimeString()}</div>
-        
-        <AnimatedTimeBar autoTimeProgress={autoTimeProgress} gameTime={gameTime} />
       </motion.div>
       
       <AnimatePresence>
@@ -135,33 +120,9 @@ export default function DayNightCycle({ day, gameTime, onTimeChange }: DayNightC
             <div className="mt-1 text-gray-700 text-xs border-t border-gray-100 pt-1">
               {getTimeEffects()}
             </div>
-            
-            <div className="mt-1 text-emerald-600 text-xs">
-              {autoTimeProgress ? "auto time advancing" : "click to toggle auto time"}
-            </div>
           </motion.div>
         )}
       </AnimatePresence>
     </motion.div>
-  );
-}
-
-type AnimatedTimeBarProps = {
-  autoTimeProgress: boolean;
-  gameTime: number;
-};
-
-function AnimatedTimeBar({ autoTimeProgress, gameTime }: AnimatedTimeBarProps) {
-  if (!autoTimeProgress) return null;
-  
-  return (
-    <div className="ml-1.5 w-8 h-1.5 bg-white bg-opacity-20 rounded-full overflow-hidden">
-      <motion.div
-        className="h-full bg-white bg-opacity-50"
-        initial={{ width: "0%" }}
-        animate={{ width: "100%" }}
-        transition={{ duration: 60, ease: "linear", repeat: Infinity }}
-      />
-    </div>
   );
 }

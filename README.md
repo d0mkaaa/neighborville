@@ -1,54 +1,74 @@
-# React + TypeScript + Vite
+# 🏙️ NeighborVille
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A city-building simulation game built for [Hack Club Neighborhood](https://neighborhood.hackclub.com/), where you can build your own virtual community, manage resources, and keep your residents happy!
 
-Currently, two official plugins are available:
+![NeighborVille Screenshot](https://neighborhood.hackclub.com/assets/screenshots/neighborville.png)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## 🎮 Game Features
 
-## Expanding the ESLint configuration
+- **City Building**: Design and build your neighborhood with various buildings, houses, and community spaces
+- **Resource Management**: Balance income, happiness, and energy usage
+- **Dynamic Weather & Day/Night Cycle**: Experience changing weather patterns and a day/night cycle
+- **Neighbor System**: House neighbors with unique traits, preferences, and personalities
+- **Random Events**: Face unexpected events that challenge your management skills
+- **Achievement System**: Unlock achievements as you develop your neighborhood
+- **Energy Management**: Monitor and reduce your city's energy consumption
+- **Housing System**: Assign your neighbors to appropriate housing based on their preferences
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## 🚀 Technologies Used
 
-```js
-export default tseslint.config({
-  extends: [
-    // Remove ...tseslint.configs.recommended and replace with this
-    ...tseslint.configs.recommendedTypeChecked,
-    // Alternatively, use this for stricter rules
-    ...tseslint.configs.strictTypeChecked,
-    // Optionally, add this for stylistic rules
-    ...tseslint.configs.stylisticTypeChecked,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
+- [React](https://react.dev/) - UI framework
+- [TypeScript](https://www.typescriptlang.org/) - Type-safe JavaScript
+- [Vite](https://vitejs.dev/) - Fast development environment
+- [Tailwind CSS](https://tailwindcss.com/) - Styling
+- [Framer Motion](https://www.framer.com/motion/) - Animations
+- [Lucide Icons](https://lucide.dev/) - UI icons
+
+## 🛠️ Development
+
+### Getting Started
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/your-username/neighborville.git
+   cd neighborville
+   ```
+
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+3. Start the development server:
+   ```bash
+   npm run dev
+   ```
+
+4. Open [http://localhost:5173](http://localhost:5173) in your browser
+
+### Building for Production
+
+```bash
+npm run build
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+### Preview Production Build
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default tseslint.config({
-  plugins: {
-    // Add the react-x and react-dom plugins
-    'react-x': reactX,
-    'react-dom': reactDom,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended typescript rules
-    ...reactX.configs['recommended-typescript'].rules,
-    ...reactDom.configs.recommended.rules,
-  },
-})
+```bash
+npm run preview
 ```
+
+## 📚 Project Structure
+
+- `src/components/game/` - Game components like buildings, residents, events
+- `src/components/ui/` - Reusable UI components
+- `src/data/` - Game data (buildings, events, neighbors, achievements)
+- `src/types/` - TypeScript type definitions
+
+## 👥 Contributing
+
+Contributions are welcome! Feel free to open issues or submit pull requests to help improve NeighborVille.
+
+## 📜 License
+
+This project is open source and available under the [MIT License](LICENSE).
