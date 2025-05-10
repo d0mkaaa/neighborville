@@ -1,8 +1,6 @@
-# 🏙️ NeighborVille
+# 🏙️ neighborville
 
 A city-building simulation game built for [Hack Club Neighborhood](https://neighborhood.hackclub.com/), where you can build your own virtual community, manage resources, and keep your residents happy!
-
-![NeighborVille Screenshot](https://neighborhood.hackclub.com/assets/screenshots/neighborville.png)
 
 ## 🎮 Game Features
 
@@ -30,7 +28,7 @@ A city-building simulation game built for [Hack Club Neighborhood](https://neigh
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/your-username/neighborville.git
+   git clone https://github.com/d0mkaaa/neighborville.git
    cd neighborville
    ```
 
