@@ -22,6 +22,11 @@ import BuildingInfoModal from "./BuildingInfoModal";
 import CalendarView from "./CalendarView";
 import CoinHistory from "./CoinHistory";
 import UtilityGrid from "./UtilityGrid";
+import PlayerStatsModal from "./PlayerStatsModal";
+import MusicControls from "./MusicControls";
+import SettingsModal from "./SettingsModal";
+import NeighborSocialFeed from "./NeighborSocialFeed";
+import Dropdown from "../ui/Dropdown";
 import { buildings as initialBuildings } from "../../data/buildings";
 import { neighborProfiles } from "../../data/neighbors";
 import { ACHIEVEMENTS } from "../../data/achievements";
@@ -92,6 +97,7 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
   const [dayRecords, setDayRecords] = useState<DayRecord[]>([]);
   const [showCoinHistory, setShowCoinHistory] = useState(false);
   const [coinHistory, setCoinHistory] = useState<CoinHistoryEntry[]>([]);
+  const [showPlayerStats, setShowPlayerStats] = useState(false);
   
   const [weatherForecast, setWeatherForecast] = useState<WeatherType[]>([]);
   const [showWeatherForecast, setShowWeatherForecast] = useState(false);
@@ -119,6 +125,8 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
   const [buildingCategory, setBuildingCategory] = useState<'all' | 'residential' | 'commercial' | 'utility' | 'entertainment'>('all');
   const [musicEnabled, setMusicEnabled] = useState(false);
   const [showMusicModal, setShowMusicModal] = useState(false);
+  const [showSocialFeed, setShowSocialFeed] = useState(true);
+  const [isMovingBuilding, setIsMovingBuilding] = useState<number | null>(null);
 
   const audioRef = useRef<HTMLAudioElement | HTMLIFrameElement | null>(null);
 
@@ -562,6 +570,23 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
   const handleTileClick = (index: number) => {
     if (index >= gridSize) return;
     
+    if (isMovingBuilding !== null) {
+      if (grid[index] === null) {
+        const buildingToMove = grid[isMovingBuilding];
+        if (buildingToMove) {
+          const newGrid = [...grid];
+          newGrid[index] = buildingToMove;
+          newGrid[isMovingBuilding] = null;
+          setGrid(newGrid);
+          addNotification(`Moved ${buildingToMove.name} to position ${index}`, 'success');
+        }
+      } else {
+        addNotification('Cannot move to occupied tile', 'error');
+      }
+      setIsMovingBuilding(null);
+      return;
+    }
+    
     if (selectedBuilding && grid[index] === null) {
       if (coins >= selectedBuilding.cost) {
         const newGrid = [...grid];
@@ -587,6 +612,20 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
 
   const handleBuildingManage = (building: Building, index: number) => {
     setShowBuildingInfo({building, index});
+  };
+
+  const handleMoveBuilding = (fromIndex: number) => {
+    setIsMovingBuilding(fromIndex);
+    addNotification('Click on an empty tile to move the building', 'info');
+  };
+
+  const handleUpgradeBuilding = (gridIndex: number) => {
+    addNotification('Building upgrades coming soon!', 'info');
+  };
+
+  const handleDemolishBuilding = (gridIndex: number) => {
+    handleDeleteBuilding(gridIndex);
+    setShowBuildingInfo(null);
   };
 
   const handleDeleteBuilding = (index: number) => {
@@ -764,25 +803,25 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
         }
         
         if (house.needsElectricity && !house.isConnectedToPower) {
-          happinessChange -= 15;
-          reasons.push('No electricity (-15)');
+          happinessChange -= 25;
+          reasons.push('No electricity (-25)');
         }
         
         if (house.needsWater && !house.isConnectedToWater) {
-          happinessChange -= 12;
-          reasons.push('No water (-12)');
+          happinessChange -= 20;
+          reasons.push('No water (-20)');
         }
       }
       
       grid.forEach(building => {
         if (building) {
           if (building.name.toLowerCase() === neighbor.likes.toLowerCase()) {
-            happinessChange += 10;
-            reasons.push(`Likes ${building.name} (+10)`);
+            happinessChange += 15;
+            reasons.push(`Likes ${building.name} (+15)`);
           }
           if (building.name.toLowerCase() === neighbor.dislikes.toLowerCase()) {
-            happinessChange -= 15;
-            reasons.push(`Dislikes ${building.name} (-15)`);
+            happinessChange -= 20;
+            reasons.push(`Dislikes ${building.name} (-20)`);
           }
         }
       });
@@ -1175,26 +1214,38 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
   };
 
   const handleEnableMusic = async (enable: boolean) => {
-      setMusicEnabled(enable);
-      setShowMusicModal(false);
+    setMusicEnabled(enable);
+    setShowMusicModal(false);
+    
+    if (enable) {
+      const script = document.createElement('script');
+      script.src = 'https://w.soundcloud.com/player/api.js';
+      script.async = true;
+      document.head.appendChild(script);
       
-      if (enable) {
-        const iframe = document.createElement('iframe');
-        iframe.width = '0';
-        iframe.height = '0';
-        iframe.style.visibility = 'hidden';
-        iframe.scrolling = 'no';
-        iframe.frameBorder = 'no';
-        iframe.allow = 'autoplay';
-        iframe.src = 'https://w.soundcloud.com/player/?url=https://soundcloud.com/d0mkaaa/neighborville-soundtrack&color=%23ff5500&auto_play=true&hide_related=true&show_comments=false&show_user=false&show_reposts=false&visual=false';
-        
-        document.body.appendChild(iframe);
-        
-        audioRef.current = iframe;
-        
-        addNotification('Music started! 🎵', 'success');
-      }
-    };
+      await new Promise(resolve => {
+        if ((window as any).SC) {
+          resolve(true);
+        } else {
+          script.onload = () => resolve(true);
+        }
+      });
+      
+      const iframe = document.createElement('iframe');
+      iframe.width = '0';
+      iframe.height = '0';
+      iframe.style.visibility = 'hidden';
+      iframe.scrolling = 'no';
+      iframe.frameBorder = 'no';
+      iframe.allow = 'autoplay';
+      iframe.src = 'https://w.soundcloud.com/player/?url=https://soundcloud.com/d0mkaaa/neighborville-soundtrack&color=%23ff5500&auto_play=true&hide_related=true&show_comments=false&show_user=false&show_reposts=false&visual=false';
+      
+      document.body.appendChild(iframe);
+      audioRef.current = iframe;
+      
+      addNotification('Music started! 🎵', 'success');
+    }
+  };
 
   const getCategorizedBuildings = () => {
     return buildings.filter(building => {
@@ -1211,6 +1262,24 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
           return true;
       }
     });
+  };
+
+  const handlePlayerNameClick = () => {
+    setShowPlayerStats(true);
+  };
+
+  const toggleMusic = () => {
+    setMusicEnabled(!musicEnabled);
+    if (musicEnabled && audioRef.current) {
+      audioRef.current.remove();
+      audioRef.current = null;
+    } else {
+      handleEnableMusic(true);
+    }
+  };
+
+  const handleShowSettings = () => {
+    setShowSettings(true);
   };
 
   return (
@@ -1235,7 +1304,7 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
             showWeatherForecast={showWeatherForecast}
             onEndDay={() => {}}
             onOpenSaveManager={() => setShowSaveManager(true)}
-            onShowSettings={() => setShowSettings(true)}
+            onShowSettings={handleShowSettings}
             onShowTutorial={() => setShowTutorial(true)}
             onShowAchievements={() => setShowAchievements(true)}
             onToggleTimePause={toggleTimePause}
@@ -1244,6 +1313,7 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
             onShowCalendar={() => setShowCalendar(true)}
             onToggleWeatherForecast={() => setShowWeatherForecast(!showWeatherForecast)}
             onShowCoinHistory={() => setShowCoinHistory(true)}
+            onPlayerNameClick={handlePlayerNameClick}
           />
           
           <AnimatePresence>
@@ -1280,6 +1350,14 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
         removeNotification={(id) => setNotifications(prev => prev.filter(n => n.id !== id))}
       />
       
+      <NeighborSocialFeed
+        neighbors={neighbors}
+        grid={grid}
+        onClose={() => setShowSocialFeed(false)}
+        currentDay={day}
+        timeOfDay={timeOfDay}
+      />
+      
       <div className="container mx-auto px-4 py-4">
         <div className="grid grid-cols-12 gap-4">
           <div className="col-span-3 space-y-4">
@@ -1312,17 +1390,18 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
               <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-sm p-4">
                 <div className="flex justify-between items-center mb-3">
                   <h2 className="font-medium lowercase text-emerald-800">available buildings</h2>
-                  <select
+                  <Dropdown
+                    options={[
+                      { value: 'all', label: 'All' },
+                      { value: 'residential', label: 'Residential' },
+                      { value: 'commercial', label: 'Commercial' },
+                      { value: 'utility', label: 'Utility' },
+                      { value: 'entertainment', label: 'Entertainment' }
+                    ]}
                     value={buildingCategory}
-                    onChange={(e) => setBuildingCategory(e.target.value as typeof buildingCategory)}
-                    className="text-sm border rounded px-2 py-1 text-gray-600"
-                  >
-                    <option value="all">all</option>
-                    <option value="residential">residential</option>
-                    <option value="commercial">commercial</option>
-                    <option value="utility">utility</option>
-                    <option value="entertainment">entertainment</option>
-                  </select>
+                    onChange={(value) => setBuildingCategory(value as typeof buildingCategory)}
+                    className="w-32"
+                  />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   {getCategorizedBuildings().map((building) => (
@@ -1366,6 +1445,7 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
                   currentSize={gridSize}
                   maxSize={64}
                   coins={coins}
+                  playerLevel={level}
                   onExpand={(newSize, cost) => {
                     if (coins >= cost) {
                       setCoins(coins - cost);
@@ -1426,6 +1506,68 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
           waterGrid
         }}
       />
+
+      <MusicControls
+        audioRef={audioRef}
+        musicEnabled={musicEnabled}
+        onToggleMusic={toggleMusic}
+      />
+
+      <AnimatePresence>
+        {showSettings && (
+          <SettingsModal 
+            isOpen={showSettings}
+            onClose={() => setShowSettings(false)}
+            musicEnabled={musicEnabled}
+            onToggleMusic={toggleMusic}
+            audioRef={audioRef}
+            onShowTutorial={() => {
+              setShowSettings(false);
+              setShowTutorial(true);
+            }}
+            onShowStats={() => {
+              setShowSettings(false);
+              setShowPlayerStats(true);
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showPlayerStats && (
+          <PlayerStatsModal 
+            gameData={{
+              playerName,
+              coins,
+              happiness,
+              day,
+              level,
+              experience,
+              grid,
+              gridSize,
+              neighbors,
+              achievements,
+              events: [],
+              gameTime,
+              gameMinutes,
+              timeOfDay,
+              recentEvents,
+              bills,
+              energyRate,
+              totalEnergyUsage,
+              lastBillDay,
+              coinHistory,
+              weather,
+              powerGrid,
+              waterGrid
+            }}
+            achievements={achievements}
+            neighbors={neighbors}
+            grid={grid}
+            onClose={() => setShowPlayerStats(false)}
+          />
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {showHappinessAnalytics && (
@@ -1521,7 +1663,11 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
             onAssignResident={handleAssignResident}
             onRemoveResident={handleRemoveResident}
             onCollectIncome={handleCollectIncome}
+            onMoveBuilding={handleMoveBuilding}
+            onUpgradeBuilding={handleUpgradeBuilding}
+            onDemolishBuilding={handleDemolishBuilding}
             grid={grid}
+            coins={coins}
           />
         )}
       </AnimatePresence>

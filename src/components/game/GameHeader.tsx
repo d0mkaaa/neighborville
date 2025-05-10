@@ -33,6 +33,7 @@ interface GameHeaderProps {
   onShowCalendar: () => void;
   onToggleWeatherForecast: () => void;
   onShowCoinHistory: () => void;
+  onPlayerNameClick?: () => void;
 }
 
 export default function GameHeader({
@@ -61,7 +62,8 @@ export default function GameHeader({
   onShowHappinessAnalytics,
   onShowCalendar,
   onToggleWeatherForecast,
-  onShowCoinHistory
+  onShowCoinHistory,
+  onPlayerNameClick
 }: GameHeaderProps) {
   const getTimeOfDayColor = () => {
     switch(timeOfDay) {
@@ -176,7 +178,8 @@ export default function GameHeader({
           <div className="flex items-center gap-2">
             <motion.div 
               whileHover={{ scale: 1.05 }}
-              className="bg-emerald-50 rounded-lg shadow-sm px-3 py-1.5 flex items-center"
+              onClick={onPlayerNameClick}
+              className="bg-emerald-50 rounded-lg shadow-sm px-3 py-1.5 flex items-center cursor-pointer"
             >
               <User size={16} className="text-emerald-700 mr-2" />
               <span className="text-emerald-800 font-medium mr-2 text-sm lowercase">{playerName} • level {level}</span>

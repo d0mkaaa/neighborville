@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Home, User, Plus, Minus, DollarSign, Zap, TrendingUp, AlertTriangle } from "lucide-react";
+import { X, Home, User, Plus, Minus, DollarSign, Zap, TrendingUp, AlertTriangle, Move, Trash2, RotateCw } from "lucide-react";
 import type { Building, Neighbor } from "../../types/game";
 
 type BuildingInfoModalProps = {
@@ -11,7 +11,11 @@ type BuildingInfoModalProps = {
   onAssignResident: (neighborId: number, gridIndex: number) => void;
   onRemoveResident: (neighborId: number) => void;
   onCollectIncome: (gridIndex: number, amount: number) => void;
+  onMoveBuilding: (fromIndex: number) => void;
+  onUpgradeBuilding: (gridIndex: number) => void;
+  onDemolishBuilding: (gridIndex: number) => void;
   grid: (Building | null)[];
+  coins: number;
 };
 
 export default function BuildingInfoModal({
@@ -22,9 +26,14 @@ export default function BuildingInfoModal({
   onAssignResident,
   onRemoveResident,
   onCollectIncome,
-  grid
+  onMoveBuilding,
+  onUpgradeBuilding,
+  onDemolishBuilding,
+  grid,
+  coins
 }: BuildingInfoModalProps) {
   const [currentBuilding, setCurrentBuilding] = useState(building);
+  const [showActions, setShowActions] = useState(false);
   
   useEffect(() => {
     const latestBuilding = grid[gridIndex];
@@ -61,6 +70,9 @@ export default function BuildingInfoModal({
   };
 
   const canCollectIncome = currentBuilding.id !== 'house' && currentBuilding.id !== 'apartment' && totalIncome > 0;
+  const demolishValue = Math.floor(currentBuilding.cost * 0.5);
+  const upgradeAvailable = false;
+  const upgradeCost = currentBuilding.cost * 0.5;
 
   const handleAssignResident = (neighborId: number) => {
     onAssignResident(neighborId, gridIndex);
@@ -94,7 +106,13 @@ export default function BuildingInfoModal({
             </div>
             <div>
               <h2 className="text-lg font-medium text-white lowercase">{currentBuilding.name} #{gridIndex}</h2>
-              <div className="text-sm text-white/80">capacity: {currentResidents.length}/{maxCapacity}</div>
+              <div className="text-sm text-white/80">
+                {currentBuilding.id === 'house' || currentBuilding.id === 'apartment' ? 
+                  `capacity: ${currentResidents.length}/${maxCapacity}` :
+                  `${currentBuilding.needsElectricity && !currentBuilding.isConnectedToPower ? 'No Power' :
+                    currentBuilding.needsWater && !currentBuilding.isConnectedToWater ? 'No Water' : 'Active'}`
+                }
+              </div>
             </div>
           </div>
           <button 
@@ -109,7 +127,7 @@ export default function BuildingInfoModal({
           <div className="grid grid-cols-3 gap-3 mb-5">
             <div className="bg-gray-50 p-3 rounded-lg text-center">
               <div className="text-xs text-gray-500 uppercase">value</div>
-              <div className="text-sm font-medium">{Math.floor(currentBuilding.cost * 0.5)}c</div>
+              <div className="text-sm font-medium">{demolishValue}c</div>
             </div>
             <div className="bg-emerald-50 p-3 rounded-lg text-center">
               <div className="text-xs text-emerald-700 uppercase">income</div>
@@ -130,17 +148,78 @@ export default function BuildingInfoModal({
             </div>
           )}
 
-          {canCollectIncome && (
+          <div className="flex gap-2 mb-4">
+            {canCollectIncome && (
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => onCollectIncome(gridIndex, totalIncome)}
+                className="flex-1 py-2 bg-emerald-500 text-white rounded-lg flex items-center justify-center gap-2 hover:bg-emerald-600 transition-colors"
+              >
+                <DollarSign size={16} />
+                Collect {totalIncome}c
+              </motion.button>
+            )}
+            
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
-              onClick={() => onCollectIncome(gridIndex, totalIncome)}
-              className="w-full mb-4 py-2 bg-emerald-500 text-white rounded-lg flex items-center justify-center gap-2 hover:bg-emerald-600 transition-colors"
+              onClick={() => setShowActions(!showActions)}
+              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
             >
-              <DollarSign size={16} />
-              Collect {totalIncome} coins
+              ⚙️
             </motion.button>
-          )}
+          </div>
+
+          <AnimatePresence>
+            {showActions && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="mb-4 overflow-hidden"
+              >
+                <div className="flex gap-2">
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => onMoveBuilding(gridIndex)}
+                    className="flex-1 py-2 bg-blue-100 text-blue-700 rounded-lg flex items-center justify-center gap-2 hover:bg-blue-200 transition-colors"
+                  >
+                    <Move size={16} />
+                    Move
+                  </motion.button>
+                  
+                  {upgradeAvailable && (
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => onUpgradeBuilding(gridIndex)}
+                      className={`flex-1 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors ${
+                        coins >= upgradeCost 
+                          ? 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                          : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      }`}
+                      disabled={coins < upgradeCost}
+                    >
+                      <RotateCw size={16} />
+                      Upgrade
+                    </motion.button>
+                  )}
+                  
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => onDemolishBuilding(gridIndex)}
+                    className="flex-1 py-2 bg-red-100 text-red-700 rounded-lg flex items-center justify-center gap-2 hover:bg-red-200 transition-colors"
+                  >
+                    <Trash2 size={16} />
+                    Demolish
+                  </motion.button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {(currentBuilding.id === 'house' || currentBuilding.id === 'apartment') && (
             <div>

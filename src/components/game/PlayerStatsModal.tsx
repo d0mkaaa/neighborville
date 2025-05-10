@@ -1,12 +1,12 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { X, User, TrendingUp, Calendar, Home, Coins, Trophy, Zap, Droplets, Users } from "lucide-react";
-import type { GameProgress, Achievement, Neighbor, Building } from "../../types/game";
+import { X, User, TrendingUp, Calendar, Home, Coins, Trophy, Zap, Droplets, Users, Building, Award, Activity, ChevronRight } from "lucide-react";
+import type { GameProgress, Achievement, Neighbor, Building as BuildingType } from "../../types/game";
 
 type PlayerStatsModalProps = {
   gameData: GameProgress;
   achievements: Achievement[];
   neighbors: Neighbor[];
-  grid: (Building | null)[];
+  grid: (BuildingType | null)[];
   onClose: () => void;
 };
 
@@ -17,31 +17,31 @@ export default function PlayerStatsModal({ gameData, achievements, neighbors, gr
   const totalBuildings = grid.filter(b => b !== null).length;
   const gridUtilization = (totalBuildings / gameData.gridSize) * 100;
   
-  const dailyIncome = grid.reduce((sum, building) => {
-    if (building && building.income > 0) {
-      return sum + building.income;
-    }
-    return sum;
-  }, 0);
-  
-  const connectedBuildings = grid.filter(b => 
-    b && (b.isConnectedToPower || b.isConnectedToWater || b.isPowerGenerator || b.isWaterSupply)
-  ).length;
-
   const stats = [
     { label: 'Level', value: gameData.level, icon: <TrendingUp className="text-emerald-500" size={20} /> },
-    { label: 'Experience', value: `${gameData.experience}/${gameData.level * 100}`, icon: <TrendingUp className="text-blue-500" size={20} /> },
+    { label: 'Experience', value: `${gameData.experience}/${gameData.level * 100}`, icon: <Activity className="text-blue-500" size={20} /> },
     { label: 'Days Survived', value: gameData.day, icon: <Calendar className="text-purple-500" size={20} /> },
     { label: 'Total Coins', value: gameData.coins, icon: <Coins className="text-yellow-500" size={20} /> },
-    { label: 'Happiness', value: `${Math.round(gameData.happiness)}%`, icon: <Users className="text-green-500" size={20} /> },
-    { label: 'Daily Income', value: `${dailyIncome} coins`, icon: <TrendingUp className="text-emerald-500" size={20} /> },
-    { label: 'Buildings', value: totalBuildings, icon: <Home className="text-indigo-500" size={20} /> },
+    { label: 'Buildings', value: totalBuildings, icon: <Building className="text-indigo-500" size={20} /> },
     { label: 'Residents', value: housedResidents, icon: <Users className="text-orange-500" size={20} /> },
-    { label: 'Grid Size', value: `${Math.sqrt(gameData.gridSize)}×${Math.sqrt(gameData.gridSize)}`, icon: <Home className="text-gray-500" size={20} /> },
+    { label: 'Happiness', value: `${Math.round(gameData.happiness)}%`, icon: <Users className="text-green-500" size={20} /> },
     { label: 'Achievements', value: `${completedAchievements}/${achievements.length}`, icon: <Trophy className="text-amber-500" size={20} /> },
-    { label: 'Connected Buildings', value: connectedBuildings, icon: <Zap className="text-blue-500" size={20} /> },
-    { label: 'Total XP Earned', value: totalXP, icon: <TrendingUp className="text-purple-500" size={20} /> },
+    { label: 'Grid Size', value: `${Math.sqrt(gameData.gridSize)}×${Math.sqrt(gameData.gridSize)}`, icon: <Home className="text-gray-500" size={20} /> },
+    { label: 'Total XP Earned', value: totalXP, icon: <Award className="text-purple-500" size={20} /> },
   ];
+
+  const nextLevel = gameData.level + 1;
+  const unlocksAtNextLevel = [
+    { level: 2, unlock: 'More building options' },
+    { level: 3, unlock: 'Fancy Restaurant' },
+    { level: 4, unlock: 'Tech Hub' },
+    { level: 5, unlock: 'Movie Theater & Special Neighbors' },
+    { level: 6, unlock: 'Luxury Condos' },
+    { level: 8, unlock: 'Expanded grid (5×5)' },
+    { level: 12, unlock: 'Large grid (6×6)' },
+    { level: 16, unlock: 'Huge grid (7×7)' },
+    { level: 20, unlock: 'Maximum grid (8×8)' },
+  ].find(item => item.level === nextLevel);
 
   return (
     <motion.div
@@ -79,7 +79,7 @@ export default function PlayerStatsModal({ gameData, achievements, neighbors, gr
         </div>
         
         <div className="p-6 overflow-y-auto max-h-[calc(80vh-100px)]">
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
             {stats.map((stat, index) => (
               <motion.div
                 key={stat.label}
@@ -104,7 +104,7 @@ export default function PlayerStatsModal({ gameData, achievements, neighbors, gr
             <div className="grid grid-cols-1 gap-4">
               <div>
                 <div className="flex justify-between text-sm text-gray-600 mb-1">
-                  <span>Experience</span>
+                  <span>Experience to Level {gameData.level + 1}</span>
                   <span>{gameData.experience}/{gameData.level * 100} XP</span>
                 </div>
                 <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden">
@@ -148,6 +148,26 @@ export default function PlayerStatsModal({ gameData, achievements, neighbors, gr
               </div>
             </div>
           </div>
+          
+          {unlocksAtNextLevel && (
+            <div className="mt-6 pt-6 border-t border-gray-200">
+              <h3 className="text-sm font-medium text-gray-700 mb-3 lowercase">next level unlock</h3>
+              <div className="bg-emerald-50 rounded-lg p-4 flex items-center justify-between">
+                <div className="flex items-center">
+                  <div className="w-8 h-8 bg-emerald-500 rounded-full flex items-center justify-center mr-3">
+                    <ChevronRight size={16} className="text-white" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium text-emerald-800">Level {unlocksAtNextLevel.level}</div>
+                    <div className="text-xs text-emerald-600">{unlocksAtNextLevel.unlock}</div>
+                  </div>
+                </div>
+                <div className="text-xs text-emerald-600">
+                  {gameData.level * 100 - gameData.experience} XP to go
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </motion.div>
     </motion.div>

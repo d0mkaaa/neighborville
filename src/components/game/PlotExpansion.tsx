@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { LockOpen, Lock, ChevronRight, TrendingUp } from "lucide-react";
+import { LockOpen, Lock, ChevronRight, TrendingUp, Zap } from "lucide-react";
 
 type PlotExpansionProps = {
   currentSize: number;
   maxSize: number;
   coins: number;
+  playerLevel: number;
   onExpand: (newSize: number, cost: number) => void;
 };
 
@@ -13,6 +14,7 @@ export default function PlotExpansion({
   currentSize, 
   maxSize, 
   coins, 
+  playerLevel,
   onExpand 
 }: PlotExpansionProps) {
   const [showDetails, setShowDetails] = useState(false);
@@ -22,22 +24,27 @@ export default function PlotExpansion({
     
     let nextSize = 0;
     let cost = 0;
+    let levelRequired = 0;
     
     if (currentSize === 16) {
-      nextSize = 25; // 5x5
+      nextSize = 25;
       cost = 1500;
+      levelRequired = 1;
     } else if (currentSize === 25) {
-      nextSize = 36; // 6x6
+      nextSize = 36;
       cost = 3000;
+      levelRequired = 8;
     } else if (currentSize === 36) {
-      nextSize = 49; // 7x7
+      nextSize = 49;
       cost = 5000;
+      levelRequired = 12;
     } else if (currentSize === 49) {
-      nextSize = 64; // 8x8
+      nextSize = 64;
       cost = 8000;
+      levelRequired = 16;
     }
     
-    return { nextSize, cost };
+    return { nextSize, cost, levelRequired };
   };
   
   const nextExpansion = getNextExpansion();
@@ -52,6 +59,8 @@ export default function PlotExpansion({
   }
   
   const canAfford = coins >= nextExpansion.cost;
+  const hasRequiredLevel = playerLevel >= nextExpansion.levelRequired;
+  const canExpand = canAfford && hasRequiredLevel;
   
   const getGridSizeLabel = (size: number) => {
     const dimension = Math.sqrt(size);
@@ -117,25 +126,44 @@ export default function PlotExpansion({
             <div className="ml-3 text-xs text-gray-500">{Math.floor((currentSize / maxSize) * 100)}%</div>
           </div>
           
+          {nextExpansion.levelRequired > 1 && (
+            <div className="mb-4 p-3 bg-emerald-50 rounded-lg flex items-center">
+              <Zap size={16} className="text-emerald-600 mr-2" />
+              <div>
+                <div className="text-sm font-medium text-emerald-800">
+                  Level {nextExpansion.levelRequired} required
+                </div>
+                <div className="text-xs text-emerald-600">
+                  {hasRequiredLevel ? 'Requirement met!' : `You are level ${playerLevel}`}
+                </div>
+              </div>
+            </div>
+          )}
+          
           <div className="text-sm text-gray-600 mb-4 lowercase">
             expanding your plot allows you to build more structures and create a larger neighborhood
           </div>
           
           <motion.button
-            whileHover={{ scale: canAfford ? 1.03 : 1 }}
-            whileTap={{ scale: canAfford ? 0.97 : 1 }}
-            onClick={() => canAfford && onExpand(nextExpansion.nextSize, nextExpansion.cost)}
+            whileHover={{ scale: canExpand ? 1.03 : 1 }}
+            whileTap={{ scale: canExpand ? 0.97 : 1 }}
+            onClick={() => canExpand && onExpand(nextExpansion.nextSize, nextExpansion.cost)}
             className={`w-full py-2 px-4 rounded-lg flex items-center justify-center ${
-              canAfford 
+              canExpand 
                 ? 'bg-purple-600 text-white hover:bg-purple-700' 
                 : 'bg-gray-300 text-gray-500 cursor-not-allowed'
             } transition-colors lowercase`}
-            disabled={!canAfford}
+            disabled={!canExpand}
           >
-            {canAfford ? (
+            {canExpand ? (
               <>
                 <LockOpen size={16} className="mr-2" />
                 purchase expansion
+              </>
+            ) : !hasRequiredLevel ? (
+              <>
+                <Lock size={16} className="mr-2" />
+                level {nextExpansion.levelRequired} required
               </>
             ) : (
               <>
