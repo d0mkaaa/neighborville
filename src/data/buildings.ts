@@ -14,7 +14,9 @@ export const buildings: Building[] = [
     residenceTier: 'basic',
     isOccupied: false,
     occupantIds: [],
-    unlocked: true
+    unlocked: true,
+    needsElectricity: true,
+    needsWater: true
   },
   { 
     id: 'apartment', 
@@ -29,7 +31,9 @@ export const buildings: Building[] = [
     residenceTier: 'basic',
     isOccupied: false,
     occupantIds: [],
-    unlocked: true
+    unlocked: true,
+    needsElectricity: true,
+    needsWater: true
   },
   { 
     id: 'park', 
@@ -40,7 +44,9 @@ export const buildings: Building[] = [
     income: 10,
     color: '#059669',
     energyUsage: 5,
-    unlocked: true
+    unlocked: true,
+    needsElectricity: false,
+    needsWater: true
   },
   { 
     id: 'cafe', 
@@ -51,7 +57,9 @@ export const buildings: Building[] = [
     income: 40,
     color: '#d97706',
     energyUsage: 20,
-    unlocked: true
+    unlocked: true,
+    needsElectricity: true,
+    needsWater: true
   },
   { 
     id: 'library', 
@@ -62,7 +70,9 @@ export const buildings: Building[] = [
     income: 15,
     color: '#7c3aed',
     energyUsage: 15,
-    unlocked: true
+    unlocked: true,
+    needsElectricity: true,
+    needsWater: false
   },
   { 
     id: 'music_venue', 
@@ -73,7 +83,9 @@ export const buildings: Building[] = [
     income: 50,
     color: '#db2777',
     energyUsage: 30,
-    unlocked: true
+    unlocked: true,
+    needsElectricity: true,
+    needsWater: false
   },
   { 
     id: 'charging_station', 
@@ -84,7 +96,9 @@ export const buildings: Building[] = [
     income: 35,
     color: '#3b82f6',
     energyUsage: 50,
-    unlocked: true
+    unlocked: true,
+    needsElectricity: true,
+    needsWater: false
   },
   { 
     id: 'solar_panel', 
@@ -95,7 +109,56 @@ export const buildings: Building[] = [
     income: 15,
     color: '#eab308',
     energyUsage: -30,
-    unlocked: true
+    unlocked: true,
+    isPowerGenerator: true,
+    powerOutput: 30,
+    needsElectricity: false,
+    needsWater: false
+  },
+  { 
+    id: 'power_plant', 
+    name: 'power plant', 
+    icon: 'Zap', 
+    cost: 800, 
+    happiness: -5, 
+    income: 20,
+    color: '#64748b',
+    energyUsage: -100,
+    unlocked: true,
+    isPowerGenerator: true,
+    powerOutput: 100,
+    needsElectricity: false,
+    needsWater: true
+  },
+  { 
+    id: 'water_tower', 
+    name: 'water tower', 
+    icon: 'Droplets', 
+    cost: 600, 
+    happiness: 5, 
+    income: 0,
+    color: '#0ea5e9',
+    energyUsage: 20,
+    unlocked: true,
+    isWaterSupply: true,
+    waterOutput: 100,
+    needsElectricity: true,
+    needsWater: false
+  },
+  { 
+    id: 'water_pump', 
+    name: 'water pump', 
+    icon: 'Waves', 
+    cost: 400, 
+    happiness: 0, 
+    income: 0,
+    color: '#0369a1',
+    energyUsage: 40,
+    unlocked: true,
+    isWaterSupply: true,
+    waterOutput: 50,
+    needsElectricity: true,
+    needsWater: false
   },
   { 
     id: 'fancy_restaurant', 
@@ -107,7 +170,9 @@ export const buildings: Building[] = [
     color: '#f59e0b',
     energyUsage: 40,
     unlocked: false,
-    levelRequired: 3
+    levelRequired: 3,
+    needsElectricity: true,
+    needsWater: true
   },
   { 
     id: 'tech_hub', 
@@ -119,7 +184,9 @@ export const buildings: Building[] = [
     color: '#3b82f6',
     energyUsage: 60,
     unlocked: false,
-    levelRequired: 4
+    levelRequired: 4,
+    needsElectricity: true,
+    needsWater: false
   },
   { 
     id: 'movie_theater', 
@@ -131,7 +198,9 @@ export const buildings: Building[] = [
     color: '#8b5cf6',
     energyUsage: 80,
     unlocked: false,
-    levelRequired: 5
+    levelRequired: 5,
+    needsElectricity: true,
+    needsWater: false
   },
   { 
     id: 'condo', 
@@ -147,6 +216,8 @@ export const buildings: Building[] = [
     isOccupied: false,
     occupantIds: [],
     unlocked: false,
-    levelRequired: 6
+    levelRequired: 6,
+    needsElectricity: true,
+    needsWater: true
   }
 ];

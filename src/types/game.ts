@@ -15,6 +15,16 @@ export interface Building {
   occupantId?: number;
   residenceTier?: 'basic' | 'premium';
   occupantIds?: number[];
+  lastCollectedIncome?: number;
+  needsElectricity?: boolean;
+  needsWater?: boolean;
+  isPowerGenerator?: boolean;
+  isWaterSupply?: boolean;
+  powerOutput?: number;
+  waterOutput?: number;
+  isConnectedToPower?: boolean;
+  isConnectedToWater?: boolean;
+  connectedBuildings?: number[];
 }
 
 export interface UnlockCondition {
@@ -102,11 +112,21 @@ export interface Bill {
 
 export type TimeOfDay = 'morning' | 'day' | 'evening' | 'night';
 
+export type WeatherType = 'sunny' | 'rainy' | 'cloudy' | 'stormy' | 'snowy';
+
 export interface TimeBasedBonus {
   buildingId: string;
   timeOfDay: TimeOfDay;
   incomeMultiplier?: number;
   happinessMultiplier?: number;
+}
+
+export interface CoinHistoryEntry {
+  day: number;
+  balance: number;
+  income: number;
+  expenses: number;
+  timestamp: number;
 }
 
 export interface GameProgress {
@@ -130,4 +150,22 @@ export interface GameProgress {
   energyRate?: number;
   totalEnergyUsage?: number;
   lastBillDay?: number;
+  coinHistory?: CoinHistoryEntry[];
+  weather?: WeatherType;
+  powerGrid?: PowerGridState;
+  waterGrid?: WaterGridState;
+}
+
+export interface PowerGridState {
+  totalPowerProduction: number;
+  totalPowerConsumption: number;
+  connectedBuildings: number[];
+  powerOutages: number[];
+}
+
+export interface WaterGridState {
+  totalWaterProduction: number;
+  totalWaterConsumption: number;
+  connectedBuildings: number[];
+  waterShortages: number[];
 }

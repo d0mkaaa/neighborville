@@ -1,10 +1,10 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { User, Save, Award, AlertCircle, Calendar, Clock, Settings, Play, Pause } from 'lucide-react';
+import { User, Save, Award, AlertCircle, Calendar, Clock, Settings, Play, Pause, TrendingUp } from 'lucide-react';
 import ProgressBar from './ProgressBar';
 import Button from '../ui/Button';
 import WeatherForecast from './WeatherForecast';
-import type { TimeOfDay } from '../../types/game';
+import type { TimeOfDay, WeatherType } from '../../types/game';
 
 interface GameHeaderProps {
   playerName: string;
@@ -17,10 +17,10 @@ interface GameHeaderProps {
   gameMinutes: number;
   timePaused: boolean;
   timeOfDay: TimeOfDay;
-  weather: 'sunny' | 'rainy' | 'cloudy' | 'stormy';
+  weather: WeatherType;
   hasUnpaidBills: boolean;
   achievements: { completed: boolean }[];
-  weatherForecast: string[];
+  weatherForecast: WeatherType[];
   showWeatherForecast: boolean;
   onEndDay: () => void;
   onOpenSaveManager: () => void;
@@ -32,6 +32,7 @@ interface GameHeaderProps {
   onShowHappinessAnalytics: () => void;
   onShowCalendar: () => void;
   onToggleWeatherForecast: () => void;
+  onShowCoinHistory: () => void;
 }
 
 export default function GameHeader({
@@ -59,7 +60,8 @@ export default function GameHeader({
   onTimeChange,
   onShowHappinessAnalytics,
   onShowCalendar,
-  onToggleWeatherForecast
+  onToggleWeatherForecast,
+  onShowCoinHistory
 }: GameHeaderProps) {
   const getTimeOfDayColor = () => {
     switch(timeOfDay) {
@@ -94,10 +96,17 @@ export default function GameHeader({
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
-              className="flex items-center rounded-lg bg-white/10 backdrop-blur-sm px-3 py-1.5 border border-white/20"
+              className="flex items-center"
             >
-              <span className="mr-2 text-xl">💰</span>
-              <span className="font-medium lowercase text-base">{coins} coins</span>
+              <motion.div 
+                whileHover={{ scale: 1.05 }}
+                onClick={onShowCoinHistory}
+                className="cursor-pointer flex items-center rounded-lg bg-white/10 backdrop-blur-sm px-3 py-1.5 border border-white/20"
+              >
+                <span className="mr-2 text-xl">💰</span>
+                <span className="font-medium lowercase text-base">{coins} coins</span>
+                <TrendingUp size={14} className="ml-1 text-white/80" />
+              </motion.div>
             </motion.div>
             
             <motion.div 
@@ -119,7 +128,7 @@ export default function GameHeader({
                   }}
                 ></motion.div>
               </div>
-              <span className="ml-2 font-medium lowercase text-base">{happiness}%</span>
+              <span className="ml-2 font-medium lowercase text-base">{Math.round(happiness)}%</span>
             </motion.div>
             
             <motion.div 
@@ -153,7 +162,7 @@ export default function GameHeader({
 
               <WeatherForecast
                 currentWeather={weather}
-                forecast={weatherForecast as any}
+                forecast={weatherForecast}
                 isExpanded={showWeatherForecast}
                 onToggle={onToggleWeatherForecast}
               />

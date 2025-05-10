@@ -1,5 +1,5 @@
 import type { Building } from "../../types/game";
-import { Home, Smile, Coffee, Book, Music, Zap, Sun, Lock } from "lucide-react";
+import { Home, Smile, Coffee, Book, Music, Zap, Sun, Lock, Droplets, Waves, Utensils, Code, Film } from "lucide-react";
 import { motion } from "framer-motion";
 
 type BuildingOptionProps = {

@@ -18,7 +18,7 @@ export const neighborProfiles: Neighbor[] = [
   },
   { 
     id: 2, 
-    name: 'sam johnson', 
+    name: 'johnny sins', 
     avatar: '👨‍🦲', 
     trait: 'creative', 
     likes: 'music venues', 

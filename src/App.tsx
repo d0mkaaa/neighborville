@@ -13,6 +13,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [showContinueModal, setShowContinueModal] = useState(false);
   const [savedGameFound, setSavedGameFound] = useState<GameProgress | null>(null);
+  const [showTutorial, setShowTutorial] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -54,7 +55,7 @@ function App() {
     
     const initialState: GameProgress = {
       playerName: playerName,
-      coins: 1000,
+      coins: 5000,  // Increased starting budget
       happiness: 70,
       day: 1,
       level: 1,
@@ -70,12 +71,21 @@ function App() {
       bills: [],
       energyRate: 2,
       totalEnergyUsage: 0,
-      lastBillDay: 0
+      lastBillDay: 0,
+      coinHistory: [{
+        day: 1,
+        balance: 5000,
+        income: 0,
+        expenses: 0,
+        timestamp: Date.now()
+      }],
+      weather: 'sunny'
     };
     
     setGameState(initialState);
     setGameStarted(true);
     setShowContinueModal(false);
+    setShowTutorial(true);
   };
 
   const handleContinueGame = () => {
@@ -83,6 +93,7 @@ function App() {
       setGameState(savedGameFound);
       setGameStarted(true);
       setShowContinueModal(false);
+      setShowTutorial(false);
     }
   };
 
@@ -94,6 +105,7 @@ function App() {
     setGameState(gameData);
     setGameStarted(true);
     setShowContinueModal(false);
+    setShowTutorial(false);
   };
 
   if (loading) {
@@ -171,7 +183,10 @@ function App() {
   }
 
   return (
-    <NeighborVille initialGameState={gameState} />
+    <NeighborVille 
+      initialGameState={gameState} 
+      showTutorialProp={showTutorial}
+    />
   );
 }
 

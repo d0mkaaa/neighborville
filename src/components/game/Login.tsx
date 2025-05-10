@@ -35,19 +35,38 @@ export default function Login({ onStartGame, onLoadGame, onShowTutorial }: Login
       
       const games = gameKeys.map(key => {
         const data = JSON.parse(localStorage.getItem(key) || "{}") as GameProgress;
+        
+        let timestamp = Date.now();
         const nameParts = key.split("_");
-        const timestamp = nameParts.length > 2 ? parseInt(nameParts[2]) : Date.now();
-        const date = new Date(timestamp).toLocaleString();
+        
+        if (nameParts.length > 2) {
+          const possibleTimestamp = parseInt(nameParts[2]);
+          if (!isNaN(possibleTimestamp)) {
+            timestamp = possibleTimestamp;
+          }
+        }
+        
+        const date = new Date(timestamp).toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
         
         return { 
           key,
-          name: data.playerName, 
+          name: data.playerName || 'Unnamed Player', 
           date, 
           data 
         };
       });
       
-      setSavedGames(games.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+      setSavedGames(games.sort((a, b) => {
+        const dateA = new Date(a.data.day * 86400000);
+        const dateB = new Date(b.data.day * 86400000);
+        return dateB.getTime() - dateA.getTime();
+      }));
     } catch (error) {
       console.error("Error loading saved games", error);
     }

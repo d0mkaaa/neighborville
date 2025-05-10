@@ -20,18 +20,22 @@ import AchievementsModal from "./AchievementsModal";
 import AchievementUnlockModal from "./AchievementUnlockModal";
 import BuildingInfoModal from "./BuildingInfoModal";
 import CalendarView from "./CalendarView";
+import CoinHistory from "./CoinHistory";
+import UtilityGrid from "./UtilityGrid";
 import { buildings as initialBuildings } from "../../data/buildings";
 import { neighborProfiles } from "../../data/neighbors";
 import { ACHIEVEMENTS } from "../../data/achievements";
 import { possibleEvents, getRandomEvent } from "../../data/events";
 import type { 
   Building, GameEvent, Neighbor, ScheduledEvent,
-  GameProgress, Achievement, RecentEvent, Bill, TimeOfDay, EventOption
+  GameProgress, Achievement, RecentEvent, Bill, TimeOfDay, EventOption,
+  CoinHistoryEntry, WeatherType, PowerGridState, WaterGridState
 } from "../../types/game";
 import type { ExtendedNotification } from "./NotificationSystem";
 
 interface NeighborVilleProps {
   initialGameState?: GameProgress | null;
+  showTutorialProp?: boolean;
 }
 
 type DayRecord = {
@@ -45,7 +49,7 @@ type DayRecord = {
   events: { name: string; type: 'good' | 'bad' | 'neutral' }[];
 };
 
-export default function NeighborVille({ initialGameState }: NeighborVilleProps) {
+export default function NeighborVille({ initialGameState, showTutorialProp = false }: NeighborVilleProps) {
   const [playerName, setPlayerName] = useState("");
   const [coins, setCoins] = useState(1000);
   const [happiness, setHappiness] = useState(50); 
@@ -59,6 +63,7 @@ export default function NeighborVille({ initialGameState }: NeighborVilleProps) 
   const [gameMinutes, setGameMinutes] = useState<number>(0);
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>('morning');
   const [timePaused, setTimePaused] = useState(false);
+  const [weather, setWeather] = useState<WeatherType>('sunny');
   
   const [notifications, setNotifications] = useState<ExtendedNotification[]>([]);
   const [selectedBuilding, setSelectedBuilding] = useState<Building | null>(null);
@@ -66,7 +71,7 @@ export default function NeighborVille({ initialGameState }: NeighborVilleProps) 
   const [showSaveManager, setShowSaveManager] = useState(false);
   const [showHappinessAnalytics, setShowHappinessAnalytics] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [showTutorial, setShowTutorial] = useState(false);
+  const [showTutorial, setShowTutorial] = useState(showTutorialProp);
   const [tutorialStep, setTutorialStep] = useState(1);
   const [activeTab, setActiveTab] = useState('buildings');
   const [autoSaving, setAutoSaving] = useState(false);
@@ -85,9 +90,10 @@ export default function NeighborVille({ initialGameState }: NeighborVilleProps) 
   const [showBuildingInfo, setShowBuildingInfo] = useState<{building: Building, index: number} | null>(null);
   const [showCalendar, setShowCalendar] = useState(false);
   const [dayRecords, setDayRecords] = useState<DayRecord[]>([]);
+  const [showCoinHistory, setShowCoinHistory] = useState(false);
+  const [coinHistory, setCoinHistory] = useState<CoinHistoryEntry[]>([]);
   
-  const [weather, setWeather] = useState<'sunny' | 'rainy' | 'cloudy' | 'stormy'>('sunny');
-  const [weatherForecast, setWeatherForecast] = useState<string[]>([]);
+  const [weatherForecast, setWeatherForecast] = useState<WeatherType[]>([]);
   const [showWeatherForecast, setShowWeatherForecast] = useState(false);
   const [totalEnergyUsage, setTotalEnergyUsage] = useState<number>(0);
   const [energyRate, setEnergyRate] = useState<number>(2);
@@ -95,14 +101,61 @@ export default function NeighborVille({ initialGameState }: NeighborVilleProps) 
   const [daysUntilBill, setDaysUntilBill] = useState<number>(5);
   const [hourlyCoinBonus, setHourlyCoinBonus] = useState<number>(0);
   const [happinessDecay, setHappinessDecay] = useState<number>(0.5);
+  
+  const [powerGrid, setPowerGrid] = useState<PowerGridState>({
+    totalPowerProduction: 0,
+    totalPowerConsumption: 0,
+    connectedBuildings: [],
+    powerOutages: []
+  });
+  
+  const [waterGrid, setWaterGrid] = useState<WaterGridState>({
+    totalWaterProduction: 0,
+    totalWaterConsumption: 0,
+    connectedBuildings: [],
+    waterShortages: []
+  });
+
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     if (initialGameState) {
       loadGameState(initialGameState);
     } else {
       initializeNewGame();
-      setShowTutorial(true);
     }
+    
+    // Create and play audio
+    const audio = new Audio();
+    audio.src = "https://w.soundcloud.com/player/?url=https%3A//api.soundcloud.com/tracks/1655066715&auto_play=true&hide_related=true&show_comments=false&show_user=false&show_reposts=false&visual=false";
+    audio.loop = true;
+    audio.volume = 0.3;
+    
+    // Try to play the audio
+    const playAudio = () => {
+      audio.play().catch(err => {
+        console.log("Audio autoplay prevented, user interaction required");
+        // Add click listener to start audio on first user interaction
+        const startAudio = () => {
+          audio.play();
+          document.removeEventListener('click', startAudio);
+        };
+        document.addEventListener('click', startAudio);
+      });
+    };
+    
+    playAudio();
+    
+    // Store audio reference
+    audioRef.current = audio;
+    
+    // Cleanup
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = '';
+      }
+    };
   }, [initialGameState]);
 
   useEffect(() => {
@@ -113,6 +166,7 @@ export default function NeighborVille({ initialGameState }: NeighborVilleProps) 
             setGameTime(prevTime => {
               const newTime = (prevTime + 1) % 24;
               updateTimeOfDay(newTime);
+              updateWeather(newTime);
               handleHourlyEffects(newTime);
               
               if (newTime === 6) {
@@ -132,8 +186,14 @@ export default function NeighborVille({ initialGameState }: NeighborVilleProps) 
   }, [timePaused]);
 
   useEffect(() => {
-    generateWeatherForecast();
-  }, [day, gameTime]);
+    if (gameTime % 4 === 0) { // Every 4 hours
+      generateWeatherForecast();
+    }
+  }, [gameTime]);
+
+  useEffect(() => {
+    calculateUtilityGrids();
+  }, [grid]);
 
   const updateTimeOfDay = (time: number) => {
     let newTimeOfDay: TimeOfDay;
@@ -149,66 +209,257 @@ export default function NeighborVille({ initialGameState }: NeighborVilleProps) 
     }
     
     setTimeOfDay(newTimeOfDay);
-    updateWeather(newTimeOfDay);
+  };
+
+  const updateWeather = (time: number) => {
+    const currentTimeOfDay = time >= 5 && time < 10 ? 'morning' :
+                            time >= 10 && time < 17 ? 'day' :
+                            time >= 17 && time < 21 ? 'evening' : 'night';
+
+    const weights: Record<TimeOfDay, Record<WeatherType, number>> = {
+      morning: {
+        sunny: 0.5,
+        cloudy: 0.3,
+        rainy: 0.15,
+        stormy: 0.05,
+        snowy: 0
+      },
+      day: {
+        sunny: 0.6,
+        cloudy: 0.25,
+        rainy: 0.12,
+        stormy: 0.03,
+        snowy: 0
+      },
+      evening: {
+        sunny: 0.3,
+        cloudy: 0.3,
+        rainy: 0.25,
+        stormy: 0.15,
+        snowy: 0
+      },
+      night: {
+        sunny: 0.7,
+        cloudy: 0.2,
+        rainy: 0.08,
+        stormy: 0.02,
+        snowy: 0
+      }
+    };
+    
+    const weatherWeights = weights[currentTimeOfDay];
+    const rand = Math.random();
+    let cumulative = 0;
+    
+    for (const [weatherType, weight] of Object.entries(weatherWeights)) {
+      cumulative += weight;
+      if (rand < cumulative) {
+        setWeather(weatherType as WeatherType);
+        break;
+      }
+    }
   };
 
   const generateWeatherForecast = () => {
-    const forecast = [];
-    for (let i = 0; i < 6; i++) {
-      const hour = (gameTime + i * 4) % 24;
-      const weatherTypes = ['sunny', 'cloudy', 'rainy', 'stormy'];
-      
-      let weights;
-      if (hour < 6 || hour >= 22) {
-        // Night - mostly clear
-        weights = [0.7, 0.2, 0.08, 0.02];
-      } else if (hour >= 6 && hour < 10) {
-        // Morning - some fog/clouds
-        weights = [0.4, 0.4, 0.15, 0.05];
-      } else if (hour >= 10 && hour < 17) {
-        // Day - mostly sunny
-        weights = [0.6, 0.25, 0.12, 0.03];
-      } else {
-        // Evening - can be stormy
-        weights = [0.3, 0.3, 0.25, 0.15];
+    const forecast: WeatherType[] = [...weatherForecast];
+    
+    // Only update the first forecast item when it's time
+    if (forecast.length === 0) {
+      // Generate initial forecast
+      for (let i = 0; i < 6; i++) {
+        const hour = (gameTime + i * 4) % 24;
+        forecast.push(getWeatherForTime(hour));
       }
-      
-      const rand = Math.random();
-      let cumulative = 0;
-      for (let j = 0; j < weights.length; j++) {
-        cumulative += weights[j];
-        if (rand < cumulative) {
-          forecast.push(weatherTypes[j]);
-          break;
-        }
-      }
+    } else {
+      // Shift forecast and add new future prediction
+      forecast.shift();
+      const lastTime = (gameTime + 5 * 4) % 24;
+      forecast.push(getWeatherForTime(lastTime));
     }
+    
     setWeatherForecast(forecast);
   };
 
-  const updateWeather = (timeOfDay: TimeOfDay) => {
-    if (weatherForecast.length > 0) {
-      setWeather(weatherForecast[0] as any);
+  const getWeatherForTime = (hour: number): WeatherType => {
+    const timeOfDay = hour >= 5 && hour < 10 ? 'morning' :
+                     hour >= 10 && hour < 17 ? 'day' :
+                     hour >= 17 && hour < 21 ? 'evening' : 'night';
+    
+    const weights = {
+      morning: { sunny: 0.5, cloudy: 0.3, rainy: 0.15, stormy: 0.05, snowy: 0 },
+      day: { sunny: 0.6, cloudy: 0.25, rainy: 0.12, stormy: 0.03, snowy: 0 },
+      evening: { sunny: 0.3, cloudy: 0.3, rainy: 0.25, stormy: 0.15, snowy: 0 },
+      night: { sunny: 0.7, cloudy: 0.2, rainy: 0.08, stormy: 0.02, snowy: 0 }
+    }[timeOfDay];
+    
+    const rand = Math.random();
+    let cumulative = 0;
+    
+    for (const [weatherType, weight] of Object.entries(weights)) {
+      cumulative += weight;
+      if (rand < cumulative) {
+        return weatherType as WeatherType;
+      }
     }
+    
+    return 'sunny';
+  };
+
+  const getWeatherHappinessEffect = () => {
+    const effects: Record<WeatherType, number> = {
+      sunny: 1,
+      cloudy: -0.5,
+      rainy: -1.5,
+      stormy: -3,
+      snowy: 0
+    };
+    return effects[weather] || 0;
+  };
+
+  const calculateUtilityGrids = () => {
+    let powerProduction = 0;
+    let powerConsumption = 0;
+    let waterProduction = 0;
+    let waterConsumption = 0;
+    const powerOutages: number[] = [];
+    const waterShortages: number[] = [];
+    
+    grid.forEach((building, index) => {
+      if (!building) return;
+      
+      if (building.isPowerGenerator) {
+        powerProduction += building.powerOutput || 0;
+      }
+      
+      if (building.isWaterSupply) {
+        waterProduction += building.waterOutput || 0;
+      }
+      
+      if (building.needsElectricity && building.energyUsage !== undefined) {
+        powerConsumption += building.energyUsage;
+        if (!building.isConnectedToPower) {
+          powerOutages.push(index);
+        }
+      }
+      
+      if (building.needsWater) {
+        const waterUsage = 20;
+        waterConsumption += waterUsage;
+        if (!building.isConnectedToWater) {
+          waterShortages.push(index);
+        }
+      }
+    });
+    
+    setPowerGrid({
+      totalPowerProduction: powerProduction,
+      totalPowerConsumption: powerConsumption,
+      connectedBuildings: grid.filter((b, i) => b?.isConnectedToPower).map((_, i) => i),
+      powerOutages
+    });
+    
+    setWaterGrid({
+      totalWaterProduction: waterProduction,
+      totalWaterConsumption: waterConsumption,
+      connectedBuildings: grid.filter((b, i) => b?.isConnectedToWater).map((_, i) => i),
+      waterShortages
+    });
+  };
+
+  const handleConnectUtility = (fromIndex: number, toIndex: number, utilityType: 'power' | 'water') => {
+    const fromBuilding = grid[fromIndex];
+    const toBuilding = grid[toIndex];
+    
+    if (!fromBuilding || !toBuilding) return;
+    
+    // Check if connection is valid
+    if (utilityType === 'power') {
+      if (!fromBuilding.isPowerGenerator || !toBuilding.needsElectricity) return;
+    } else {
+      if (!fromBuilding.isWaterSupply || !toBuilding.needsWater) return;
+    }
+    
+    // Check distance
+    const distance = calculateGridDistance(fromIndex, toIndex, Math.sqrt(gridSize));
+    const maxDistance = utilityType === 'power' ? 5 : 3; // Power can reach further
+    
+    if (distance > maxDistance) {
+      addNotification(`Too far! ${utilityType === 'power' ? 'Power' : 'Water'} can only reach ${maxDistance} tiles away`, 'warning');
+      return;
+    }
+    
+    const newGrid = [...grid];
+    
+    if (utilityType === 'power') {
+      const updatedBuilding = {
+        ...toBuilding,
+        isConnectedToPower: true,
+        connectedBuildings: [...(toBuilding.connectedBuildings || []), fromIndex]
+      };
+      newGrid[toIndex] = updatedBuilding;
+      addNotification(`Connected power to ${toBuilding.name}`, 'success');
+    } else {
+      const updatedBuilding = {
+        ...toBuilding,
+        isConnectedToWater: true,
+        connectedBuildings: [...(toBuilding.connectedBuildings || []), fromIndex]
+      };
+      newGrid[toIndex] = updatedBuilding;
+      addNotification(`Connected water to ${toBuilding.name}`, 'success');
+    }
+    
+    setGrid(newGrid);
+  };
+
+  const findNearbyGenerators = (buildingIndex: number): number[] => {
+    const generators: number[] = [];
+    const gridWidth = Math.sqrt(gridSize);
+    const maxDistance = 3;
+    
+    grid.forEach((building, index) => {
+      if (building?.isPowerGenerator) {
+        const distance = calculateGridDistance(buildingIndex, index, gridWidth);
+        if (distance <= maxDistance) {
+          generators.push(index);
+        }
+      }
+    });
+    
+    return generators;
+  };
+
+  const calculateGridDistance = (index1: number, index2: number, gridWidth: number): number => {
+    const x1 = index1 % gridWidth;
+    const y1 = Math.floor(index1 / gridWidth);
+    const x2 = index2 % gridWidth;
+    const y2 = Math.floor(index2 / gridWidth);
+    
+    return Math.abs(x1 - x2) + Math.abs(y1 - y2);
   };
 
   const handleHourlyEffects = (newTime: number) => {
     let hourlyCoinIncome = 0;
-    grid.forEach(building => {
+    const newGrid = [...grid];
+    
+    grid.forEach((building, index) => {
       if (building && building.income > 0) {
-        let income = building.income / 24;
-        
-        if (building.id === 'cafe' && newTime >= 6 && newTime <= 11) {
-          income *= 1.5; // Morning rush
+        if (!building.needsElectricity || building.isConnectedToPower) {
+          if (!building.needsWater || building.isConnectedToWater) {
+            let income = building.income / 24;
+            
+            if (building.id === 'cafe' && newTime >= 6 && newTime <= 11) {
+              income *= 1.5;
+            }
+            if (building.id === 'music_venue' && newTime >= 19 && newTime <= 2) {
+              income *= 2.0;
+            }
+            if (building.id === 'solar_panel' && newTime >= 9 && newTime <= 17 && weather === 'sunny') {
+              income *= 1.5;
+            }
+            
+            hourlyCoinIncome += income;
+          }
         }
-        if (building.id === 'music_venue' && newTime >= 19 && newTime <= 2) {
-          income *= 2.0; // Evening concerts
-        }
-        if (building.id === 'solar_panel' && newTime >= 9 && newTime <= 17) {
-          income *= 1.5; // Peak sun hours
-        }
-        
-        hourlyCoinIncome += income;
       }
     });
     
@@ -216,10 +467,13 @@ export default function NeighborVille({ initialGameState }: NeighborVilleProps) 
       setCoins(coins => coins + Math.round(hourlyCoinIncome));
       setHourlyCoinBonus(Math.round(hourlyCoinIncome));
       setTimeout(() => setHourlyCoinBonus(0), 2000);
+      
+      addToCoinHistory(Math.round(hourlyCoinIncome), 0);
     }
     
     const totalResidents = neighbors.filter(n => n.hasHome).length;
-    const happinessLoss = happinessDecay + (totalResidents * 0.1);
+    const weatherEffect = getWeatherHappinessEffect();
+    const happinessLoss = happinessDecay + (totalResidents * 0.1) - weatherEffect;
     setHappiness(prev => Math.max(0, prev - happinessLoss));
     
     if (Math.random() < 0.05) { 
@@ -233,8 +487,8 @@ export default function NeighborVille({ initialGameState }: NeighborVilleProps) 
   const initializeNewGame = () => {
     const name = initialGameState?.playerName || "Mayor";
     setPlayerName(name);
-    setCoins(1000);
-    setHappiness(50);
+    setCoins(5000);  // Increased starting budget
+    setHappiness(70);
     setDay(1);
     setLevel(1);
     setExperience(0);
@@ -242,6 +496,25 @@ export default function NeighborVille({ initialGameState }: NeighborVilleProps) 
     setGrid(Array(64).fill(null));
     setWeather('sunny');
     setGameTime(8);
+    setCoinHistory([{
+      day: 1,
+      balance: 5000,
+      income: 0,
+      expenses: 0,
+      timestamp: Date.now()
+    }]);
+  };
+
+  const addToCoinHistory = (income: number, expenses: number) => {
+    const newEntry: CoinHistoryEntry = {
+      day: day,
+      balance: coins + income - expenses,
+      income: income,
+      expenses: expenses,
+      timestamp: Date.now()
+    };
+    
+    setCoinHistory(prev => [...prev, newEntry].slice(-100));
   };
 
   const loadGameState = (state: GameProgress) => {
@@ -261,6 +534,20 @@ export default function NeighborVille({ initialGameState }: NeighborVilleProps) 
     setEnergyRate(state.energyRate || 2);
     setLastBillDay(state.lastBillDay || 0);
     setRecentEvents(state.recentEvents || []);
+    setWeather(state.weather || 'sunny');
+    setCoinHistory(state.coinHistory || []);
+    setPowerGrid(state.powerGrid || {
+      totalPowerProduction: 0,
+      totalPowerConsumption: 0,
+      connectedBuildings: [],
+      powerOutages: []
+    });
+    setWaterGrid(state.waterGrid || {
+      totalWaterProduction: 0,
+      totalWaterConsumption: 0,
+      connectedBuildings: [],
+      waterShortages: []
+    });
     updateTimeOfDay(state.gameTime || 8);
     
     const currentLevel = state.level || 1;
@@ -314,6 +601,7 @@ export default function NeighborVille({ initialGameState }: NeighborVilleProps) 
         addNotification(`Built a ${selectedBuilding.name} (+${selectedBuilding.happiness}% happiness)`, 'success');
         setSelectedBuilding(null);
         calculateEnergyUsage(newGrid);
+        addToCoinHistory(0, selectedBuilding.cost);
       } else {
         addNotification('Not enough coins', 'error');
       }
@@ -350,6 +638,7 @@ export default function NeighborVille({ initialGameState }: NeighborVilleProps) 
     addNotification(`Demolished a ${buildingToDelete.name}`, 'info');
     setSelectedTile(null);
     calculateEnergyUsage(newGrid);
+    addToCoinHistory(Math.floor(buildingToDelete.cost * 0.5), 0);
   };
 
   const calculateEnergyUsage = (currentGrid = grid) => {
@@ -367,13 +656,22 @@ export default function NeighborVille({ initialGameState }: NeighborVilleProps) 
       if (building) {
         let income = building.income;
         
-        if (building.occupants && building.occupants.length > 0) {
-          building.occupants.forEach(occupantId => {
-            const occupant = neighbors.find(n => n.id === occupantId);
-            if (occupant) {
-              income += occupant.dailyRent || 0;
+        if (building.id === 'cafe' || building.id === 'fancy_restaurant') {
+          if (!building.needsElectricity || building.isConnectedToPower) {
+            if (!building.needsWater || building.isConnectedToWater) {
+              if (building.occupants && building.occupants.length > 0) {
+                building.occupants.forEach(occupantId => {
+                  const occupant = neighbors.find(n => n.id === occupantId);
+                  if (occupant) {
+                    income += occupant.dailyRent || 0;
+                  }
+                });
+              }
             }
-          });
+          } else {
+            income = 0;
+            addNotification(`${building.name} not generating income - no power/water!`, 'warning');
+          }
         }
         
         return total + income;
@@ -416,6 +714,7 @@ export default function NeighborVille({ initialGameState }: NeighborVilleProps) 
     checkAchievements();
     
     addNotification(`Day ${day} complete! Earned ${netIncome} coins (${baseIncome} income - ${energyCost} energy cost)`, 'success');
+    addToCoinHistory(baseIncome, energyCost);
     saveGame();
   };
 
@@ -466,6 +765,7 @@ export default function NeighborVille({ initialGameState }: NeighborVilleProps) 
     
     setCurrentEvent(null);
     addNotification(option.outcome, option.happiness > 0 ? 'success' : 'warning');
+    addToCoinHistory(option.coins > 0 ? option.coins : 0, option.coins < 0 ? Math.abs(option.coins) : 0);
   };
 
   const updateNeighborHappiness = () => {
@@ -473,32 +773,64 @@ export default function NeighborVille({ initialGameState }: NeighborVilleProps) 
       if (!neighbor.unlocked || !neighbor.hasHome) return neighbor;
       
       let happinessChange = 0;
+      let reasons = [];
       
       const house = neighbor.houseIndex !== undefined ? grid[neighbor.houseIndex] : null;
       if (house) {
+        // Housing preference check
         if (neighbor.housingPreference === 'house' && house.id === 'apartment') {
           happinessChange -= 15;
+          reasons.push('Prefers house over apartment (-15)');
         } else if (neighbor.housingPreference === 'apartment' && house.id === 'house') {
           happinessChange -= 10;
+          reasons.push('Prefers apartment over house (-10)');
         }
         
+        // Overcrowding check
         if (house.occupants && house.occupants.length > (neighbor.maxNeighbors || 1)) {
           happinessChange -= 20;
+          reasons.push('Too many roommates (-20)');
+        }
+        
+        // Utility checks
+        if (house.needsElectricity && !house.isConnectedToPower) {
+          happinessChange -= 15;
+          reasons.push('No electricity (-15)');
+        }
+        
+        if (house.needsWater && !house.isConnectedToWater) {
+          happinessChange -= 12;
+          reasons.push('No water (-12)');
         }
       }
       
+      // Building preferences
       grid.forEach(building => {
         if (building) {
           if (building.name.toLowerCase() === neighbor.likes.toLowerCase()) {
-            happinessChange += 8;
+            happinessChange += 10;
+            reasons.push(`Likes ${building.name} (+10)`);
           }
           if (building.name.toLowerCase() === neighbor.dislikes.toLowerCase()) {
-            happinessChange -= 12;
+            happinessChange -= 15;
+            reasons.push(`Dislikes ${building.name} (-15)`);
           }
         }
       });
       
+      // Weather effect
+      const weatherBonus = getWeatherHappinessEffect();
+      happinessChange += weatherBonus;
+      if (weatherBonus !== 0) {
+        reasons.push(`Weather: ${weather} (${weatherBonus > 0 ? '+' : ''}${weatherBonus})`);
+      }
+      
       const newHappiness = Math.min(100, Math.max(0, (neighbor.happiness || 70) + happinessChange));
+      
+      // Notify about major unhappiness
+      if (newHappiness < 30 && (neighbor.happiness || 70) >= 30) {
+        addNotification(`${neighbor.name} is very unhappy! ${reasons.join('. ')}`, 'warning');
+      }
       
       return {
         ...neighbor,
@@ -542,6 +874,7 @@ export default function NeighborVille({ initialGameState }: NeighborVilleProps) 
       );
       
       addNotification(`Paid ${billToPay.name}: ${billToPay.amount} coins`, 'success');
+      addToCoinHistory(0, billToPay.amount);
     } else {
       addNotification('Not enough coins to pay this bill', 'error');
     }
@@ -644,8 +977,42 @@ export default function NeighborVille({ initialGameState }: NeighborVilleProps) 
   };
 
   const handleCollectIncome = (gridIndex: number, amount: number) => {
+    const building = grid[gridIndex];
+    if (!building) return;
+    
+    const COLLECTION_COOLDOWN = 24 * 60 * 1000; // 24 hours in milliseconds
+    const currentTime = Date.now();
+    
+    if (building.lastCollectedIncome && currentTime - building.lastCollectedIncome < COLLECTION_COOLDOWN) {
+      const timeLeft = COLLECTION_COOLDOWN - (currentTime - building.lastCollectedIncome);
+      const hoursLeft = Math.ceil(timeLeft / (60 * 60 * 1000));
+      addNotification(`You can collect from this building again in ${hoursLeft} hours`, 'warning');
+      return;
+    }
+    
+    // Check if building has power when needed
+    if (building.needsElectricity && !building.isConnectedToPower) {
+      addNotification(`${building.name} needs power connection to generate income!`, 'warning');
+      return;
+    }
+    
+    // Check if building has water when needed
+    if (building.needsWater && !building.isConnectedToWater) {
+      addNotification(`${building.name} needs water connection to generate income!`, 'warning');
+      return;
+    }
+    
+    // All checks passed, collect income
+    const newGrid = [...grid];
+    newGrid[gridIndex] = {
+      ...building,
+      lastCollectedIncome: currentTime
+    };
+    setGrid(newGrid);
+    
     setCoins(coins + amount);
     addNotification(`Collected ${amount} coins from your business!`, 'success');
+    addToCoinHistory(amount, 0);
   };
 
   const checkAchievements = () => {
@@ -808,7 +1175,11 @@ export default function NeighborVille({ initialGameState }: NeighborVilleProps) 
       bills,
       energyRate,
       totalEnergyUsage,
-      lastBillDay
+      lastBillDay,
+      coinHistory,
+      weather,
+      powerGrid,
+      waterGrid
     };
     
     try {
@@ -869,6 +1240,7 @@ export default function NeighborVille({ initialGameState }: NeighborVilleProps) 
             onShowHappinessAnalytics={handleShowHappinessAnalytics}
             onShowCalendar={() => setShowCalendar(true)}
             onToggleWeatherForecast={() => setShowWeatherForecast(!showWeatherForecast)}
+            onShowCoinHistory={() => setShowCoinHistory(true)}
           />
           
           <AnimatePresence>
@@ -899,6 +1271,8 @@ export default function NeighborVille({ initialGameState }: NeighborVilleProps) 
       }
       timeOfDay={timeOfDay}
     >
+      <audio ref={audioRef} />
+      
       <NotificationSystem 
         notifications={notifications}
         removeNotification={(id) => setNotifications(prev => prev.filter(n => n.id !== id))}
@@ -951,6 +1325,14 @@ export default function NeighborVille({ initialGameState }: NeighborVilleProps) 
             
             {activeTab === 'utilities' && (
               <div className="space-y-4">
+                <UtilityGrid
+                  grid={grid}
+                  powerGrid={powerGrid}
+                  waterGrid={waterGrid}
+                  onConnectUtility={handleConnectUtility}
+                  gridSize={gridSize}
+                />
+                
                 <EnergyUsagePanel
                   grid={grid}
                   energyRate={energyRate}
@@ -974,6 +1356,7 @@ export default function NeighborVille({ initialGameState }: NeighborVilleProps) 
                       setCoins(coins - cost);
                       setGridSize(newSize);
                       addNotification(`Plot expanded to ${Math.sqrt(newSize)}×${Math.sqrt(newSize)}!`, 'success');
+                      addToCoinHistory(0, cost);
                     }
                   }}
                 />
@@ -1021,7 +1404,11 @@ export default function NeighborVille({ initialGameState }: NeighborVilleProps) 
           bills,
           energyRate,
           totalEnergyUsage,
-          lastBillDay
+          lastBillDay,
+          coinHistory,
+          weather,
+          powerGrid,
+          waterGrid
         }}
       />
 
@@ -1129,6 +1516,15 @@ export default function NeighborVille({ initialGameState }: NeighborVilleProps) 
             dayRecords={dayRecords}
             currentDay={day}
             onClose={() => setShowCalendar(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showCoinHistory && (
+          <CoinHistory 
+            history={coinHistory}
+            onClose={() => setShowCoinHistory(false)}
           />
         )}
       </AnimatePresence>
