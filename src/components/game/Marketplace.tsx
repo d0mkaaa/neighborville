@@ -1,19 +1,22 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Store, ShoppingCart, TrendingUp, RefreshCw, Coins } from "lucide-react";
-import type { Neighbor, Building } from "../../types/game";
+import { X, Store, ShoppingCart, TrendingUp, RefreshCw, Coins, Star, CheckCircle, Package, DollarSign } from "lucide-react";
+import type { Neighbor, Building, GameProgress } from "../../types/game";
 
-type MarketItem = {
+export type MarketItem = {
   id: string;
   name: string;
   description: string;
   price: number;
-  sellerType: 'resident' | 'system';
+  sellerType: 'resident' | 'system' | 'traveling_merchant';
   sellerId?: number;
-  itemType: 'material' | 'service' | 'rare' | 'building_upgrade';
+  itemType: 'material' | 'service' | 'rare' | 'building_upgrade' | 'boost' | 'decoration';
   quantity: number;
   icon: string;
   availableUntil?: number;
+  effect?: string;
+  duration?: number;
+  rarity?: 'common' | 'uncommon' | 'rare' | 'legendary';
 };
 
 type MarketplaceProps = {
@@ -23,19 +26,125 @@ type MarketplaceProps = {
   onClose: () => void;
   onPurchase: (item: MarketItem) => void;
   onSellItem: (itemId: string, price: number) => void;
+  onUpdateGameState: (updates: Partial<GameProgress>) => void;
   grid: (Building | null)[];
+  playerLevel: number;
+  gameProgress: GameProgress;
 };
 
-export default function Marketplace({ neighbors, coins, day, onClose, onPurchase, onSellItem, grid }: MarketplaceProps) {
-  const [activeTab, setActiveTab] = useState<'buy' | 'sell' | 'history'>('buy');
+export default function Marketplace({ 
+  neighbors, 
+  coins, 
+  day, 
+  onClose, 
+  onPurchase, 
+  onSellItem,
+  onUpdateGameState,
+  grid,
+  playerLevel,
+  gameProgress
+}: MarketplaceProps) {
+  const [activeTab, setActiveTab] = useState<'buy' | 'sell' | 'history' | 'inventory'>('buy');
   const [marketItems, setMarketItems] = useState<MarketItem[]>([]);
   const [refreshCost, setRefreshCost] = useState(50);
   const [lastRefresh, setLastRefresh] = useState(day);
-  
+  const [purchaseHistory, setPurchaseHistory] = useState<Array<{item: MarketItem, date: number, type: 'bought' | 'sold'}>>([]);
+  const [inventory, setInventory] = useState<MarketItem[]>([]);
+  const [travelingMerchant, setTravelingMerchant] = useState<{
+    isPresent: boolean;
+    leavesOnDay: number;
+    items: MarketItem[];
+  } | null>(null);
+
   useEffect(() => {
     generateMarketItems();
+    loadInventory();
+    checkTravelingMerchant();
   }, [day]);
-  
+
+  const loadInventory = () => {
+    const savedInventory = localStorage.getItem(`neighborville_inventory_${gameProgress.playerName}`);
+    if (savedInventory) {
+      setInventory(JSON.parse(savedInventory));
+    }
+  };
+
+  const saveInventory = (newInventory: MarketItem[]) => {
+    setInventory(newInventory);
+    localStorage.setItem(`neighborville_inventory_${gameProgress.playerName}`, JSON.stringify(newInventory));
+  };
+
+  const checkTravelingMerchant = () => {
+    if (!travelingMerchant && Math.random() < 0.15) {
+      const leavesOnDay = day + 3;
+      const merchantItems = generateTravelingMerchantItems();
+      setTravelingMerchant({
+        isPresent: true,
+        leavesOnDay,
+        items: merchantItems
+      });
+    } else if (travelingMerchant && day > travelingMerchant.leavesOnDay) {
+      setTravelingMerchant(null);
+    }
+  };
+
+  const generateTravelingMerchantItems = (): MarketItem[] => {
+    const items: MarketItem[] = [
+      {
+        id: 'ancient_blueprint',
+        name: 'Ancient Blueprint',
+        description: 'Mysterious building plans from ages past',
+        price: 1500,
+        sellerType: 'traveling_merchant',
+        itemType: 'rare',
+        quantity: 1,
+        icon: '📜',
+        effect: 'Unlocks special building: Mystical Garden',
+        rarity: 'legendary'
+      },
+      {
+        id: 'time_crystal',
+        name: 'Time Crystal',
+        description: 'Skip to the next day instantly',
+        price: 800,
+        sellerType: 'traveling_merchant',
+        itemType: 'service',
+        quantity: 1,
+        icon: '💎',
+        effect: 'Jump forward one day',
+        rarity: 'rare'
+      },
+      {
+        id: 'happiness_potion',
+        name: 'Happiness Elixir',
+        description: 'Instantly boost neighborhood happiness',
+        price: 600,
+        sellerType: 'traveling_merchant',
+        itemType: 'boost',
+        quantity: 1,
+        icon: '🍶',
+        effect: '+30% happiness for 7 days',
+        duration: 7,
+        rarity: 'uncommon'
+      },
+      {
+        id: 'golden_shovel',
+        name: 'Golden Shovel',
+        description: 'Building costs reduced for 14 days',
+        price: 1200,
+        sellerType: 'traveling_merchant',
+        itemType: 'boost',
+        quantity: 1,
+        icon: '🪙',
+        effect: '-20% building costs',
+        duration: 14,
+        rarity: 'rare'
+      }
+    ];
+
+    return items.filter(() => Math.random() < 0.6);
+  };
+
   const generateMarketItems = () => {
     const items: MarketItem[] = [];
     
@@ -48,7 +157,9 @@ export default function Marketplace({ neighbors, coins, day, onClose, onPurchase
         sellerType: 'system',
         itemType: 'building_upgrade',
         quantity: 5,
-        icon: '🎨'
+        icon: '🎨',
+        effect: 'Permanent +5% happiness bonus',
+        rarity: 'common'
       },
       {
         id: 'energy_booster',
@@ -58,7 +169,10 @@ export default function Marketplace({ neighbors, coins, day, onClose, onPurchase
         sellerType: 'system',
         itemType: 'service',
         quantity: 1,
-        icon: '⚡'
+        icon: '⚡',
+        effect: '-25% energy consumption',
+        duration: 3,
+        rarity: 'common'
       },
       {
         id: 'construction_materials',
@@ -68,17 +182,35 @@ export default function Marketplace({ neighbors, coins, day, onClose, onPurchase
         sellerType: 'system',
         itemType: 'material',
         quantity: 3,
-        icon: '🔨'
+        icon: '🔨',
+        effect: '-10% cost for next 5 buildings',
+        rarity: 'common'
       },
       {
         id: 'happiness_charm',
         name: 'Happiness Charm',
-        description: 'Increase overall neighborhood happiness by 10%',
+        description: 'Increase overall neighborhood happiness',
         price: 400,
         sellerType: 'system',
-        itemType: 'rare',
+        itemType: 'boost',
         quantity: 1,
-        icon: '✨'
+        icon: '✨',
+        effect: '+15% happiness for 5 days',
+        duration: 5,
+        rarity: 'uncommon'
+      },
+      {
+        id: 'xp_multiplier',
+        name: 'Experience Booster',
+        description: 'Double XP gains for 24 hours',
+        price: 500,
+        sellerType: 'system',
+        itemType: 'boost',
+        quantity: 1,
+        icon: '📈',
+        effect: '2x XP gains',
+        duration: 1,
+        rarity: 'uncommon'
       }
     ];
     
@@ -86,7 +218,7 @@ export default function Marketplace({ neighbors, coins, day, onClose, onPurchase
     
     const activeResidents = neighbors.filter(n => n.hasHome);
     activeResidents.forEach(resident => {
-      if (Math.random() < 0.3) {
+      if (Math.random() < 0.4) {
         const priceMultiplier = 0.7 + Math.random() * 0.6;
         const residentItems: MarketItem[] = [
           {
@@ -96,10 +228,12 @@ export default function Marketplace({ neighbors, coins, day, onClose, onPurchase
             price: Math.floor(80 * priceMultiplier),
             sellerType: 'resident',
             sellerId: resident.id,
-            itemType: 'material',
+            itemType: 'decoration',
             quantity: 1,
             icon: '🎁',
-            availableUntil: day + 3
+            availableUntil: day + 3,
+            effect: '+3% happiness to adjacent buildings',
+            rarity: 'common'
           },
           {
             id: `${resident.id}_home_services`,
@@ -111,7 +245,24 @@ export default function Marketplace({ neighbors, coins, day, onClose, onPurchase
             itemType: 'service',
             quantity: 1,
             icon: '🏠',
-            availableUntil: day + 2
+            availableUntil: day + 2,
+            effect: 'Repairs one building to 100% efficiency',
+            rarity: 'common'
+          },
+          {
+            id: `${resident.id}_tutoring`,
+            name: 'Tutoring Services',
+            description: `Learn from ${resident.name}'s expertise`,
+            price: Math.floor(200 * priceMultiplier),
+            sellerType: 'resident',
+            sellerId: resident.id,
+            itemType: 'service',
+            quantity: 1,
+            icon: '👨‍🏫',
+            availableUntil: day + 1,
+            effect: '+50% XP for the next 24 hours',
+            duration: 1,
+            rarity: 'uncommon'
           }
         ];
         
@@ -120,7 +271,7 @@ export default function Marketplace({ neighbors, coins, day, onClose, onPurchase
       }
     });
     
-    if (Math.random() < 0.2) {
+    if (Math.random() < 0.15) {
       const rareItems: MarketItem[] = [
         {
           id: 'golden_blueprint',
@@ -131,22 +282,30 @@ export default function Marketplace({ neighbors, coins, day, onClose, onPurchase
           itemType: 'rare',
           quantity: 1,
           icon: '📜',
-          availableUntil: day + 1
+          availableUntil: day + 1,
+          effect: 'Unlock premium building variant',
+          rarity: 'rare'
         },
         {
-          id: 'time_crystal',
-          name: 'Time Crystal',
-          description: 'Skip to next day instantly',
-          price: 500,
+          id: 'land_deed',
+          name: 'Land Expansion Deed',
+          description: 'Expand your plot at 50% discount',
+          price: 750,
           sellerType: 'system',
           itemType: 'rare',
           quantity: 1,
-          icon: '💎',
-          availableUntil: day + 1
+          icon: '📄',
+          availableUntil: day + 2,
+          effect: 'Next plot expansion costs 50% less',
+          rarity: 'rare'
         }
       ];
       
       items.push(...rareItems);
+    }
+    
+    if (travelingMerchant?.isPresent) {
+      items.push(...travelingMerchant.items);
     }
     
     setMarketItems(items);
@@ -154,19 +313,70 @@ export default function Marketplace({ neighbors, coins, day, onClose, onPurchase
   
   const handleRefreshMarket = () => {
     if (coins >= refreshCost) {
+      onUpdateGameState({ coins: coins - refreshCost });
       generateMarketItems();
       setLastRefresh(day);
       setRefreshCost(prev => Math.floor(prev * 1.2));
     }
   };
   
-  const getItemRarityColor = (itemType: string) => {
-    switch (itemType) {
-      case 'rare': return 'border-purple-500 bg-purple-50';
-      case 'building_upgrade': return 'border-blue-500 bg-blue-50';
-      case 'service': return 'border-green-500 bg-green-50';
-      case 'material': return 'border-orange-500 bg-orange-50';
+  const getItemRarityColor = (rarity?: string) => {
+    switch (rarity) {
+      case 'legendary': return 'border-yellow-500 bg-yellow-50 shadow-yellow-500/20';
+      case 'rare': return 'border-purple-500 bg-purple-50 shadow-purple-500/20';
+      case 'uncommon': return 'border-blue-500 bg-blue-50 shadow-blue-500/20';
+      case 'common':
       default: return 'border-gray-300 bg-gray-50';
+    }
+  };
+
+  const handlePurchaseItem = (item: MarketItem) => {
+    if (coins >= item.price) {
+      onPurchase(item);
+      
+      const newInventory = [...inventory];
+      const existingItem = newInventory.find(i => i.id === item.id);
+      
+      if (existingItem) {
+        existingItem.quantity += item.quantity;
+      } else {
+        newInventory.push({ ...item, quantity: item.quantity });
+      }
+      
+      saveInventory(newInventory);
+      
+      const history = [...purchaseHistory, { item, date: Date.now(), type: 'bought' as const }];
+      setPurchaseHistory(history);
+      
+      applyItemEffect(item);
+    }
+  };
+
+  const applyItemEffect = (item: MarketItem) => {
+    const updates: Partial<GameProgress> = {};
+    
+    switch (item.id) {
+      case 'happiness_charm':
+      case 'happiness_potion':
+        updates.happiness = Math.min(100, gameProgress.happiness + 15);
+        break;
+        
+      case 'time_crystal':
+        updates.day = gameProgress.day + 1;
+        updates.gameTime = 8;
+        break;
+        
+      case 'xp_multiplier':
+        updates.experience = gameProgress.experience + 100;
+        break;
+        
+      case 'energy_booster':
+        updates.totalEnergyUsage = Math.max(0, gameProgress.totalEnergyUsage * 0.75);
+        break;
+    }
+    
+    if (Object.keys(updates).length > 0) {
+      onUpdateGameState(updates);
     }
   };
   
@@ -187,120 +397,261 @@ export default function Marketplace({ neighbors, coins, day, onClose, onPurchase
           Refresh ({refreshCost}c)
         </button>
       </div>
+
+      {travelingMerchant?.isPresent && (
+        <div className="bg-gradient-to-r from-purple-100 to-pink-100 border border-purple-300 rounded-lg p-4 mb-4">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-2xl">🎪</span>
+            <h4 className="font-medium text-purple-800">Traveling Merchant</h4>
+            <span className="ml-auto text-sm text-purple-600">
+              Leaves in {travelingMerchant.leavesOnDay - day} day{travelingMerchant.leavesOnDay - day !== 1 ? 's' : ''}
+            </span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {travelingMerchant.items.map(item => renderItemCard(item))}
+          </div>
+        </div>
+      )}
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {marketItems.map(item => {
-          const seller = item.sellerId ? neighbors.find(n => n.id === item.sellerId) : null;
-          const canAfford = coins >= item.price;
-          
-          return (
-            <motion.div
-              key={item.id}
-              whileHover={{ scale: 1.02 }}
-              className={`p-4 rounded-lg border ${getItemRarityColor(item.itemType)}`}
-            >
-              <div className="flex justify-between items-start mb-2">
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">{item.icon}</span>
-                  <div>
-                    <h4 className="font-medium text-gray-800">{item.name}</h4>
-                    <p className="text-sm text-gray-600">{item.description}</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-lg font-bold text-gray-900">{item.price}c</div>
-                  <div className="text-xs text-gray-500">x{item.quantity}</div>
-                </div>
-              </div>
-              
-              {seller && (
-                <div className="text-xs text-gray-500 mb-2">
-                  Sold by {seller.name} {seller.avatar}
-                </div>
-              )}
-              
-              {item.availableUntil && (
-                <div className="text-xs text-orange-600 mb-2">
-                  Available for {item.availableUntil - day} more day(s)
-                </div>
-              )}
-              
-              <button
-                onClick={() => canAfford && onPurchase(item)}
-                disabled={!canAfford}
-                className={`w-full py-2 px-4 rounded ${
-                  canAfford
-                    ? 'bg-emerald-500 text-white hover:bg-emerald-600'
-                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                }`}
-              >
-                {canAfford ? 'Purchase' : 'Insufficient Funds'}
-              </button>
-            </motion.div>
-          );
-        })}
+        {marketItems.filter(item => item.sellerType !== 'traveling_merchant').map(renderItemCard)}
       </div>
     </div>
   );
+
+  const renderItemCard = (item: MarketItem) => {
+    const seller = item.sellerId ? neighbors.find(n => n.id === item.sellerId) : null;
+    const canAfford = coins >= item.price;
+    const isExpired = item.availableUntil && day > item.availableUntil;
+    
+    return (
+      <motion.div
+        key={item.id}
+        whileHover={{ scale: 1.02 }}
+        className={`p-4 rounded-lg border shadow-md ${getItemRarityColor(item.rarity)} ${
+          isExpired ? 'opacity-60' : ''
+        }`}
+      >
+        <div className="flex justify-between items-start mb-2">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">{item.icon}</span>
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="font-medium text-gray-800">{item.name}</h4>
+                {item.rarity && (
+                  <span className={`text-xs px-2 py-0.5 rounded ${
+                    item.rarity === 'legendary' ? 'bg-yellow-200 text-yellow-800' :
+                    item.rarity === 'rare' ? 'bg-purple-200 text-purple-800' :
+                    item.rarity === 'uncommon' ? 'bg-blue-200 text-blue-800' :
+                    'bg-gray-200 text-gray-600'
+                  }`}>
+                    {item.rarity}
+                  </span>
+                )}
+              </div>
+              <p className="text-sm text-gray-600">{item.description}</p>
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-lg font-bold text-gray-900 flex items-center gap-1">
+              <Coins size={16} className="text-yellow-600" />
+              {item.price}
+            </div>
+            <div className="text-xs text-gray-500">x{item.quantity}</div>
+          </div>
+        </div>
+        
+        {item.effect && (
+          <div className="text-sm text-emerald-600 mb-2">
+            Effect: {item.effect}
+            {item.duration && <span className="text-gray-500"> (for {item.duration} day{item.duration !== 1 ? 's' : ''})</span>}
+          </div>
+        )}
+        
+        {seller && (
+          <div className="text-xs text-gray-500 mb-2">
+            Sold by {seller.name} {seller.avatar}
+          </div>
+        )}
+        
+        {item.availableUntil && (
+          <div className={`text-xs mb-2 ${
+            isExpired ? 'text-red-600' : 'text-orange-600'
+          }`}>
+            {isExpired ? 'Expired' : `Available for ${item.availableUntil - day} more day(s)`}
+          </div>
+        )}
+        
+        <button
+          onClick={() => canAfford && !isExpired && handlePurchaseItem(item)}
+          disabled={!canAfford || isExpired}
+          className={`w-full py-2 px-4 rounded text-sm flex items-center justify-center gap-2 ${
+            canAfford && !isExpired
+              ? 'bg-emerald-500 text-white hover:bg-emerald-600'
+              : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+          }`}
+        >
+          {isExpired ? (
+            <>Expired</>
+          ) : canAfford ? (
+            <>
+              <ShoppingCart size={14} />
+              Purchase
+            </>
+          ) : (
+            'Insufficient Funds'
+          )}
+        </button>
+      </motion.div>
+    );
+  };
   
   const renderSellTab = () => {
     const sellableItems = [
       { id: 'extra_materials', name: 'Extra Materials', icon: '📦', basePrice: 50 },
       { id: 'old_furniture', name: 'Old Furniture', icon: '🪑', basePrice: 80 },
       { id: 'vintage_decor', name: 'Vintage Decor', icon: '🏺', basePrice: 120 },
-      { id: 'rare_artifact', name: 'Rare Artifact', icon: '💎', basePrice: 200 }
+      { id: 'rare_artifact', name: 'Rare Artifact', icon: '💎', basePrice: 200 },
+      { id: 'building_plans', name: 'Extra Building Plans', icon: '📋', basePrice: 300 },
+      { id: 'neighborhood_photos', name: 'Neighborhood Photos', icon: '📸', basePrice: 150 }
     ];
     
+    const inventoryItems = inventory.filter(item => item.quantity > 0);
+    
     return (
-      <div className="space-y-4">
-        <h3 className="text-lg font-medium text-gray-800">Sell Your Items</h3>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {sellableItems.map(item => {
-            const [customPrice, setCustomPrice] = useState(item.basePrice);
-            
-            return (
-              <div key={item.id} className="p-4 border border-gray-300 rounded-lg bg-white">
-                <div className="flex items-center gap-3 mb-3">
-                  <span className="text-2xl">{item.icon}</span>
-                  <div>
-                    <h4 className="font-medium text-gray-800">{item.name}</h4>
-                    <p className="text-sm text-gray-500">Base price: {item.basePrice}c</p>
+      <div className="space-y-6">
+        <div>
+          <h3 className="text-lg font-medium text-gray-800 mb-4">Your Inventory</h3>
+          {inventoryItems.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              {inventoryItems.map(item => (
+                <div key={item.id} className="p-3 border border-gray-300 rounded-lg bg-white">
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className="text-xl">{item.icon}</span>
+                    <div className="flex-1">
+                      <h4 className="font-medium text-gray-800">{item.name}</h4>
+                      <p className="text-xs text-gray-500">Quantity: {item.quantity}</p>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-medium">{Math.floor(item.price * 0.7)} coins</div>
+                    </div>
                   </div>
+                  <button
+                    onClick={() => sellInventoryItem(item)}
+                    className="w-full py-1 px-3 bg-green-500 text-white rounded text-sm hover:bg-green-600"
+                  >
+                    Sell
+                  </button>
                 </div>
-                
-                <div className="flex items-center gap-2 mb-3">
-                  <label className="text-sm text-gray-600">Your price:</label>
-                  <input
-                    type="number"
-                    value={customPrice}
-                    onChange={(e) => setCustomPrice(Math.max(0, parseInt(e.target.value) || 0))}
-                    className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
-                    min="0"
-                  />
-                  <span className="text-sm text-gray-600">coins</span>
+              ))}
+            </div>
+          ) : (
+            <div className="p-4 bg-gray-50 rounded-lg text-center text-gray-500 mb-6">
+              Your inventory is empty
+            </div>
+          )}
+        </div>
+
+        <div>
+          <h3 className="text-lg font-medium text-gray-800 mb-4">Sell Other Items</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {sellableItems.map(item => {
+              const [customPrice, setCustomPrice] = useState(item.basePrice);
+              
+              return (
+                <div key={item.id} className="p-4 border border-gray-300 rounded-lg bg-white">
+                  <div className="flex items-center gap-3 mb-3">
+                    <span className="text-2xl">{item.icon}</span>
+                    <div>
+                      <h4 className="font-medium text-gray-800">{item.name}</h4>
+                      <p className="text-sm text-gray-500">Base price: {item.basePrice}c</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-2 mb-3">
+                    <label className="text-sm text-gray-600">Your price:</label>
+                    <input
+                      type="number"
+                      value={customPrice}
+                      onChange={(e) => setCustomPrice(Math.max(0, parseInt(e.target.value) || 0))}
+                      className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
+                      min="0"
+                    />
+                    <span className="text-sm text-gray-600">coins</span>
+                  </div>
+                  
+                  <button
+                    onClick={() => handleSellCustomItem(item.id, customPrice)}
+                    className="w-full py-2 px-4 bg-blue-500 text-white rounded hover:bg-blue-600"
+                  >
+                    List for Sale
+                  </button>
                 </div>
-                
-                <button
-                  onClick={() => onSellItem(item.id, customPrice)}
-                  className="w-full py-2 px-4 bg-blue-500 text-white rounded hover:bg-blue-600"
-                >
-                  List for Sale
-                </button>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       </div>
     );
+  };
+
+  const sellInventoryItem = (item: MarketItem) => {
+    const sellPrice = Math.floor(item.price * 0.7);
+    const newInventory = inventory.map(invItem => 
+      invItem.id === item.id 
+        ? { ...invItem, quantity: invItem.quantity - 1 }
+        : invItem
+    ).filter(invItem => invItem.quantity > 0);
+    
+    saveInventory(newInventory);
+    onUpdateGameState({ coins: coins + sellPrice });
+    
+    const history = [...purchaseHistory, { 
+      item: { ...item, price: sellPrice }, 
+      date: Date.now(), 
+      type: 'sold' as const 
+    }];
+    setPurchaseHistory(history);
+  };
+
+  const handleSellCustomItem = (itemId: string, price: number) => {
+    onSellItem(itemId, price);
+    const sellPrice = Math.floor(price * 0.9);
+    onUpdateGameState({ coins: coins + sellPrice });
   };
   
   const renderHistoryTab = () => (
     <div className="space-y-4">
       <h3 className="text-lg font-medium text-gray-800">Transaction History</h3>
-      <div className="bg-gray-50 p-4 rounded-lg text-center text-gray-500">
-        Transaction history feature coming soon!
-      </div>
+      {purchaseHistory.length > 0 ? (
+        <div className="space-y-2">
+          {purchaseHistory.slice().reverse().map((transaction, index) => (
+            <div key={index} className="p-3 bg-gray-50 rounded-lg flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <span className="text-xl">{transaction.item.icon}</span>
+                <div>
+                  <div className="font-medium text-gray-700">{transaction.item.name}</div>
+                  <div className="text-sm text-gray-500">
+                    {new Date(transaction.date).toLocaleDateString()}
+                  </div>
+                </div>
+              </div>
+              <div className={`text-right ${
+                transaction.type === 'bought' ? 'text-red-600' : 'text-green-600'
+              }`}>
+                <div className="font-medium">
+                  {transaction.type === 'bought' ? '-' : '+'}{transaction.item.price} coins
+                </div>
+                <div className="text-xs text-gray-500">{transaction.type}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="p-4 bg-gray-50 rounded-lg text-center text-gray-500">
+          No transaction history yet
+        </div>
+      )}
     </div>
   );
   
@@ -318,7 +669,7 @@ export default function Marketplace({ neighbors, coins, day, onClose, onPurchase
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.9, opacity: 0, y: 20 }}
         transition={{ type: "spring", damping: 20 }}
-        className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[80vh] overflow-hidden"
+        className="bg-white rounded-xl shadow-xl max-w-6xl w-full max-h-[90vh] overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-4 bg-gradient-to-r from-orange-500 to-amber-600 text-white flex justify-between items-center">
@@ -344,8 +695,9 @@ export default function Marketplace({ neighbors, coins, day, onClose, onPurchase
           <nav className="flex">
             {[
               { id: 'buy', icon: ShoppingCart, label: 'Buy' },
-              { id: 'sell', icon: TrendingUp, label: 'Sell' },
-              { id: 'history', icon: RefreshCw, label: 'History' }
+              { id: 'sell', icon: DollarSign, label: 'Sell' },
+              { id: 'inventory', icon: Package, label: 'Inventory' },
+              { id: 'history', icon: TrendingUp, label: 'History' }
             ].map(({ id, icon: Icon, label }) => (
               <button
                 key={id}
@@ -363,7 +715,7 @@ export default function Marketplace({ neighbors, coins, day, onClose, onPurchase
           </nav>
         </div>
         
-        <div className="p-6 overflow-y-auto max-h-[calc(80vh-140px)]">
+        <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
@@ -374,6 +726,7 @@ export default function Marketplace({ neighbors, coins, day, onClose, onPurchase
             >
               {activeTab === 'buy' && renderBuyTab()}
               {activeTab === 'sell' && renderSellTab()}
+              {activeTab === 'inventory' && renderInventoryTab()}
               {activeTab === 'history' && renderHistoryTab()}
             </motion.div>
           </AnimatePresence>
@@ -381,4 +734,72 @@ export default function Marketplace({ neighbors, coins, day, onClose, onPurchase
       </motion.div>
     </motion.div>
   );
+
+  function renderInventoryTab() {
+    return (
+      <div className="space-y-4">
+        <h3 className="text-lg font-medium text-gray-800">Your Inventory</h3>
+        {inventory.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {inventory.map(item => (
+              <div key={item.id} className={`p-4 rounded-lg border ${getItemRarityColor(item.rarity)}`}>
+                <div className="flex items-center gap-3 mb-2">
+                  <span className="text-xl">{item.icon}</span>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-medium text-gray-800">{item.name}</h4>
+                      {item.rarity && (
+                        <span className={`text-xs px-2 py-0.5 rounded ${
+                          item.rarity === 'legendary' ? 'bg-yellow-200 text-yellow-800' :
+                          item.rarity === 'rare' ? 'bg-purple-200 text-purple-800' :
+                          item.rarity === 'uncommon' ? 'bg-blue-200 text-blue-800' :
+                          'bg-gray-200 text-gray-600'
+                        }`}>
+                          {item.rarity}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-600">x{item.quantity}</p>
+                  </div>
+                </div>
+                {item.effect && (
+                  <p className="text-sm text-emerald-600 mb-2">{item.effect}</p>
+                )}
+                <button
+                  onClick={() => useInventoryItem(item)}
+                  disabled={item.itemType !== 'service' && item.itemType !== 'boost'}
+                  className={`w-full py-1 px-3 rounded text-sm ${
+                    item.itemType === 'service' || item.itemType === 'boost'
+                      ? 'bg-blue-500 text-white hover:bg-blue-600'
+                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  }`}
+                >
+                  {item.itemType === 'service' || item.itemType === 'boost' ? 'Use' : 'Decorative'}
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="p-8 bg-gray-50 rounded-lg text-center text-gray-500">
+            <Package size={48} className="mx-auto mb-2 text-gray-300" />
+            Your inventory is empty
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function useInventoryItem(item: MarketItem) {
+    if (item.itemType === 'service' || item.itemType === 'boost') {
+      applyItemEffect(item);
+      
+      const newInventory = inventory.map(invItem => 
+        invItem.id === item.id 
+          ? { ...invItem, quantity: invItem.quantity - 1 }
+          : invItem
+      ).filter(invItem => invItem.quantity > 0);
+      
+      saveInventory(newInventory);
+    }
+  }
 }

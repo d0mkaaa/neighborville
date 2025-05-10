@@ -28,7 +28,11 @@ export default function NeighborSocialFeed({ neighbors, grid, onClose, currentDa
 
   useEffect(() => {
     generateRandomPost();
-    const interval = setInterval(generateRandomPost, 15000);
+    const interval = setInterval(() => {
+      if (Math.random() < 0.7) {
+        generateRandomPost();
+      }
+    }, 15000);
     return () => clearInterval(interval);
   }, [neighbors, grid, currentDay, timeOfDay]);
 
@@ -39,6 +43,19 @@ export default function NeighborSocialFeed({ neighbors, grid, onClose, currentDa
     const neighbor = activeNeighbors[Math.floor(Math.random() * activeNeighbors.length)];
     const happiness = neighbor.happiness || 70;
     
+    let postType: 'complaint' | 'praise' | 'observation' | 'concern';
+    let icon: React.ReactNode;
+    
+    const hasWater = () => {
+      const house = neighbor.houseIndex !== undefined ? grid[neighbor.houseIndex] : null;
+      return !house?.needsWater || house?.isConnectedToWater;
+    };
+    
+    const hasPower = () => {
+      const house = neighbor.houseIndex !== undefined ? grid[neighbor.houseIndex] : null;
+      return !house?.needsElectricity || house?.isConnectedToPower;
+    };
+    
     const messages = {
       complaint: [
         "Still no power in my building! 😤 #poweroutage",
@@ -48,6 +65,7 @@ export default function NeighborSocialFeed({ neighbors, grid, onClose, currentDa
         "The energy bills are getting ridiculous... 💸",
         "Need more entertainment options around here! 🎮",
         "Too many people living in my building. It's chaos! 👥",
+        "When will we get proper utilities? This is getting old! ⚡💧"
       ],
       praise: [
         "Loving the new park! Perfect for morning jogs 🏃‍♀️ #neighborhoodgoals",
@@ -57,6 +75,7 @@ export default function NeighborSocialFeed({ neighbors, grid, onClose, currentDa
         "Power grid working perfectly now! Thank you mayor! ⚡️",
         "The library has become my favorite spot 📚",
         "Happy to have reliable water supply now! 💧",
+        "Our facilities are top-notch! Living the dream! ✨"
       ],
       observation: [
         "Noticed a lot of new construction lately... 🏗️",
@@ -66,6 +85,7 @@ export default function NeighborSocialFeed({ neighbors, grid, onClose, currentDa
         "Busy day at the local shops today 🛍️",
         "Lots of activity in the music district tonight 🎶",
         "The community garden is looking amazing! 🌱",
+        "Infrastructure development is really picking up pace 🚧"
       ],
       concern: [
         "Is anyone else worried about the energy consumption? 🤔",
@@ -75,38 +95,74 @@ export default function NeighborSocialFeed({ neighbors, grid, onClose, currentDa
         "The bills keep piling up... hope this is sustainable 📄",
         "Anyone else feeling the housing crunch? 🏘️",
         "Quality of life concerns are rising... 📊",
+        "When will we get basic utilities sorted out? 🛠️"
       ]
     };
 
-    let postType: 'complaint' | 'praise' | 'observation' | 'concern';
-    let icon: React.ReactNode;
-    
-    if (happiness < 40) {
-      postType = Math.random() < 0.7 ? 'complaint' : 'concern';
+    if (!hasPower() || !hasWater()) {
+      postType = 'complaint';
+      icon = !hasPower() ? <Zap size={16} className="text-red-500" /> : <Droplets size={16} className="text-red-500" />;
+      
+      if (!hasPower() && !hasWater()) {
+        messages.complaint.push("No power AND no water?! This is unacceptable! ⚡💧");
+      } else if (!hasPower()) {
+        messages.complaint.push("Still no electricity! How am I supposed to live like this? ⚡");
+      } else {
+        messages.complaint.push("Can't even get clean water! What kind of neighborhood is this? 💧");
+      }
+    } else if (happiness < 30) {
+      postType = Math.random() < 0.8 ? 'complaint' : 'concern';
       icon = <Frown size={16} className="text-red-500" />;
-    } else if (happiness > 70) {
-      postType = Math.random() < 0.7 ? 'praise' : 'observation';
+    } else if (happiness > 80) {
+      postType = Math.random() < 0.8 ? 'praise' : 'observation';
       icon = <Heart size={16} className="text-emerald-500" />;
     } else {
-      const types: Array<'observation' | 'concern'> = ['observation', 'concern'];
-      postType = types[Math.floor(Math.random() * types.length)];
-      icon = postType === 'concern' ? <Frown size={16} className="text-yellow-500" /> : null;
+      const types: Array<'observation' | 'concern' | 'praise' | 'complaint'> = ['observation', 'concern', 'praise', 'complaint'];
+      const weights = [0.4, 0.3, 0.2, 0.1];
+      const rand = Math.random();
+      let cumulative = 0;
+      
+      for (let i = 0; i < types.length; i++) {
+        cumulative += weights[i];
+        if (rand < cumulative) {
+          postType = types[i];
+          break;
+        }
+      }
+      
+      if (postType === 'concern') {
+        icon = <Frown size={16} className="text-yellow-500" />;
+      } else if (postType === 'praise') {
+        icon = <Heart size={16} className="text-emerald-500" />;
+      }
     }
 
     const house = neighbor.houseIndex !== undefined ? grid[neighbor.houseIndex] : null;
     if (house) {
       if (house.needsElectricity && !house.isConnectedToPower) {
-        if (Math.random() < 0.3) {
-          postType = 'complaint';
-          icon = <Zap size={16} className="text-red-500" />;
+        if (Math.random() < 0.5 && postType === 'complaint') {
           messages.complaint.push("Still no electricity! This is getting old... ⚡️");
+          icon = <Zap size={16} className="text-red-500" />;
         }
       }
       if (house.needsWater && !house.isConnectedToWater) {
-        if (Math.random() < 0.3) {
-          postType = 'complaint';
-          icon = <Droplets size={16} className="text-red-500" />;
+        if (Math.random() < 0.5 && postType === 'complaint') {
           messages.complaint.push("No water again! When will this be fixed? 💧");
+          icon = <Droplets size={16} className="text-red-500" />;
+        }
+      }
+      
+      if (house.occupants && house.occupants.length > (neighbor.maxNeighbors || 1)) {
+        if (Math.random() < 0.4 && postType === 'complaint') {
+          messages.complaint.push("Sharing with too many roommates. Need personal space! 👥");
+          icon = <Home size={16} className="text-red-500" />;
+        }
+      }
+      
+      if ((house.isConnectedToPower && house.isConnectedToWater) && happiness > 70) {
+        if (Math.random() < 0.3 && postType === 'praise') {
+          messages.praise.push("All utilities working perfectly! Life is good! ⚡💧");
+          icon = <Heart size={16} className="text-emerald-500" />;
         }
       }
     }
@@ -125,7 +181,7 @@ export default function NeighborSocialFeed({ neighbors, grid, onClose, currentDa
       timestamp: Date.now()
     };
 
-    setPosts(prev => [newPost, ...prev].slice(0, 10));
+    setPosts(prev => [newPost, ...prev].slice(0, 15));
   };
 
   const formatTimeAgo = (timestamp: number) => {
