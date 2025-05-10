@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import type { Building, Neighbor } from "../../types/game";
-import { TrendingUp, TrendingDown, BarChart, ChevronDown, ChevronUp } from "lucide-react";
+import type { Building, Neighbor, WeatherType } from "../../types/game";
+import { TrendingUp, TrendingDown, BarChart, ChevronDown, ChevronUp, CloudRain, Sun, CloudLightning, CloudSnow, Cloud } from "lucide-react";
 
 type HappinessContributor = {
   name: string;
   value: number;
-  type: 'building' | 'neighbor' | 'event' | 'other';
+  type: 'building' | 'neighbor' | 'event' | 'weather' | 'other';
   icon?: React.ReactNode;
 };
 
@@ -20,6 +20,7 @@ type HappinessAnalyticsProps = {
     happinessImpact: number;
     day: number;
   }[];
+  weather?: WeatherType;
 };
 
 export default function HappinessAnalytics({
@@ -28,6 +29,7 @@ export default function HappinessAnalytics({
   neighbors,
   grid,
   recentEvents,
+  weather = 'sunny',
 }: HappinessAnalyticsProps) {
   const [expanded, setExpanded] = useState(false);
   
@@ -94,11 +96,30 @@ export default function HappinessAnalytics({
       type: 'event' as const,
     }));
   };
+
+  const getWeatherContribution = (): HappinessContributor[] => {
+    const weatherEffects: Record<WeatherType, { value: number, icon: React.ReactNode }> = {
+      sunny: { value: 1, icon: <Sun size={16} className="text-yellow-500" /> },
+      cloudy: { value: -0.5, icon: <Cloud size={16} className="text-gray-500" /> },
+      rainy: { value: -1.5, icon: <CloudRain size={16} className="text-blue-500" /> },
+      stormy: { value: -3, icon: <CloudLightning size={16} className="text-purple-600" /> },
+      snowy: { value: 0, icon: <CloudSnow size={16} className="text-cyan-400" /> }
+    };
+
+    const effect = weatherEffects[weather];
+    return effect.value !== 0 ? [{
+      name: `${weather} weather`,
+      value: effect.value,
+      type: 'weather' as const,
+      icon: effect.icon
+    }] : [];
+  };
   
   const contributors = [
     ...getBuildingContributions(),
     ...getNeighborContributions(),
     ...getEventContributions(),
+    ...getWeatherContribution(),
     {
       name: 'base happiness',
       value: 50,
@@ -175,7 +196,10 @@ export default function HappinessAnalytics({
                   </h5>
                   {positiveContributors.map((contributor, index) => (
                     <div key={index} className="flex justify-between items-center mb-1.5">
-                      <div className="text-xs text-gray-700 lowercase">{contributor.name}</div>
+                      <div className="text-xs text-gray-700 lowercase flex items-center gap-1">
+                        {contributor.icon && contributor.icon}
+                        {contributor.name}
+                      </div>
                       <div className="text-xs font-medium text-emerald-600">+{contributor.value}</div>
                     </div>
                   ))}
@@ -190,7 +214,10 @@ export default function HappinessAnalytics({
                   </h5>
                   {negativeContributors.map((contributor, index) => (
                     <div key={index} className="flex justify-between items-center mb-1.5">
-                      <div className="text-xs text-gray-700 lowercase">{contributor.name}</div>
+                      <div className="text-xs text-gray-700 lowercase flex items-center gap-1">
+                        {contributor.icon && contributor.icon}
+                        {contributor.name}
+                      </div>
                       <div className="text-xs font-medium text-red-600">{contributor.value}</div>
                     </div>
                   ))}

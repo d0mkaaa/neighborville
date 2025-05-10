@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Home, Zap, User, Calendar, Settings, Award, AlertCircle, X, CheckCircle } from "lucide-react";
+import { Plus, Home, Zap, User, Calendar, Settings, Award, AlertCircle, X, CheckCircle, Volume2, VolumeX } from "lucide-react";
 import AppLayout from "../ui/AppLayout";
 import GameHeader from "./GameHeader";
 import BuildingOption from "./BuildingOption";
@@ -51,7 +51,7 @@ type DayRecord = {
 
 export default function NeighborVille({ initialGameState, showTutorialProp = false }: NeighborVilleProps) {
   const [playerName, setPlayerName] = useState("");
-  const [coins, setCoins] = useState(1000);
+  const [coins, setCoins] = useState(2000);
   const [happiness, setHappiness] = useState(50); 
   const [day, setDay] = useState(1);
   const [level, setLevel] = useState(1);
@@ -116,7 +116,11 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
     waterShortages: []
   });
 
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [buildingCategory, setBuildingCategory] = useState<'all' | 'residential' | 'commercial' | 'utility' | 'entertainment'>('all');
+  const [musicEnabled, setMusicEnabled] = useState(false);
+  const [showMusicModal, setShowMusicModal] = useState(false);
+
+  const audioRef = useRef<HTMLAudioElement | HTMLIFrameElement | null>(null);
 
   useEffect(() => {
     if (initialGameState) {
@@ -124,38 +128,6 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
     } else {
       initializeNewGame();
     }
-    
-    // Create and play audio
-    const audio = new Audio();
-    audio.src = "https://w.soundcloud.com/player/?url=https%3A//api.soundcloud.com/tracks/1655066715&auto_play=true&hide_related=true&show_comments=false&show_user=false&show_reposts=false&visual=false";
-    audio.loop = true;
-    audio.volume = 0.3;
-    
-    // Try to play the audio
-    const playAudio = () => {
-      audio.play().catch(err => {
-        console.log("Audio autoplay prevented, user interaction required");
-        // Add click listener to start audio on first user interaction
-        const startAudio = () => {
-          audio.play();
-          document.removeEventListener('click', startAudio);
-        };
-        document.addEventListener('click', startAudio);
-      });
-    };
-    
-    playAudio();
-    
-    // Store audio reference
-    audioRef.current = audio;
-    
-    // Cleanup
-    return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.src = '';
-      }
-    };
   }, [initialGameState]);
 
   useEffect(() => {
@@ -186,7 +158,7 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
   }, [timePaused]);
 
   useEffect(() => {
-    if (gameTime % 4 === 0) { // Every 4 hours
+    if (gameTime % 4 === 0) {
       generateWeatherForecast();
     }
   }, [gameTime]);
@@ -194,6 +166,12 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
   useEffect(() => {
     calculateUtilityGrids();
   }, [grid]);
+
+  useEffect(() => {
+    if (!showTutorial && !showMusicModal && musicEnabled === false) {
+      setShowMusicModal(true);
+    }
+  }, [showTutorial]);
 
   const updateTimeOfDay = (time: number) => {
     let newTimeOfDay: TimeOfDay;
@@ -263,15 +241,12 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
   const generateWeatherForecast = () => {
     const forecast: WeatherType[] = [...weatherForecast];
     
-    // Only update the first forecast item when it's time
     if (forecast.length === 0) {
-      // Generate initial forecast
       for (let i = 0; i < 6; i++) {
         const hour = (gameTime + i * 4) % 24;
         forecast.push(getWeatherForTime(hour));
       }
     } else {
-      // Shift forecast and add new future prediction
       forecast.shift();
       const lastTime = (gameTime + 5 * 4) % 24;
       forecast.push(getWeatherForTime(lastTime));
@@ -372,16 +347,14 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
     
     if (!fromBuilding || !toBuilding) return;
     
-    // Check if connection is valid
     if (utilityType === 'power') {
       if (!fromBuilding.isPowerGenerator || !toBuilding.needsElectricity) return;
     } else {
       if (!fromBuilding.isWaterSupply || !toBuilding.needsWater) return;
     }
     
-    // Check distance
     const distance = calculateGridDistance(fromIndex, toIndex, Math.sqrt(gridSize));
-    const maxDistance = utilityType === 'power' ? 5 : 3; // Power can reach further
+    const maxDistance = utilityType === 'power' ? 5 : 3;
     
     if (distance > maxDistance) {
       addNotification(`Too far! ${utilityType === 'power' ? 'Power' : 'Water'} can only reach ${maxDistance} tiles away`, 'warning');
@@ -487,7 +460,7 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
   const initializeNewGame = () => {
     const name = initialGameState?.playerName || "Mayor";
     setPlayerName(name);
-    setCoins(5000);  // Increased starting budget
+    setCoins(2000);
     setHappiness(70);
     setDay(1);
     setLevel(1);
@@ -498,7 +471,7 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
     setGameTime(8);
     setCoinHistory([{
       day: 1,
-      balance: 5000,
+      balance: 2000,
       income: 0,
       expenses: 0,
       timestamp: Date.now()
@@ -777,7 +750,6 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
       
       const house = neighbor.houseIndex !== undefined ? grid[neighbor.houseIndex] : null;
       if (house) {
-        // Housing preference check
         if (neighbor.housingPreference === 'house' && house.id === 'apartment') {
           happinessChange -= 15;
           reasons.push('Prefers house over apartment (-15)');
@@ -786,13 +758,11 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
           reasons.push('Prefers apartment over house (-10)');
         }
         
-        // Overcrowding check
         if (house.occupants && house.occupants.length > (neighbor.maxNeighbors || 1)) {
           happinessChange -= 20;
           reasons.push('Too many roommates (-20)');
         }
         
-        // Utility checks
         if (house.needsElectricity && !house.isConnectedToPower) {
           happinessChange -= 15;
           reasons.push('No electricity (-15)');
@@ -804,7 +774,6 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
         }
       }
       
-      // Building preferences
       grid.forEach(building => {
         if (building) {
           if (building.name.toLowerCase() === neighbor.likes.toLowerCase()) {
@@ -818,7 +787,6 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
         }
       });
       
-      // Weather effect
       const weatherBonus = getWeatherHappinessEffect();
       happinessChange += weatherBonus;
       if (weatherBonus !== 0) {
@@ -827,7 +795,6 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
       
       const newHappiness = Math.min(100, Math.max(0, (neighbor.happiness || 70) + happinessChange));
       
-      // Notify about major unhappiness
       if (newHappiness < 30 && (neighbor.happiness || 70) >= 30) {
         addNotification(`${neighbor.name} is very unhappy! ${reasons.join('. ')}`, 'warning');
       }
@@ -980,7 +947,7 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
     const building = grid[gridIndex];
     if (!building) return;
     
-    const COLLECTION_COOLDOWN = 24 * 60 * 1000; // 24 hours in milliseconds
+    const COLLECTION_COOLDOWN = 24 * 60 * 1000;
     const currentTime = Date.now();
     
     if (building.lastCollectedIncome && currentTime - building.lastCollectedIncome < COLLECTION_COOLDOWN) {
@@ -990,19 +957,16 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
       return;
     }
     
-    // Check if building has power when needed
     if (building.needsElectricity && !building.isConnectedToPower) {
       addNotification(`${building.name} needs power connection to generate income!`, 'warning');
       return;
     }
     
-    // Check if building has water when needed
     if (building.needsWater && !building.isConnectedToWater) {
       addNotification(`${building.name} needs water connection to generate income!`, 'warning');
       return;
     }
     
-    // All checks passed, collect income
     const newGrid = [...grid];
     newGrid[gridIndex] = {
       ...building,
@@ -1210,6 +1174,45 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
     }
   };
 
+  const handleEnableMusic = async (enable: boolean) => {
+      setMusicEnabled(enable);
+      setShowMusicModal(false);
+      
+      if (enable) {
+        const iframe = document.createElement('iframe');
+        iframe.width = '0';
+        iframe.height = '0';
+        iframe.style.visibility = 'hidden';
+        iframe.scrolling = 'no';
+        iframe.frameBorder = 'no';
+        iframe.allow = 'autoplay';
+        iframe.src = 'https://w.soundcloud.com/player/?url=https://soundcloud.com/d0mkaaa/neighborville-soundtrack&color=%23ff5500&auto_play=true&hide_related=true&show_comments=false&show_user=false&show_reposts=false&visual=false';
+        
+        document.body.appendChild(iframe);
+        
+        audioRef.current = iframe;
+        
+        addNotification('Music started! 🎵', 'success');
+      }
+    };
+
+  const getCategorizedBuildings = () => {
+    return buildings.filter(building => {
+      switch (buildingCategory) {
+        case 'residential':
+          return building.id === 'house' || building.id === 'apartment' || building.id === 'condo';
+        case 'commercial':
+          return building.id === 'cafe' || building.id === 'fancy_restaurant' || building.id === 'tech_hub';
+        case 'utility':
+          return building.id === 'solar_panel' || building.id === 'power_plant' || building.id === 'water_tower' || building.id === 'water_pump' || building.id === 'charging_station';
+        case 'entertainment':
+          return building.id === 'park' || building.id === 'library' || building.id === 'music_venue' || building.id === 'movie_theater';
+        default:
+          return true;
+      }
+    });
+  };
+
   return (
     <AppLayout 
       header={
@@ -1271,7 +1274,6 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
       }
       timeOfDay={timeOfDay}
     >
-      <audio ref={audioRef} />
       
       <NotificationSystem 
         notifications={notifications}
@@ -1308,9 +1310,22 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
             
             {activeTab === 'buildings' && (
               <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-sm p-4">
-                <h2 className="font-medium mb-3 lowercase text-emerald-800">available buildings</h2>
+                <div className="flex justify-between items-center mb-3">
+                  <h2 className="font-medium lowercase text-emerald-800">available buildings</h2>
+                  <select
+                    value={buildingCategory}
+                    onChange={(e) => setBuildingCategory(e.target.value as typeof buildingCategory)}
+                    className="text-sm border rounded px-2 py-1 text-gray-600"
+                  >
+                    <option value="all">all</option>
+                    <option value="residential">residential</option>
+                    <option value="commercial">commercial</option>
+                    <option value="utility">utility</option>
+                    <option value="entertainment">entertainment</option>
+                  </select>
+                </div>
                 <div className="grid grid-cols-2 gap-2">
-                  {buildings.map((building) => (
+                  {getCategorizedBuildings().map((building) => (
                     <BuildingOption 
                       key={building.id}
                       building={building}
@@ -1436,6 +1451,7 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
                 neighbors={neighbors}
                 grid={grid}
                 recentEvents={recentEvents}
+                weather={weather}
               />
               <div className="p-4 border-t border-gray-100">
                 <button
@@ -1546,6 +1562,44 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
               addNotification('You can access the tutorial anytime from the help button', 'info');
             }}
           />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showMusicModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{ backdropFilter: "blur(8px)", backgroundColor: "rgba(0,0,0,0.3)" }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-xl p-6 max-w-md w-full shadow-xl"
+            >
+              <h3 className="text-lg font-medium text-emerald-800 mb-4 lowercase">would you like music?</h3>
+              <p className="text-gray-600 mb-6 lowercase">enjoy some background music while you build your neighborhood?</p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => handleEnableMusic(true)}
+                  className="flex-1 bg-emerald-500 text-white py-2 px-4 rounded-lg font-medium hover:bg-emerald-600 transition-colors lowercase flex items-center justify-center gap-2"
+                >
+                  <Volume2 size={16} />
+                  yes please
+                </button>
+                <button
+                  onClick={() => handleEnableMusic(false)}
+                  className="flex-1 bg-gray-200 text-gray-800 py-2 px-4 rounded-lg font-medium hover:bg-gray-300 transition-colors lowercase flex items-center justify-center gap-2"
+                >
+                  <VolumeX size={16} />
+                  no thanks
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
     </AppLayout>

@@ -1,13 +1,29 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Zap, Droplets, CheckCircle, AlertCircle, XCircle, ChevronDown, ChevronUp } from "lucide-react";
-import type { Building, PowerGridState, WaterGridState } from "../../types/game";
+import {
+  Zap,
+  Droplets,
+  CheckCircle,
+  AlertCircle,
+  XCircle,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
+import type {
+  Building,
+  PowerGridState,
+  WaterGridState,
+} from "../../types/game";
 
 type UtilityGridProps = {
   grid: (Building | null)[];
   powerGrid: PowerGridState;
   waterGrid: WaterGridState;
-  onConnectUtility: (fromIndex: number, toIndex: number, utilityType: 'power' | 'water') => void;
+  onConnectUtility: (
+    fromIndex: number,
+    toIndex: number,
+    utilityType: "power" | "water"
+  ) => void;
   gridSize: number;
 };
 
@@ -16,87 +32,101 @@ export default function UtilityGrid({
   powerGrid,
   waterGrid,
   onConnectUtility,
-  gridSize
+  gridSize,
 }: UtilityGridProps) {
   const [showPowerGrid, setShowPowerGrid] = useState(false);
   const [showWaterGrid, setShowWaterGrid] = useState(false);
-  const [dragStart, setDragStart] = useState<{index: number, type: 'power' | 'water'} | null>(null);
-  const [dragPosition, setDragPosition] = useState<{x: number, y: number} | null>(null);
+  const [dragStart, setDragStart] = useState<{
+    index: number;
+    type: "power" | "water";
+  } | null>(null);
+  const [dragPosition, setDragPosition] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
   const [dragEnd, setDragEnd] = useState<number | null>(null);
 
-  const getBuildingStatus = (index: number, type: 'power' | 'water') => {
+  const getBuildingStatus = (index: number, type: "power" | "water") => {
     const building = grid[index];
-    if (!building) return 'none';
-    
-    if (type === 'power') {
-      if (building.isPowerGenerator) return 'generator';
-      if (!building.needsElectricity) return 'not-needed';
-      if (building.isConnectedToPower) return 'connected';
-      return 'disconnected';
+    if (!building) return "none";
+
+    if (type === "power") {
+      if (building.isPowerGenerator) return "generator";
+      if (!building.needsElectricity) return "not-needed";
+      if (building.isConnectedToPower) return "connected";
+      return "disconnected";
     } else {
-      if (building.isWaterSupply) return 'supply';
-      if (!building.needsWater) return 'not-needed';
-      if (building.isConnectedToWater) return 'connected';
-      return 'disconnected';
+      if (building.isWaterSupply) return "supply";
+      if (!building.needsWater) return "not-needed";
+      if (building.isConnectedToWater) return "connected";
+      return "disconnected";
     }
   };
 
-  const getStatusColor = (status: string, type: 'power' | 'water') => {
+  const getStatusColor = (status: string, type: "power" | "water") => {
     switch (status) {
-      case 'generator':
-      case 'supply':
-        return type === 'power' ? 'bg-yellow-400' : 'bg-blue-400';
-      case 'connected':
-        return 'bg-green-400';
-      case 'disconnected':
-        return 'bg-red-400';
-      case 'not-needed':
-        return 'bg-gray-300';
+      case "generator":
+      case "supply":
+        return type === "power" ? "bg-yellow-400" : "bg-blue-400";
+      case "connected":
+        return "bg-green-400";
+      case "disconnected":
+        return "bg-red-400";
+      case "not-needed":
+        return "bg-gray-300";
       default:
-        return 'transparent';
+        return "transparent";
     }
   };
 
   const gridCols = Math.sqrt(gridSize);
 
-  const handleMouseDown = (e: React.MouseEvent, index: number, type: 'power' | 'water') => {
+  const handleMouseDown = (
+    e: React.MouseEvent,
+    index: number,
+    type: "power" | "water"
+  ) => {
     const building = grid[index];
     if (!building) return;
-    
-    if ((type === 'power' && !building.isPowerGenerator) || 
-        (type === 'water' && !building.isWaterSupply)) return;
-    
+
+    if (
+      (type === "power" && !building.isPowerGenerator) ||
+      (type === "water" && !building.isWaterSupply)
+    )
+      return;
+
     const rect = e.currentTarget.getBoundingClientRect();
-    setDragStart({index, type});
+    setDragStart({ index, type });
     setDragPosition({
       x: rect.left + rect.width / 2,
-      y: rect.top + rect.height / 2
+      y: rect.top + rect.height / 2,
     });
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
     if (!dragStart || !dragPosition) return;
-    
+
     setDragPosition({
       x: e.clientX,
-      y: e.clientY
+      y: e.clientY,
     });
   };
 
   const handleMouseUp = (e: React.MouseEvent, index: number) => {
     if (!dragStart) return;
-    
+
     const building = grid[index];
     if (!building) return;
-    
-    const canConnect = dragStart.type === 'power' 
-      ? building.needsElectricity 
-      : building.needsWater;
-    
+
+    const canConnect =
+      dragStart.type === "power"
+        ? building.needsElectricity
+        : building.needsWater;
+
     if (canConnect && index !== dragStart.index) {
       onConnectUtility(dragStart.index, index, dragStart.type);
     }
-    
+
     setDragStart(null);
     setDragPosition(null);
     setDragEnd(null);
@@ -109,16 +139,50 @@ export default function UtilityGrid({
 
   const getLineCoordinates = () => {
     if (!dragStart || !dragPosition || !dragEnd) return null;
-    
-    const gridElement = document.querySelector(`[data-grid-index="${dragEnd}"]`);
-    if (!gridElement) return null;
-    
-    const rect = gridElement.getBoundingClientRect();
+
+    const gridContainer = document.querySelector("[data-utility-grid]");
+    if (!gridContainer) return null;
+
+    const containerRect = gridContainer.getBoundingClientRect();
+    const gridElements = gridContainer.querySelectorAll("[data-grid-index]");
+    const startElement = gridElements[dragStart.index];
+    const endElement = gridElements[dragEnd];
+
+    if (!startElement || !endElement) return null;
+
+    const startRect = startElement.getBoundingClientRect();
+    const endRect = endElement.getBoundingClientRect();
+
+    const startCenterX = startRect.left + startRect.width / 2;
+    const startCenterY = startRect.top + startRect.height / 2;
+    const endCenterX = endRect.left + endRect.width / 2;
+    const endCenterY = endRect.top + endRect.height / 2;
+
+    let startX = startCenterX;
+    let startY = startCenterY;
+
+    const dx = endCenterX - startCenterX;
+    const dy = endCenterY - startCenterY;
+
+    if (Math.abs(dx) > Math.abs(dy)) {
+      if (dx > 0) {
+        startX = startRect.right;
+      } else {
+        startX = startRect.left;
+      }
+    } else {
+      if (dy > 0) {
+        startY = startRect.bottom;
+      } else {
+        startY = startRect.top;
+      }
+    }
+
     return {
-      x1: dragPosition.x,
-      y1: dragPosition.y,
-      x2: rect.left + rect.width / 2,
-      y2: rect.top + rect.height / 2
+      x1: startX - containerRect.left,
+      y1: startY - containerRect.top,
+      x2: endCenterX - containerRect.left,
+      y2: endCenterY - containerRect.top,
     };
   };
 
@@ -137,13 +201,20 @@ export default function UtilityGrid({
             <div className="flex items-center">
               <Zap size={18} className="text-yellow-600 mr-2" />
               <div>
-                <div className="text-sm font-medium text-gray-800">power grid</div>
+                <div className="text-sm font-medium text-gray-800">
+                  power grid
+                </div>
                 <div className="text-xs text-gray-600">
-                  {powerGrid.totalPowerProduction}/{powerGrid.totalPowerConsumption} units
+                  {powerGrid.totalPowerProduction}/
+                  {powerGrid.totalPowerConsumption} units
                 </div>
               </div>
             </div>
-            {showPowerGrid ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            {showPowerGrid ? (
+              <ChevronUp size={16} />
+            ) : (
+              <ChevronDown size={16} />
+            )}
           </motion.button>
 
           <motion.button
@@ -155,13 +226,20 @@ export default function UtilityGrid({
             <div className="flex items-center">
               <Droplets size={18} className="text-blue-600 mr-2" />
               <div>
-                <div className="text-sm font-medium text-gray-800">water grid</div>
+                <div className="text-sm font-medium text-gray-800">
+                  water grid
+                </div>
                 <div className="text-xs text-gray-600">
-                  {waterGrid.totalWaterProduction}/{waterGrid.totalWaterConsumption} units
+                  {waterGrid.totalWaterProduction}/
+                  {waterGrid.totalWaterConsumption} units
                 </div>
               </div>
             </div>
-            {showWaterGrid ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            {showWaterGrid ? (
+              <ChevronUp size={16} />
+            ) : (
+              <ChevronDown size={16} />
+            )}
           </motion.button>
         </div>
       </div>
@@ -173,6 +251,7 @@ export default function UtilityGrid({
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
             className="p-4 bg-gray-50 relative"
+            data-utility-grid
             onMouseMove={handleMouseMove}
             onMouseLeave={() => {
               setDragStart(null);
@@ -181,33 +260,33 @@ export default function UtilityGrid({
             }}
           >
             {lineCoords && (
-              <svg 
+              <svg
                 className="absolute inset-0 pointer-events-none"
-                style={{ width: '100%', height: '100%' }}
+                style={{ width: "100%", height: "100%" }}
               >
                 <line
-                  x1={lineCoords.x1 - 150}
-                  y1={lineCoords.y1 - 200}
-                  x2={lineCoords.x2 - 150}
-                  y2={lineCoords.y2 - 200}
-                  stroke={dragStart?.type === 'power' ? '#fbbf24' : '#3b82f6'}
+                  x1={lineCoords.x1}
+                  y1={lineCoords.y1}
+                  x2={lineCoords.x2}
+                  y2={lineCoords.y2}
+                  stroke={dragStart?.type === "power" ? "#fbbf24" : "#3b82f6"}
                   strokeWidth="3"
                   strokeDasharray="5,5"
                 />
               </svg>
             )}
-            
-            <div 
+
+            <div
               className="grid gap-1"
-              style={{ 
-                gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))`
+              style={{
+                gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))`,
               }}
             >
               {Array.from({ length: gridSize }).map((_, index) => {
                 const building = grid[index];
-                const powerStatus = getBuildingStatus(index, 'power');
-                const waterStatus = getBuildingStatus(index, 'water');
-                
+                const powerStatus = getBuildingStatus(index, "power");
+                const waterStatus = getBuildingStatus(index, "water");
+
                 return (
                   <motion.div
                     key={index}
@@ -215,43 +294,71 @@ export default function UtilityGrid({
                     whileHover={{ scale: 1.05 }}
                     onMouseDown={(e) => {
                       if (showPowerGrid && building?.isPowerGenerator) {
-                        handleMouseDown(e, index, 'power');
+                        handleMouseDown(e, index, "power");
                       } else if (showWaterGrid && building?.isWaterSupply) {
-                        handleMouseDown(e, index, 'water');
+                        handleMouseDown(e, index, "water");
                       }
                     }}
                     onMouseUp={(e) => handleMouseUp(e, index)}
                     onMouseEnter={() => handleMouseEnter(index)}
                     className="aspect-square relative cursor-pointer"
                     style={{
-                      cursor: (showPowerGrid && building?.isPowerGenerator) || 
-                              (showWaterGrid && building?.isWaterSupply) 
-                        ? 'pointer' : 'auto'
+                      cursor:
+                        (showPowerGrid && building?.isPowerGenerator) ||
+                        (showWaterGrid && building?.isWaterSupply)
+                          ? "pointer"
+                          : "auto",
                     }}
                   >
                     {building && (
                       <div className="w-full h-full rounded border border-gray-300 overflow-hidden relative">
-                        <div 
-                          className="w-full h-full opacity-50" 
+                        <div
+                          className="w-full h-full opacity-50"
                           style={{ backgroundColor: building.color }}
                         />
-                        
+
                         {showPowerGrid && (
-                          <div className={`absolute inset-0 flex items-center justify-center`}>
-                            <div className={`w-4 h-4 rounded-full ${getStatusColor(powerStatus, 'power')} flex items-center justify-center`}>
-                              {powerStatus === 'generator' && <Zap size={10} className="text-white" />}
-                              {powerStatus === 'connected' && <CheckCircle size={10} className="text-white" />}
-                              {powerStatus === 'disconnected' && <XCircle size={10} className="text-white" />}
+                          <div
+                            className={`absolute inset-0 flex items-center justify-center`}
+                          >
+                            <div
+                              className={`w-4 h-4 rounded-full ${getStatusColor(
+                                powerStatus,
+                                "power"
+                              )} flex items-center justify-center`}
+                            >
+                              {powerStatus === "generator" && (
+                                <Zap size={10} className="text-white" />
+                              )}
+                              {powerStatus === "connected" && (
+                                <CheckCircle size={10} className="text-white" />
+                              )}
+                              {powerStatus === "disconnected" && (
+                                <XCircle size={10} className="text-white" />
+                              )}
                             </div>
                           </div>
                         )}
-                        
+
                         {showWaterGrid && (
-                          <div className={`absolute inset-0 flex items-center justify-center`}>
-                            <div className={`w-4 h-4 rounded-full ${getStatusColor(waterStatus, 'water')} flex items-center justify-center`}>
-                              {waterStatus === 'supply' && <Droplets size={10} className="text-white" />}
-                              {waterStatus === 'connected' && <CheckCircle size={10} className="text-white" />}
-                              {waterStatus === 'disconnected' && <XCircle size={10} className="text-white" />}
+                          <div
+                            className={`absolute inset-0 flex items-center justify-center`}
+                          >
+                            <div
+                              className={`w-4 h-4 rounded-full ${getStatusColor(
+                                waterStatus,
+                                "water"
+                              )} flex items-center justify-center`}
+                            >
+                              {waterStatus === "supply" && (
+                                <Droplets size={10} className="text-white" />
+                              )}
+                              {waterStatus === "connected" && (
+                                <CheckCircle size={10} className="text-white" />
+                              )}
+                              {waterStatus === "disconnected" && (
+                                <XCircle size={10} className="text-white" />
+                              )}
                             </div>
                           </div>
                         )}
@@ -261,7 +368,7 @@ export default function UtilityGrid({
                 );
               })}
             </div>
-            
+
             <div className="mt-4 text-xs text-gray-600">
               <div className="flex flex-wrap gap-4">
                 <div className="flex items-center">

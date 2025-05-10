@@ -55,7 +55,7 @@ function App() {
     
     const initialState: GameProgress = {
       playerName: playerName,
-      coins: 5000,  // Increased starting budget
+      coins: 2000,
       happiness: 70,
       day: 1,
       level: 1,
