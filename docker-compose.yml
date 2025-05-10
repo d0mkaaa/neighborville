@@ -1,6 +1,25 @@
+version: '3.8'
+
 services:
-  app:
-    build: .
+  build:
+    image: neighborville-build
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: build
+    volumes:
+      - build_output:/app/dist
+
+  nginx:
+    image: nginx:alpine
     ports:
       - "8080:80" 
     restart: unless-stopped
+    volumes:
+      - build_output:/usr/share/nginx/html
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - build
+
+volumes:
+  build_output:
