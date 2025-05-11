@@ -28,6 +28,7 @@ import SettingsModal from "./SettingsModal";
 import NeighborSocialFeed from "./NeighborSocialFeed";
 import Marketplace from "./Marketplace";
 import SpecialEvents from "./SpecialEvents";
+import BuildingModal from "./BuildingModal";
 import Dropdown from "../ui/Dropdown";
 import { buildings as initialBuildings } from "../../data/buildings";
 import { neighborProfiles } from "../../data/neighbors";
@@ -45,17 +46,6 @@ interface NeighborVilleProps {
   initialGameState?: GameProgress | null;
   showTutorialProp?: boolean;
 }
-
-type DayRecord = {
-  day: number;
-  coins: number;
-  happiness: number;
-  residents: number;
-  buildings: number;
-  income: number;
-  expenses: number;
-  events: { name: string; type: 'good' | 'bad' | 'neutral' }[];
-};
 
 export default function NeighborVille({ initialGameState, showTutorialProp = false }: NeighborVilleProps) {
   const [playerName, setPlayerName] = useState("");
@@ -97,12 +87,22 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
   const [showAchievementUnlock, setShowAchievementUnlock] = useState<Achievement | null>(null);
   const [showBuildingInfo, setShowBuildingInfo] = useState<{building: Building, index: number} | null>(null);
   const [showCalendar, setShowCalendar] = useState(false);
-  const [dayRecords, setDayRecords] = useState<DayRecord[]>([]);
+  const [dayRecords, setDayRecords] = useState<{
+    day: number;
+    coins: number;
+    happiness: number;
+    residents: number;
+    buildings: number;
+    income: number;
+    expenses: number;
+    events: { name: string; type: 'good' | 'bad' | 'neutral' }[];
+  }[]>([]);
   const [showCoinHistory, setShowCoinHistory] = useState(false);
   const [coinHistory, setCoinHistory] = useState<CoinHistoryEntry[]>([]);
   const [showPlayerStats, setShowPlayerStats] = useState(false);
   const [showMarketplace, setShowMarketplace] = useState(false);
   const [showSpecialEvents, setShowSpecialEvents] = useState(false);
+  const [showBuildingModal, setShowBuildingModal] = useState(false);
   
   const [weatherForecast, setWeatherForecast] = useState<WeatherType[]>([]);
   const [showWeatherForecast, setShowWeatherForecast] = useState(false);
@@ -131,7 +131,6 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
   const [musicEnabled, setMusicEnabled] = useState(false);
   const [showMusicModal, setShowMusicModal] = useState(false);
   const [showSocialFeed, setShowSocialFeed] = useState(true);
-  const [isMovingBuilding, setIsMovingBuilding] = useState<number | null>(null);
 
   const audioRef = useRef<HTMLAudioElement | HTMLIFrameElement | null>(null);
 
@@ -216,34 +215,10 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
     }
 
     const weights: Record<TimeOfDay, Record<WeatherType, number>> = {
-      morning: {
-        sunny: 0.6,
-        cloudy: 0.25,
-        rainy: 0.12,
-        stormy: 0.03,
-        snowy: 0
-      },
-      day: {
-        sunny: 0.7,
-        cloudy: 0.2,
-        rainy: 0.08,
-        stormy: 0.02,
-        snowy: 0
-      },
-      evening: {
-        sunny: 0.5,
-        cloudy: 0.3,
-        rainy: 0.15,
-        stormy: 0.05,
-        snowy: 0
-      },
-      night: {
-        sunny: 0.1,
-        cloudy: 0.6,
-        rainy: 0.2,
-        stormy: 0.05,
-        snowy: 0.05
-      }
+      morning: { sunny: 0.6, cloudy: 0.25, rainy: 0.12, stormy: 0.03, snowy: 0 },
+      day: { sunny: 0.7, cloudy: 0.2, rainy: 0.08, stormy: 0.02, snowy: 0 },
+      evening: { sunny: 0.5, cloudy: 0.3, rainy: 0.15, stormy: 0.05, snowy: 0 },
+      night: { sunny: 0.1, cloudy: 0.6, rainy: 0.2, stormy: 0.05, snowy: 0.05 }
     };
     
     const weatherWeights = weights[currentTimeOfDay];
@@ -386,7 +361,7 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
     }
     
     const distance = calculateGridDistance(fromIndex, toIndex, Math.sqrt(gridSize));
-    const maxDistance = utilityType === 'power' ? 3 : 2;
+    const maxDistance = utilityType === 'power' ? 3 : 3;
     
     if (distance > maxDistance) {
       addNotification(`Too far! ${utilityType === 'power' ? 'Power' : 'Water'} can only reach ${maxDistance} tiles away`, 'warning');
@@ -414,23 +389,6 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
     }
     
     setGrid(newGrid);
-  };
-
-  const findNearbyGenerators = (buildingIndex: number): number[] => {
-    const generators: number[] = [];
-    const gridWidth = Math.sqrt(gridSize);
-    const maxDistance = 3;
-    
-    grid.forEach((building, index) => {
-      if (building?.isPowerGenerator) {
-        const distance = calculateGridDistance(buildingIndex, index, gridWidth);
-        if (distance <= maxDistance) {
-          generators.push(index);
-        }
-      }
-    });
-    
-    return generators;
   };
 
   const calculateGridDistance = (index1: number, index2: number, gridWidth: number): number => {
@@ -627,41 +585,15 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
   };
 
   const handleTileClick = (index: number) => {
+    console.log('Tile clicked:', index, 'Selected building:', selectedBuilding, 'Grid at index:', grid[index]);
+    
     if (index >= gridSize) return;
     
-    if (isMovingBuilding !== null) {
-      if (grid[index] === null) {
-        const buildingToMove = grid[isMovingBuilding];
-        if (buildingToMove) {
-          const newGrid = [...grid];
-          newGrid[index] = buildingToMove;
-          newGrid[isMovingBuilding] = null;
-          setGrid(newGrid);
-          addNotification(`Moved ${buildingToMove.name} to position ${index}`, 'success');
-        }
-      } else {
-        addNotification('Cannot move to occupied tile', 'error');
-      }
-      setIsMovingBuilding(null);
-      return;
-    }
-    
     if (selectedBuilding && grid[index] === null) {
-      if (coins >= selectedBuilding.cost) {
-        const newGrid = [...grid];
-        newGrid[index] = selectedBuilding;
-        
-        setGrid(newGrid);
-        setCoins(coins - selectedBuilding.cost);
-        setHappiness(Math.min(100, happiness + selectedBuilding.happiness));
-        
-        addNotification(`Built a ${selectedBuilding.name} (+${selectedBuilding.happiness}% happiness)`, 'success');
-        setSelectedBuilding(null);
-        calculateEnergyUsage(newGrid);
-        addToCoinHistory(0, selectedBuilding.cost);
-      } else {
-        addNotification('Not enough coins', 'error');
-      }
+      console.log('Setting selectedTile to:', index, 'and showing building modal');
+      setSelectedTile(index);
+      setShowBuildingModal(true);
+      console.log('showBuildingModal should now be:', true);
     } else if (!selectedBuilding && grid[index] !== null) {
       setSelectedTile(index);
     } else {
@@ -669,22 +601,26 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
     }
   };
 
+  const handleBuildingComplete = (building: Building, index: number) => {
+    if (coins >= building.cost) {
+      const newGrid = [...grid];
+      newGrid[index] = building;
+      
+      setGrid(newGrid);
+      setCoins(coins - building.cost);
+      setHappiness(Math.min(100, happiness + building.happiness));
+      
+      addNotification(`Built a ${building.name} (+${building.happiness}% happiness)`, 'success');
+      setSelectedBuilding(null);
+      calculateEnergyUsage(newGrid);
+      addToCoinHistory(0, building.cost);
+    } else {
+      addNotification('Not enough coins', 'error');
+    }
+  };
+
   const handleBuildingManage = (building: Building, index: number) => {
     setShowBuildingInfo({building, index});
-  };
-
-  const handleMoveBuilding = (fromIndex: number) => {
-    setIsMovingBuilding(fromIndex);
-    addNotification('Click on an empty tile to move the building', 'info');
-  };
-
-  const handleUpgradeBuilding = (gridIndex: number) => {
-    addNotification('Building upgrades coming soon!', 'info');
-  };
-
-  const handleDemolishBuilding = (gridIndex: number) => {
-    handleDeleteBuilding(gridIndex);
-    setShowBuildingInfo(null);
   };
 
   const handleDeleteBuilding = (index: number) => {
@@ -710,6 +646,18 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
     setSelectedTile(null);
     calculateEnergyUsage(newGrid);
     addToCoinHistory(Math.floor(buildingToDelete.cost * 0.5), 0);
+  };
+
+  const handleMoveBuilding = (fromIndex: number) => {
+    addNotification('Moving feature coming soon!', 'info');
+  };
+
+  const handleUpgradeBuilding = (gridIndex: number) => {
+    addNotification('Building upgrades coming soon!', 'info');
+  };
+
+  const handleDemolishBuilding = (gridIndex: number) => {
+    handleDeleteBuilding(gridIndex);
   };
 
   const calculateEnergyUsage = (currentGrid = grid) => {
@@ -753,7 +701,7 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
     const energyCost = totalEnergyUsage > 0 ? Math.round(totalEnergyUsage * energyRate) : 0;
     const netIncome = baseIncome - energyCost;
     
-    const newRecord: DayRecord = {
+    const newRecord = {
       day: day,
       coins: coins,
       happiness: happiness,
@@ -763,7 +711,7 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
       expenses: energyCost,
       events: recentEvents.filter(e => e.day === day).map(e => ({
         name: e.name,
-        type: e.happinessImpact > 0 ? 'good' : e.happinessImpact < 0 ? 'bad' : 'neutral'
+        type: (e.happinessImpact > 0 ? 'good' : e.happinessImpact < 0 ? 'bad' : 'neutral') as 'good' | 'bad' | 'neutral'
       }))
     };
     
@@ -1595,20 +1543,24 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
         </div>
       </div>
       
-      <div className="fixed bottom-4 right-4 space-y-2">
-        <button
+      <div className="fixed bottom-24 right-4 space-y-2 flex flex-col">
+        <motion.button
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
           onClick={() => setShowMarketplace(true)}
-          className="bg-amber-500 hover:bg-amber-600 text-white p-3 rounded-full shadow-lg transition-all"
+          className="w-12 h-12 bg-gradient-to-br from-amber-500 to-orange-600 text-white rounded-full shadow-lg transition-all flex items-center justify-center"
         >
           🛍️
-        </button>
+        </motion.button>
         
-        <button
+        <motion.button
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
           onClick={() => setShowSpecialEvents(true)}
-          className="bg-purple-500 hover:bg-purple-600 text-white p-3 rounded-full shadow-lg transition-all"
+          className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 text-white rounded-full shadow-lg transition-all flex items-center justify-center"
         >
           🎉
-        </button>
+        </motion.button>
       </div>
       
       <SaveManager 
