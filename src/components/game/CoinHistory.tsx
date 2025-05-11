@@ -10,8 +10,8 @@ type CoinHistoryProps = {
 export default function CoinHistory({ history, onClose }: CoinHistoryProps) {
   const recentEntries = history.slice(-20).reverse();
   
-  const totalIncome = history.reduce((sum, entry) => sum + entry.income, 0);
-  const totalExpenses = history.reduce((sum, entry) => sum + entry.expenses, 0);
+  const totalIncome = history.reduce((sum, entry) => entry.type === 'income' ? sum + entry.amount : sum, 0);
+  const totalExpenses = history.reduce((sum, entry) => entry.type === 'expense' ? sum + entry.amount : sum, 0);
   const netGain = totalIncome - totalExpenses;
   
   const formatDate = (timestamp: number) => {
@@ -91,17 +91,18 @@ export default function CoinHistory({ history, onClose }: CoinHistoryProps) {
                   </div>
                 </div>
                 
-                <div className="flex items-center space-x-3">
-                  {entry.income > 0 && (
+                <div className="flex flex-col items-end">
+                  <div className="text-xs mb-1 text-gray-500">{entry.description}</div>
+                  {entry.type === 'income' && (
                     <div className="flex items-center text-green-600">
                       <TrendingUp size={14} className="mr-1" />
-                      <span className="text-sm">+{entry.income}</span>
+                      <span className="text-sm">+{entry.amount}</span>
                     </div>
                   )}
-                  {entry.expenses > 0 && (
+                  {entry.type === 'expense' && (
                     <div className="flex items-center text-red-600">
                       <TrendingDown size={14} className="mr-1" />
-                      <span className="text-sm">-{entry.expenses}</span>
+                      <span className="text-sm">-{entry.amount}</span>
                     </div>
                   )}
                 </div>

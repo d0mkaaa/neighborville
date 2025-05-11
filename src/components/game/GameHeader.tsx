@@ -4,6 +4,7 @@ import { User, Save, Award, AlertCircle, Calendar, Clock, Settings, Play, Pause,
 import ProgressBar from './ProgressBar';
 import Button from '../ui/Button';
 import WeatherForecast from './WeatherForecast';
+import Tooltip from '../ui/Tooltip';
 import type { TimeOfDay, WeatherType } from '../../types/game';
 
 interface GameHeaderProps {
@@ -34,6 +35,8 @@ interface GameHeaderProps {
   onToggleWeatherForecast: () => void;
   onShowCoinHistory: () => void;
   onPlayerNameClick?: () => void;
+  autoSaving?: boolean;
+  lastSaveTime?: Date | null;
 }
 
 export default function GameHeader({
@@ -63,7 +66,9 @@ export default function GameHeader({
   onShowCalendar,
   onToggleWeatherForecast,
   onShowCoinHistory,
-  onPlayerNameClick
+  onPlayerNameClick,
+  autoSaving,
+  lastSaveTime
 }: GameHeaderProps) {
   const getTimeOfDayColor = () => {
     switch(timeOfDay) {
@@ -122,15 +127,17 @@ export default function GameHeader({
               <div className="w-24 h-4 bg-black/20 rounded-full overflow-hidden shadow-inner">
                 <motion.div
                   initial={{ width: "0%" }}
-                  animate={{ width: `${happiness}%` }}
+                  animate={{ width: `${happiness !== undefined ? happiness : 0}%` }}
                   transition={{ duration: 1, ease: "easeOut" }}
                   className="h-full bg-white bg-opacity-80"
                   style={{ 
-                    background: `linear-gradient(90deg, #34d399 0%, #10b981 ${happiness}%)` 
+                    background: `linear-gradient(90deg, #34d399 0%, #10b981 ${happiness !== undefined ? happiness : 0}%)` 
                   }}
                 ></motion.div>
               </div>
-              <span className="ml-2 font-medium lowercase text-base">{Math.round(happiness)}%</span>
+              <Tooltip content={`Exact happiness: ${happiness.toFixed(2)}%`}>
+                <span className="ml-2 font-medium lowercase text-base cursor-help">{Math.round(happiness !== undefined ? happiness : 0)}%</span>
+              </Tooltip>
             </motion.div>
             
             <motion.div 
@@ -221,14 +228,35 @@ export default function GameHeader({
           </div>
           
           <div className="flex items-center gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={<Save size={16} />}
-              onClick={onOpenSaveManager}
-            >
-              save
-            </Button>
+            <div className="relative">
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<Save size={16} />}
+                onClick={onOpenSaveManager}
+                disabled={autoSaving}
+              >
+                {autoSaving ? 'saving...' : 'save'}
+              </Button>
+              
+              {lastSaveTime && !autoSaving && (
+                <div className="absolute -bottom-5 left-0 right-0 text-xs text-slate-500 text-center">
+                  {`Last saved: ${lastSaveTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`}
+                </div>
+              )}
+              
+              {autoSaving && (
+                <motion.div 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="absolute top-0 right-0 -mr-1 -mt-1 w-2 h-2 rounded-full bg-emerald-500"
+                  style={{
+                    boxShadow: '0 0 0 2px white',
+                    animation: 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite'
+                  }}
+                />
+              )}
+            </div>
             
             <Button
               variant="secondary"

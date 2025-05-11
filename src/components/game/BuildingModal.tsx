@@ -3,12 +3,13 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, Hammer, Shuffle, Rotate3D, CheckCircle, Timer } from "lucide-react";
 import type { Building } from "../../types/game";
 
-type PuzzleType = 'memory' | 'sequence' | 'rotation';
+type PuzzleType = 'memory' | 'sequence' | 'connect';
 
 type BuildingModalProps = {
   building: Building;
   onClose: () => void;
   onComplete: (building: Building, index: number) => void;
+  onSaveGame?: () => Promise<void>;
   selectedIndex: number;
   playerCoins: number;
 };
@@ -18,8 +19,28 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
   
   const [phase, setPhase] = useState<'start' | 'puzzle' | 'building' | 'complete'>('start');
   const [puzzleType] = useState<PuzzleType>(() => {
-    const types: PuzzleType[] = ['memory', 'sequence', 'rotation'];
-    return types[Math.floor(Math.random() * types.length)];
+    const allTypes: PuzzleType[] = ['memory', 'sequence', 'connect'];
+    
+    const completedPuzzleKey = `completed_puzzles_${building.id}`;
+    const storedCompletedPuzzles = localStorage.getItem(completedPuzzleKey);
+    
+    let availableTypes = [...allTypes];
+    
+    if (storedCompletedPuzzles) {
+      try {
+        const completedTypes = JSON.parse(storedCompletedPuzzles) as PuzzleType[];
+        availableTypes = allTypes.filter(type => !completedTypes.includes(type));
+        
+        if (availableTypes.length === 0) {
+          localStorage.removeItem(completedPuzzleKey);
+          availableTypes = [...allTypes];
+        }
+      } catch (e) {
+        console.error('Error parsing completed puzzles:', e);
+      }
+    }
+    
+    return availableTypes[Math.floor(Math.random() * availableTypes.length)];
   });
   
   const [memoryCards, setMemoryCards] = useState<string[]>([]);
@@ -31,25 +52,58 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
   const [playerSequence, setPlayerSequence] = useState<number[]>([]);
   const [showingSequence, setShowingSequence] = useState(false);
   
-  const [rotationTarget, setRotationTarget] = useState(0);
-  const [currentRotation, setCurrentRotation] = useState(0);
+  const [connectPoints, setConnectPoints] = useState<{x: number, y: number}[]>([]);
+  const [connectLines, setConnectLines] = useState<{start: number, end: number}[]>([]);
+  const [selectedPoint, setSelectedPoint] = useState<number | null>(null);
+  const [completedConnections, setCompletedConnections] = useState<number>(0);
+  const [requiredConnections, setRequiredConnections] = useState<number>(5);
   
   const [attempts, setAttempts] = useState(0);
-  const maxAttempts = 3;
+  const maxAttempts = puzzleType === 'memory' ? 999 : 3;
   
   useEffect(() => {
     if (puzzleType === 'memory') {
-      const items = ['🔨', '🪚', '⚒️', '🔩', '🔧', '⚙️', '🛠️', '⚡'];
+      const items = ['🔨', '🪚'];
       const shuffled = [...items, ...items].sort(() => Math.random() - 0.5);
       setMemoryCards(shuffled);
     } else if (puzzleType === 'sequence') {
       const seq = Array.from({ length: 4 }, () => Math.floor(Math.random() * 4));
       setSequence(seq);
-    } else if (puzzleType === 'rotation') {
-      const target = Math.floor(Math.random() * 8) * 45;
-      setRotationTarget(target);
+    } else if (puzzleType === 'connect') {
+      initializeConnectPuzzle();
     }
   }, [puzzleType]);
+  
+  const initializeConnectPuzzle = () => {
+    const points = [];
+    const gridSize = 8;
+    const numPoints = 6;
+    
+    for (let i = 0; i < numPoints; i++) {
+      let x, y;
+      let validPosition = false;
+      
+      while (!validPosition) {
+        x = Math.floor(Math.random() * (gridSize - 2)) + 1;
+        y = Math.floor(Math.random() * (gridSize - 2)) + 1;
+        
+        validPosition = true;
+        
+        for (const point of points) {
+          const dist = Math.sqrt(Math.pow(point.x - x, 2) + Math.pow(point.y - y, 2));
+          if (dist < 2) { 
+            validPosition = false;
+            break;
+          }
+        }
+      }
+      
+      points.push({ x, y });
+    }
+    
+    setConnectPoints(points);
+    setRequiredConnections(numPoints - 1);
+  };
   
   useEffect(() => {
     if (phase === 'building') {
@@ -79,6 +133,21 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
       if (memoryCards[first] === memoryCards[second]) {
         setMatchedCards([...matchedCards, first, second]);
         if (matchedCards.length + 2 === memoryCards.length) {
+          const completedPuzzleKey = `completed_puzzles_${building.id}`;
+          const storedPuzzles = localStorage.getItem(completedPuzzleKey);
+          let completedPuzzles: PuzzleType[] = [];
+          
+          try {
+            completedPuzzles = storedPuzzles ? JSON.parse(storedPuzzles) : [];
+          } catch (e) {
+            console.error('Error parsing completed puzzles:', e);
+          }
+          
+          if (!completedPuzzles.includes(puzzleType)) {
+            completedPuzzles.push(puzzleType);
+            localStorage.setItem(completedPuzzleKey, JSON.stringify(completedPuzzles));
+          }
+          
           setTimeout(() => setPhase('building'), 500);
         }
       } else {
@@ -96,15 +165,49 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
     for (let i = 0; i < sequence.length; i++) {
       await new Promise(resolve => setTimeout(resolve, 500));
       const buttons = document.querySelectorAll('.sequence-button');
-      buttons[sequence[i]]?.classList.add('highlighted');
-      await new Promise(resolve => setTimeout(resolve, 400));
-      buttons[sequence[i]]?.classList.remove('highlighted');
+      const button = buttons[sequence[i]] as HTMLElement | undefined;
+      
+      if (button) {
+        const overlay = button.querySelector('.highlighted-overlay') as HTMLElement | null;
+        
+        if (overlay) {
+          overlay.classList.add('opacity-50');
+          button.classList.add('scale-110');
+          button.style.boxShadow = '0 0 15px 5px rgba(255,255,255,0.7)';
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 400));
+        
+        if (overlay) {
+          overlay.classList.remove('opacity-50');
+          button.classList.remove('scale-110');
+          button.style.boxShadow = '0 0 0 0 rgba(255,255,255,0)';
+        }
+      } else {
+        await new Promise(resolve => setTimeout(resolve, 400));
+      }
     }
     setShowingSequence(false);
   };
   
   const handleSequenceClick = (index: number) => {
     if (showingSequence) return;
+    
+    const button = document.querySelectorAll('.sequence-button')[index] as HTMLElement | undefined;
+    if (button) {
+      const overlay = button.querySelector('.highlighted-overlay') as HTMLElement | null;
+      if (overlay) {
+        overlay.classList.add('opacity-50');
+        button.classList.add('scale-75');
+        button.style.boxShadow = '0 0 10px 3px rgba(255,255,255,0.7)';
+        
+        setTimeout(() => {
+          overlay.classList.remove('opacity-50');
+          button.classList.remove('scale-75');
+          button.style.boxShadow = '0 0 0 0 rgba(255,255,255,0)';
+        }, 200);
+      }
+    }
     
     const newPlayerSequence = [...playerSequence, index];
     setPlayerSequence(newPlayerSequence);
@@ -116,17 +219,61 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
         onClose();
       }
     } else if (newPlayerSequence.length === sequence.length) {
+      const completedPuzzleKey = `completed_puzzles_${building.id}`;
+      const storedPuzzles = localStorage.getItem(completedPuzzleKey);
+      let completedPuzzles: PuzzleType[] = [];
+      
+      try {
+        completedPuzzles = storedPuzzles ? JSON.parse(storedPuzzles) : [];
+      } catch (e) {
+        console.error('Error parsing completed puzzles:', e);
+      }
+      
+      if (!completedPuzzles.includes(puzzleType)) {
+        completedPuzzles.push(puzzleType);
+        localStorage.setItem(completedPuzzleKey, JSON.stringify(completedPuzzles));
+      }
+      
       setTimeout(() => setPhase('building'), 500);
     }
   };
   
-  const handleRotation = (direction: 'left' | 'right') => {
-    const change = direction === 'left' ? -45 : 45;
-    const newRotation = (currentRotation + change + 360) % 360;
-    setCurrentRotation(newRotation);
-    
-    if (newRotation === rotationTarget) {
-      setTimeout(() => setPhase('building'), 500);
+  const handleConnectPoint = (index: number) => {
+    if (selectedPoint === null) {
+      setSelectedPoint(index);
+    } else if (selectedPoint === index) {
+      setSelectedPoint(null);
+    } else {
+      const alreadyConnected = connectLines.some(
+        line => (line.start === selectedPoint && line.end === index) || 
+                (line.start === index && line.end === selectedPoint)
+      );
+      
+      if (!alreadyConnected) {
+        setConnectLines([...connectLines, { start: selectedPoint, end: index }]);
+        setCompletedConnections(prev => prev + 1);
+        
+        if (completedConnections + 1 >= requiredConnections) {
+          const completedPuzzleKey = `completed_puzzles_${building.id}`;
+          const storedPuzzles = localStorage.getItem(completedPuzzleKey);
+          let completedPuzzles: PuzzleType[] = [];
+          
+          try {
+            completedPuzzles = storedPuzzles ? JSON.parse(storedPuzzles) : [];
+          } catch (e) {
+            console.error('Error parsing completed puzzles:', e);
+          }
+          
+          if (!completedPuzzles.includes(puzzleType)) {
+            completedPuzzles.push(puzzleType);
+            localStorage.setItem(completedPuzzleKey, JSON.stringify(completedPuzzles));
+          }
+          
+          setTimeout(() => setPhase('building'), 500);
+        }
+      }
+      
+      setSelectedPoint(null);
     }
   };
   
@@ -209,9 +356,9 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
               >
                 <h3 className="text-lg font-medium text-gray-800 mb-4 text-center">memory game</h3>
                 <p className="text-sm text-gray-600 mb-4 text-center">
-                  match the construction tools (attempts: {attempts}/{maxAttempts})
+                  match the construction tools {puzzleType === 'memory' ? '(unlimited attempts)' : `(attempts: ${attempts}/${maxAttempts})`}
                 </p>
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   {memoryCards.map((card, index) => (
                     <motion.div
                       key={index}
@@ -249,10 +396,14 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                       onClick={() => handleSequenceClick(i)}
-                      className="sequence-button aspect-square bg-gray-200 rounded-lg flex items-center justify-center"
-                      style={{ backgroundColor: ['#ef4444', '#3b82f6', '#10b981', '#f59e0b'][i] }}
+                      className="sequence-button aspect-square rounded-lg flex items-center justify-center relative overflow-hidden transition-all duration-200"
+                      style={{
+                        backgroundColor: ['#ef4444', '#3b82f6', '#10b981', '#f59e0b'][i],
+                        boxShadow: '0 0 0 0 rgba(255,255,255,0)'
+                      }}
                     >
-                      <span className="text-2xl">{['🔨', '🔧', '⚙️', '🛠️'][i]}</span>
+                      <span className="text-2xl z-10 relative">{['🔨', '🔧', '⚙️', '🛠️'][i]}</span>
+                      <div className="absolute inset-0 opacity-0 bg-white transition-opacity duration-200 highlighted-overlay"></div>
                     </motion.button>
                   ))}
                 </div>
@@ -265,45 +416,86 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
                 </button>
               </motion.div>
             )}
-            
-            {phase === 'puzzle' && puzzleType === 'rotation' && (
+
+            {phase === 'puzzle' && puzzleType === 'connect' && (
               <motion.div
-                key="rotation"
+                key="connect"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
               >
-                <h3 className="text-lg font-medium text-gray-800 mb-4 text-center">rotation puzzle</h3>
+                <h3 className="text-lg font-medium text-gray-800 mb-4 text-center">building blueprint</h3>
                 <p className="text-sm text-gray-600 mb-4 text-center">
-                  rotate to match the target position
+                  connect the points to complete the blueprint ({completedConnections}/{requiredConnections} lines)
                 </p>
                 <div className="flex justify-center items-center mb-6">
-                  <div className="relative">
-                    <motion.div
-                      style={{ rotate: currentRotation }}
-                      className="w-32 h-32 bg-emerald-100 rounded-lg flex items-center justify-center"
-                    >
-                      <Rotate3D size={48} className="text-emerald-600" />
-                    </motion.div>
-                    <div
-                      className="absolute inset-0 border-4 border-dashed border-emerald-400 rounded-lg"
-                      style={{ transform: `rotate(${rotationTarget}deg)` }}
-                    />
+                  <div 
+                    className="w-64 h-64 bg-blue-50 rounded-lg relative"
+                    style={{ backgroundImage: 'linear-gradient(#e5e7eb 1px, transparent 1px), linear-gradient(90deg, #e5e7eb 1px, transparent 1px)',
+                             backgroundSize: '32px 32px' }}
+                  >
+                    <svg width="100%" height="100%" style={{ position: 'absolute', top: 0, left: 0 }}>
+                      {connectLines.map((line, idx) => {
+                        const start = connectPoints[line.start];
+                        const end = connectPoints[line.end];
+                        
+                        return (
+                          <line 
+                            key={idx}
+                            x1={start.x * 32} 
+                            y1={start.y * 32} 
+                            x2={end.x * 32} 
+                            y2={end.y * 32}
+                            stroke="#3b82f6" 
+                            strokeWidth="3"
+                          />
+                        );
+                      })}
+                      
+                      {selectedPoint !== null && (
+                        <line 
+                          x1={connectPoints[selectedPoint].x * 32} 
+                          y1={connectPoints[selectedPoint].y * 32} 
+                          x2={(connectPoints[selectedPoint].x * 32) + Math.random() * 0.001}
+                          y2={(connectPoints[selectedPoint].y * 32) + Math.random() * 0.001}
+                          stroke="#3b82f6" 
+                          strokeWidth="3"
+                          strokeDasharray="4"
+                          className="animate-pulse"
+                        />
+                      )}
+                    </svg>
+                    
+                    {connectPoints.map((point, idx) => (
+                      <motion.div
+                        key={idx}
+                        className={`absolute w-6 h-6 -ml-3 -mt-3 rounded-full flex items-center justify-center cursor-pointer ${
+                          selectedPoint === idx ? 'bg-emerald-500' : 'bg-blue-500 hover:bg-blue-600'
+                        }`}
+                        style={{ left: point.x * 32, top: point.y * 32 }}
+                        whileHover={{ scale: 1.2 }}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={() => handleConnectPoint(idx)}
+                      >
+                        <span className="text-white text-xs font-bold">{idx + 1}</span>
+                      </motion.div>
+                    ))}
                   </div>
                 </div>
-                <div className="flex gap-4 justify-center">
-                  <button
-                    onClick={() => handleRotation('left')}
-                    className="p-3 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600"
+                
+                <div className="text-center">
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => {
+                      setConnectLines([]);
+                      setSelectedPoint(null);
+                      setCompletedConnections(0);
+                    }}
+                    className="px-4 py-2 bg-gray-100 rounded-lg text-gray-600 hover:bg-gray-200"
                   >
-                    ← left
-                  </button>
-                  <button
-                    onClick={() => handleRotation('right')}
-                    className="p-3 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600"
-                  >
-                    right →
-                  </button>
+                    Reset Connections
+                  </motion.button>
                 </div>
               </motion.div>
             )}

@@ -1,6 +1,7 @@
-import type { Building } from "../../types/game";
-import { Plus, Trash2, Home, Smile, Coffee, Book, Music, Zap, Lock, Sun } from "lucide-react";
+import type { Building, PowerGridState, WaterGridState } from "../../types/game";
+import { Plus, Trash2, Home, Smile, Coffee, Book, Music, Zap, Lock, Sun, Droplets, AlertCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useState } from "react";
 
 type GameGridProps = {
   grid: (Building | null)[];
@@ -11,6 +12,10 @@ type GameGridProps = {
   onTileClick: (index: number) => void;
   onDeleteBuilding: (index: number) => void;
   onBuildingManage: (building: Building, index: number) => void;
+  powerGrid?: PowerGridState;
+  waterGrid?: WaterGridState;
+  onConnectUtility?: (fromIndex: number, toIndex: number, utilityType: "power" | "water") => void;
+  showUtilityMode?: boolean;
 };
 
 export default function GameGrid({
@@ -21,8 +26,15 @@ export default function GameGrid({
   selectedTile,
   onTileClick,
   onDeleteBuilding,
-  onBuildingManage
+  onBuildingManage,
+  powerGrid,
+  waterGrid,
+  onConnectUtility,
+  showUtilityMode = false
 }: GameGridProps) {
+  const [activeUtility, setActiveUtility] = useState<"power" | "water" | null>(null);
+  const [selectedSource, setSelectedSource] = useState<number | null>(null);
+
   const getIcon = (iconName: string, size: number = 20) => {
     switch(iconName) {
       case 'Home': return <Home size={size} />;
@@ -48,11 +60,26 @@ export default function GameGrid({
   const currentDimensions = getGridDimensions(gridSize);
 
   const handleTileClick = (index: number) => {
-    const building = grid[index];
-    if (building && !selectedBuilding) {
-      onBuildingManage(building, index);
+    if (showUtilityMode && activeUtility && onConnectUtility) {
+      const building = grid[index];
+      if (!building) return;
+      
+      if (selectedSource === null) {
+        if ((activeUtility === 'power' && building.isPowerGenerator) ||
+            (activeUtility === 'water' && building.isWaterSupply)) {
+          setSelectedSource(index);
+        }
+      } else if (selectedSource !== index) {
+        onConnectUtility(selectedSource, index, activeUtility);
+        setSelectedSource(null);
+      }
     } else {
-      onTileClick(index);
+      const building = grid[index];
+      if (building && !selectedBuilding) {
+        onBuildingManage(building, index);
+      } else {
+        onTileClick(index);
+      }
     }
   };
 
@@ -62,9 +89,57 @@ export default function GameGrid({
     }
   };
 
+  const getBuildingStatus = (index: number, type: "power" | "water") => {
+    const building = grid[index];
+    if (!building) return "none";
+
+    if (type === "power") {
+      if (building.isPowerGenerator) return "generator";
+      if (!building.needsElectricity) return "not-needed";
+      if (building.isConnectedToPower) return "connected";
+      return "disconnected";
+    } else {
+      if (building.isWaterSupply) return "supply";
+      if (!building.needsWater) return "not-needed";
+      if (building.isConnectedToWater) return "connected";
+      return "disconnected";
+    }
+  };
+
+  const toggleUtilityMode = (type: "power" | "water") => {
+    if (activeUtility === type) {
+      setActiveUtility(null);
+      setSelectedSource(null);
+    } else {
+      setActiveUtility(type);
+      setSelectedSource(null);
+    }
+  };
+
   return (
     <div className="bg-white rounded-xl shadow-md p-4">
-      <h2 className="font-medium mb-4 lowercase text-gray-800">your neighborhood</h2>
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="font-medium lowercase text-gray-800">your neighborhood</h2>
+        
+        {showUtilityMode && (
+          <div className="flex gap-2">
+            <button 
+              onClick={() => toggleUtilityMode("power")}
+              className={`px-3 py-1 rounded-lg text-sm flex items-center gap-1 ${activeUtility === "power" ? "bg-yellow-100 text-yellow-700" : "bg-gray-100 text-gray-600"}`}
+            >
+              <Zap size={14} />
+              Power
+            </button>
+            <button 
+              onClick={() => toggleUtilityMode("water")}
+              className={`px-3 py-1 rounded-lg text-sm flex items-center gap-1 ${activeUtility === "water" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600"}`}
+            >
+              <Droplets size={14} />
+              Water
+            </button>
+          </div>
+        )}
+      </div>
       
       <div 
         className="grid gap-2"
@@ -101,6 +176,9 @@ export default function GameGrid({
                                 (building.id === 'house' || building.id === 'apartment') && 
                                 building.isOccupied;
           
+          let powerStatus = showUtilityMode ? getBuildingStatus(index, "power") : null;
+          let waterStatus = showUtilityMode ? getBuildingStatus(index, "water") : null;
+          
           return (
             <motion.div
               key={index}
@@ -112,6 +190,8 @@ export default function GameGrid({
                 selectedTile === index ? 'ring-2 ring-emerald-500' : ''
               } ${
                 !building ? 'bg-emerald-50 hover:bg-emerald-100' : 'text-white'
+              } ${
+                selectedSource === index ? 'ring-2 ring-yellow-400' : ''
               }`}
               style={{ 
                 backgroundColor: building ? building.color : '',
@@ -143,6 +223,31 @@ export default function GameGrid({
                     >
                       <div className="text-xs">💰</div>
                     </motion.div>
+                  )}
+                  
+                  {showUtilityMode && (
+                    <div className="absolute top-1 right-1 flex flex-col gap-1">
+                      {powerStatus === "generator" && (
+                        <div className="w-4 h-4 bg-yellow-400 rounded-full flex items-center justify-center">
+                          <Zap size={10} className="text-yellow-800" />
+                        </div>
+                      )}
+                      {powerStatus === "disconnected" && building.needsElectricity && (
+                        <div className="w-4 h-4 bg-red-400 rounded-full flex items-center justify-center">
+                          <AlertCircle size={10} className="text-red-800" />
+                        </div>
+                      )}
+                      {waterStatus === "supply" && (
+                        <div className="w-4 h-4 bg-blue-400 rounded-full flex items-center justify-center">
+                          <Droplets size={10} className="text-blue-800" />
+                        </div>
+                      )}
+                      {waterStatus === "disconnected" && building.needsWater && (
+                        <div className="w-4 h-4 bg-red-400 rounded-full flex items-center justify-center">
+                          <AlertCircle size={10} className="text-red-800" />
+                        </div>
+                      )}
+                    </div>
                   )}
                 </motion.div>
               ) : (

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Building, Neighbor, WeatherType } from "../../types/game";
 import { TrendingUp, TrendingDown, BarChart, ChevronDown, ChevronUp, CloudRain, Sun, CloudLightning, CloudSnow, Cloud } from "lucide-react";
+import Tooltip from "../ui/Tooltip";
 
 type HappinessContributor = {
   name: string;
@@ -34,30 +35,40 @@ export default function HappinessAnalytics({
   const [expanded, setExpanded] = useState(false);
   
   const getBuildingContributions = (): HappinessContributor[] => {
+    const baseHappiness: HappinessContributor = {
+      name: 'base happiness',
+      value: 70,
+      type: 'other'
+    };
+    
     const buildingCounts: Record<string, number> = {};
     
     grid.forEach(building => {
-      if (building) {
+      if (building && building.happiness) {
         buildingCounts[building.id] = (buildingCounts[building.id] || 0) + 1;
       }
     });
     
-    return Object.entries(buildingCounts).map(([buildingId, count]) => {
+    const buildingContributions = Object.keys(buildingCounts).map(buildingId => {
       const building = buildings.find(b => b.id === buildingId);
       if (!building) return null;
       
+      const count = buildingCounts[buildingId];
       return {
         name: `${count} × ${building.name}`,
         value: building.happiness * count,
         type: 'building' as const,
       };
     }).filter(Boolean) as HappinessContributor[];
+    
+    return [baseHappiness, ...buildingContributions];
   };
   
   const getNeighborContributions = (): HappinessContributor[] => {
     const unlockedNeighbors = neighbors.filter(n => n.unlocked);
+    const contributors: HappinessContributor[] = [];
     
-    return unlockedNeighbors.map(neighbor => {
+    unlockedNeighbors.forEach(neighbor => {
       const hasPreference = buildings.some(b => 
         b.name.toLowerCase() === neighbor.likes.toLowerCase() &&
         grid.some(g => g?.id === b.id)
@@ -68,25 +79,67 @@ export default function HappinessAnalytics({
         grid.some(g => g?.id === b.id)
       );
       
-      let value = 0;
-      let name = neighbor.name;
-      
       if (hasPreference) {
-        value += 10;
-        name += ` (likes ${neighbor.likes})`;
+        contributors.push({
+          name: `${neighbor.name} (likes ${neighbor.likes})`,
+          value: 10,
+          type: 'neighbor' as const,
+        });
       }
       
       if (hasDislike) {
-        value -= 5;
-        name += ` (dislikes ${neighbor.dislikes})`;
+        contributors.push({
+          name: `${neighbor.name} (dislikes ${neighbor.dislikes})`,
+          value: -5,
+          type: 'neighbor' as const,
+        });
       }
       
-      return {
-        name,
-        value,
-        type: 'neighbor' as const,
-      };
-    }).filter(n => n.value !== 0);
+      if (neighbor.hasHome && neighbor.houseIndex !== undefined) {
+        const house = grid[neighbor.houseIndex];
+        if (house) {
+          if (neighbor.housingPreference === 'house' && house.id === 'apartment') {
+            contributors.push({
+              name: `${neighbor.name} (prefers house over apartment)`,
+              value: -25,
+              type: 'neighbor' as const,
+            });
+          } else if (neighbor.housingPreference === 'apartment' && house.id === 'house') {
+            contributors.push({
+              name: `${neighbor.name} (prefers apartment over house)`,
+              value: -15,
+              type: 'neighbor' as const,
+            });
+          }
+          
+          if (house.occupants && house.occupants.length > (neighbor.maxNeighbors || 1)) {
+            contributors.push({
+              name: `${neighbor.name} (too many roommates)`,
+              value: -30,
+              type: 'neighbor' as const,
+            });
+          }
+
+          if (house.needsElectricity && !house.isConnectedToPower) {
+            contributors.push({
+              name: `${neighbor.name} (no electricity)`,
+              value: -40,
+              type: 'neighbor' as const,
+            });
+          }
+          
+          if (house.needsWater && !house.isConnectedToWater) {
+            contributors.push({
+              name: `${neighbor.name} (no water)`,
+              value: -35,
+              type: 'neighbor' as const,
+            });
+          }
+        }
+      }
+    });
+    
+    return contributors;
   };
   
   const getEventContributions = (): HappinessContributor[] => {
@@ -99,20 +152,49 @@ export default function HappinessAnalytics({
 
   const getWeatherContribution = (): HappinessContributor[] => {
     const weatherEffects: Record<WeatherType, { value: number, icon: React.ReactNode }> = {
-      sunny: { value: 1, icon: <Sun size={16} className="text-yellow-500" /> },
+      sunny: { value: 2, icon: <Sun size={16} className="text-yellow-500" /> },
       cloudy: { value: -0.5, icon: <Cloud size={16} className="text-gray-500" /> },
-      rainy: { value: -1.5, icon: <CloudRain size={16} className="text-blue-500" /> },
-      stormy: { value: -3, icon: <CloudLightning size={16} className="text-purple-600" /> },
-      snowy: { value: 0, icon: <CloudSnow size={16} className="text-cyan-400" /> }
+      rainy: { value: -2, icon: <CloudRain size={16} className="text-blue-500" /> },
+      stormy: { value: -4, icon: <CloudLightning size={16} className="text-purple-500" /> },
+      snowy: { value: -1, icon: <CloudSnow size={16} className="text-blue-300" /> }
     };
-
-    const effect = weatherEffects[weather];
-    return effect.value !== 0 ? [{
-      name: `${weather} weather`,
-      value: effect.value,
-      type: 'weather' as const,
-      icon: effect.icon
-    }] : [];
+    
+    const effect = weatherEffects[weather || 'sunny'];
+    
+    if (effect && effect.value !== 0) {
+      return [{
+        name: `${weather} weather`,
+        value: effect.value,
+        type: 'weather',
+        icon: effect.icon
+      }];
+    }
+    
+    return [];
+  };
+  
+  const getUtilityPenalties = (): HappinessContributor[] => {
+    const penalties = [];
+    
+    const buildingsWithoutPower = grid.filter(b => b && b.needsElectricity && !b.isConnectedToPower).length;
+    if (buildingsWithoutPower > 0) {
+      penalties.push({
+        name: `${buildingsWithoutPower} buildings without power`,
+        value: -buildingsWithoutPower * 2,
+        type: 'other'
+      });
+    }
+    
+    const buildingsWithoutWater = grid.filter(b => b && b.needsWater && !b.isConnectedToWater).length;
+    if (buildingsWithoutWater > 0) {
+      penalties.push({
+        name: `${buildingsWithoutWater} buildings without water`,
+        value: -buildingsWithoutWater * 3,
+        type: 'other'
+      });
+    }
+    
+    return penalties;
   };
   
   const contributors = [
@@ -120,11 +202,7 @@ export default function HappinessAnalytics({
     ...getNeighborContributions(),
     ...getEventContributions(),
     ...getWeatherContribution(),
-    {
-      name: 'base happiness',
-      value: 50,
-      type: 'other' as const,
-    }
+    ...getUtilityPenalties()
   ].sort((a, b) => b.value - a.value);
   
   const positiveContributors = contributors.filter(c => c.value > 0);
@@ -132,6 +210,8 @@ export default function HappinessAnalytics({
   
   const totalPositive = positiveContributors.reduce((sum, c) => sum + c.value, 0);
   const totalNegative = negativeContributors.reduce((sum, c) => sum + c.value, 0);
+  
+  const calculatedHappiness = happiness;
   
   return (
     <div className="bg-white rounded-xl shadow-md overflow-hidden">
@@ -228,12 +308,16 @@ export default function HappinessAnalytics({
             <div className="mt-3 pt-3 border-t border-gray-200">
               <div className="flex justify-between items-center mb-1">
                 <div className="text-xs font-medium text-gray-700 lowercase">total happiness</div>
-                <div className="text-xs font-medium text-gray-800">{happiness}%</div>
+                <Tooltip content={`Happiness: ${happiness}%`}>
+                  <div className="text-xs font-medium text-gray-800 cursor-help">
+                    {Math.round(calculatedHappiness)}%
+                  </div>
+                </Tooltip>
               </div>
               <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden">
                 <motion.div
                   initial={{ width: 0 }}
-                  animate={{ width: `${happiness}%` }}
+                  animate={{ width: `${Math.min(100, calculatedHappiness)}%` }}
                   transition={{ duration: 1 }}
                   className="h-full"
                   style={{ 

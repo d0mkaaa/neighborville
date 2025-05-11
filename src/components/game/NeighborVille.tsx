@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Home, Zap, User, Calendar, Settings, Award, AlertCircle, X, CheckCircle, Volume2, VolumeX } from "lucide-react";
+import { getAvailableUpgrades, calculateUpgradedStats } from "../../data/upgrades";
 import AppLayout from "../ui/AppLayout";
 import GameHeader from "./GameHeader";
 import BuildingOption from "./BuildingOption";
@@ -50,7 +51,7 @@ interface NeighborVilleProps {
 export default function NeighborVille({ initialGameState, showTutorialProp = false }: NeighborVilleProps) {
   const [playerName, setPlayerName] = useState("");
   const [coins, setCoins] = useState(2000);
-  const [happiness, setHappiness] = useState(50); 
+  const [happiness, setHappiness] = useState(70); 
   const [day, setDay] = useState(1);
   const [level, setLevel] = useState(1);
   const [experience, setExperience] = useState(0);
@@ -134,6 +135,8 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
 
   const audioRef = useRef<HTMLAudioElement | HTMLIFrameElement | null>(null);
 
+
+
   useEffect(() => {
     if (initialGameState) {
       loadGameState(initialGameState);
@@ -147,18 +150,31 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
       const timer = setInterval(() => {
         setGameMinutes(prevMinutes => {
           if (prevMinutes >= 59) {
-            setGameTime(prevTime => {
-              const newTime = (prevTime + 1) % 24;
-              updateTimeOfDay(newTime);
-              updateWeather(newTime);
-              handleHourlyEffects(newTime);
-              
-              if (newTime === 6) {
+
+            const newTime = (gameTime + 1) % 24;
+            setGameTime(newTime);
+            
+            let newTimeOfDay: TimeOfDay;
+            if (newTime >= 5 && newTime < 10) {
+              newTimeOfDay = 'morning';
+            } else if (newTime >= 10 && newTime < 17) {
+              newTimeOfDay = 'day';
+            } else if (newTime >= 17 && newTime < 21) {
+              newTimeOfDay = 'evening';
+            } else {
+              newTimeOfDay = 'night';
+            }
+            setTimeOfDay(newTimeOfDay);
+            updateWeather(newTime);
+            handleHourlyEffects(newTime);
+            
+            if (newTime === 6) {
+              setTimeout(() => {
                 handleEndDay();
-              }
-              
-              return newTime;
-            });
+                saveGameCallback(undefined, true);
+              }, 0);
+            }
+            
             return 0;
           }
           return prevMinutes + 1;
@@ -167,7 +183,7 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
 
       return () => clearInterval(timer);
     }
-  }, [timePaused]);
+  }, [timePaused, gameTime]);
 
   useEffect(() => {
     if (gameTime % 4 === 0) {
@@ -282,6 +298,35 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
     
     return 'cloudy';
   };
+
+  const calculateTotalHappiness = useCallback(() => {
+    let calculatedHappiness = 70;
+    
+    grid.forEach(building => {
+      if (building && building.happiness) {
+        calculatedHappiness += building.happiness;
+      }
+    });
+    
+    calculatedHappiness += getWeatherHappinessEffect();
+    
+    const buildingsWithoutPower = grid.filter(b => b && b.needsElectricity && !b.isConnectedToPower).length;
+    if (buildingsWithoutPower > 0) {
+      calculatedHappiness -= buildingsWithoutPower * 2;
+    }
+    
+    const buildingsWithoutWater = grid.filter(b => b && b.needsWater && !b.isConnectedToWater).length;
+    if (buildingsWithoutWater > 0) {
+      calculatedHappiness -= buildingsWithoutWater * 3;
+    }
+    
+    return Math.min(100, Math.max(0, calculatedHappiness));
+  }, [grid, weather]);
+  
+  useEffect(() => {
+    const newHappiness = calculateTotalHappiness();
+    setHappiness(newHappiness);
+  }, [calculateTotalHappiness]);
 
   const getWeatherHappinessEffect = () => {
     const effects: Record<WeatherType, number> = {
@@ -439,7 +484,7 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
       setHourlyCoinBonus(Math.round(hourlyCoinIncome));
       setTimeout(() => setHourlyCoinBonus(0), 2000);
       
-      addToCoinHistory(Math.round(hourlyCoinIncome), 0);
+      addToCoinHistory(Math.round(hourlyCoinIncome), 'Hourly income from buildings', 'income');
     }
     
     const totalResidents = neighbors.filter(n => n.hasHome).length;
@@ -485,7 +530,8 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
   const initializeNewGame = () => {
     const name = initialGameState?.playerName || "Mayor";
     setPlayerName(name);
-    setCoins(2000);
+    const startingCoins = 2000;
+    setCoins(startingCoins);
     setHappiness(70);
     setDay(1);
     setLevel(1);
@@ -495,20 +541,24 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
     setWeather('sunny');
     setGameTime(8);
     setCoinHistory([{
+      id: `init-${Date.now()}`,
       day: 1,
-      balance: 2000,
-      income: 0,
-      expenses: 0,
+      balance: startingCoins,
+      amount: startingCoins,
+      type: 'income',
+      description: 'Initial funds',
       timestamp: Date.now()
     }]);
   };
 
-  const addToCoinHistory = (income: number, expenses: number) => {
+  const addToCoinHistory = (amount: number, description: string, type: 'income' | 'expense') => {
     const newEntry: CoinHistoryEntry = {
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       day: day,
-      balance: coins + income - expenses,
-      income: income,
-      expenses: expenses,
+      balance: type === 'income' ? coins + amount : coins - amount,
+      amount: amount,
+      type: type,
+      description: description,
       timestamp: Date.now()
     };
     
@@ -518,7 +568,7 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
   const loadGameState = (state: GameProgress) => {
     setPlayerName(state.playerName);
     setCoins(state.coins);
-    setHappiness(state.happiness);
+    setHappiness(state.happiness !== undefined && state.happiness > 0 ? state.happiness : 70);
     setDay(state.day);
     setLevel(state.level || 1);
     setExperience(state.experience || 0);
@@ -613,7 +663,7 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
       addNotification(`Built a ${building.name} (+${building.happiness}% happiness)`, 'success');
       setSelectedBuilding(null);
       calculateEnergyUsage(newGrid);
-      addToCoinHistory(0, building.cost);
+      addToCoinHistory(building.cost, `Purchased ${building.name}`, 'expense');
     } else {
       addNotification('Not enough coins', 'error');
     }
@@ -645,15 +695,58 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
     addNotification(`Demolished a ${buildingToDelete.name}`, 'info');
     setSelectedTile(null);
     calculateEnergyUsage(newGrid);
-    addToCoinHistory(Math.floor(buildingToDelete.cost * 0.5), 0);
+    addToCoinHistory(Math.floor(buildingToDelete.cost * 0.5), `Demolished ${buildingToDelete.name}`, 'income');
   };
 
   const handleMoveBuilding = (fromIndex: number) => {
     addNotification('Moving feature coming soon!', 'info');
   };
 
-  const handleUpgradeBuilding = (gridIndex: number) => {
-    addNotification('Building upgrades coming soon!', 'info');
+  const handleUpgradeBuilding = (gridIndex: number, upgradeId: string) => {
+    const building = grid[gridIndex];
+    if (!building) return;
+    
+    const currentLevel = building.level || 0;
+    
+    const availableUpgrades = getAvailableUpgrades(building.id, currentLevel);
+
+    const selectedUpgrade = availableUpgrades.find(upgrade => upgrade.id === upgradeId);
+    
+    if (!selectedUpgrade) {
+      addNotification('Upgrade not available for this building', 'error');
+      return;
+    }
+    
+    if (coins < selectedUpgrade.cost) {
+      addNotification(`Not enough coins for this upgrade. Need ${selectedUpgrade.cost} coins.`, 'error');
+      return;
+    }
+    
+    const currentUpgrades = building.currentUpgrades || [];
+    const newUpgrades = [...currentUpgrades, upgradeId];
+    
+    const upgradedStats = calculateUpgradedStats(building, newUpgrades);
+    
+    const updatedBuilding = {
+      ...building,
+      level: currentLevel + 1,
+      income: upgradedStats.income,
+      happiness: upgradedStats.happiness,
+      energyUsage: upgradedStats.energyUsage,
+      currentUpgrades: newUpgrades
+    };
+    
+    const newGrid = [...grid];
+    newGrid[gridIndex] = updatedBuilding;
+    setGrid(newGrid);
+    
+    setCoins(coins - selectedUpgrade.cost);
+    
+    calculateEnergyUsage(newGrid);
+    
+    addNotification(`Upgraded ${building.name} with ${selectedUpgrade.name}!`, 'success');
+
+    addToCoinHistory(selectedUpgrade.cost, `Upgrade: ${selectedUpgrade.name} for ${building.name}`, 'expense');
   };
 
   const handleDemolishBuilding = (gridIndex: number) => {
@@ -733,9 +826,15 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
     checkAchievements();
     
     addNotification(`Day ${day} complete! Earned ${netIncome} coins (${baseIncome} income - ${energyCost} energy cost)`, 'success');
-    addToCoinHistory(baseIncome, energyCost);
+    if (baseIncome > 0) {
+      addToCoinHistory(baseIncome, 'Daily income from buildings', 'income');
+    }
     
-    await saveGame(undefined, true);
+    if (energyCost > 0) {
+      addToCoinHistory(energyCost, 'Daily energy costs', 'expense');
+    }
+    
+    await saveGameCallback(undefined, true);
   };
 
   const checkForRandomEvent = () => {
@@ -785,7 +884,11 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
     
     setCurrentEvent(null);
     addNotification(option.outcome, option.happiness > 0 ? 'success' : 'warning');
-    addToCoinHistory(option.coins > 0 ? option.coins : 0, option.coins < 0 ? Math.abs(option.coins) : 0);
+    if (option.coins > 0) {
+      addToCoinHistory(option.coins, `Event: ${currentEvent?.title}`, 'income');
+    } else if (option.coins < 0) {
+      addToCoinHistory(Math.abs(option.coins), `Event: ${currentEvent?.title}`, 'expense');
+    }
   };
 
   const updateNeighborHappiness = () => {
@@ -905,7 +1008,7 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
       );
       
       addNotification(`Paid ${billToPay.name}: ${billToPay.amount} coins`, 'success');
-      addToCoinHistory(0, billToPay.amount);
+      addToCoinHistory(billToPay.amount, `Paid ${billToPay.name}`, 'expense');
     } else {
       addNotification('Not enough coins to pay this bill', 'error');
     }
@@ -1040,7 +1143,7 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
     
     setCoins(coins + amount);
     addNotification(`Collected ${amount} coins from your business!`, 'success');
-    addToCoinHistory(amount, 0);
+    addToCoinHistory(amount, `Income from ${building?.name || 'business'}`, 'income');
   };
 
   const checkAchievements = () => {
@@ -1167,21 +1270,7 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
     });
   };
 
-  useEffect(() => {
-    const autoSaveInterval = setInterval(async () => {
-      await saveGame(undefined, true);
-    }, 30000);
-
-    return () => clearInterval(autoSaveInterval);
-  }, [playerName]);
-
-  useEffect(() => {
-    if (playerName) {
-      saveGame(undefined, true);
-    }
-  }, [day, level, gridSize]);
-
-  const saveGame = async (name?: string, isAutoSave: boolean = false) => {
+  const saveGameCallback = useCallback(async (buildingCompleted?: Building | string, isAutoSave: boolean = false) => {
     setAutoSaving(true);
     
     const gameProgress: GameProgress = {
@@ -1215,9 +1304,9 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
         localStorage.setItem(`neighborville_autosave_${playerName.replace(/\s+/g, '_')}`, JSON.stringify(gameProgress));
         await cloudSave.saveToCloud(gameProgress);
         await cloudSave.backupToLocalStorage(gameProgress);
-      } else if (name) {
+      } else if (typeof buildingCompleted === 'string') {
         const timestamp = Date.now();
-        const saveKey = `neighborville_save_${name}_${timestamp}`;
+        const saveKey = `neighborville_save_${buildingCompleted}_${timestamp}`;
         localStorage.setItem(saveKey, JSON.stringify(gameProgress));
         await cloudSave.saveToCloud(gameProgress);
       } else {
@@ -1227,7 +1316,9 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
       
       setLastSaveTime(new Date());
       
-      if (!isAutoSave && !name) {
+      if (typeof buildingCompleted === 'object' && buildingCompleted !== null) {
+        addNotification(`${buildingCompleted.name} built and game saved!`, 'success');
+      } else if (!isAutoSave && buildingCompleted === undefined) {
         addNotification('Game saved!', 'success');
       }
     } catch (error) {
@@ -1238,7 +1329,21 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
     } finally {
       setAutoSaving(false);
     }
-  };
+  }, [playerName, coins, happiness, day, level, experience, grid, gridSize, neighbors, achievements, gameTime, gameMinutes, timeOfDay, recentEvents, bills, energyRate, totalEnergyUsage, lastBillDay, coinHistory, weather, powerGrid, waterGrid]);
+
+  useEffect(() => {
+    const autoSaveInterval = setInterval(() => {
+      saveGameCallback(undefined, true);
+    }, 30000);
+
+    return () => clearInterval(autoSaveInterval);
+  }, [saveGameCallback]);
+
+  useEffect(() => {
+    if (playerName) {
+      saveGameCallback(undefined, true);
+    }
+  }, [day, level, gridSize, saveGameCallback]);
 
   const handleEnableMusic = async (enable: boolean) => {
     setMusicEnabled(enable);
@@ -1486,14 +1591,6 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
             
             {activeTab === 'utilities' && (
               <div className="space-y-4">
-                <UtilityGrid
-                  grid={grid}
-                  powerGrid={powerGrid}
-                  waterGrid={waterGrid}
-                  onConnectUtility={handleConnectUtility}
-                  gridSize={gridSize}
-                />
-                
                 <EnergyUsagePanel
                   grid={grid}
                   energyRate={energyRate}
@@ -1518,7 +1615,7 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
                       setCoins(coins - cost);
                       setGridSize(newSize);
                       addNotification(`Plot expanded to ${Math.sqrt(newSize)}×${Math.sqrt(newSize)}!`, 'success');
-                      addToCoinHistory(0, cost);
+                      addToCoinHistory(cost, `Plot expansion to ${Math.sqrt(newSize)}×${Math.sqrt(newSize)}`, 'expense');
                     }
                   }}
                 />
@@ -1537,6 +1634,10 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
                 onTileClick={handleTileClick}
                 onDeleteBuilding={handleDeleteBuilding}
                 onBuildingManage={handleBuildingManage}
+                powerGrid={powerGrid}
+                waterGrid={waterGrid}
+                onConnectUtility={handleConnectUtility}
+                showUtilityMode={activeTab === 'utilities'}
               />
             </div>
           </div>
@@ -1566,7 +1667,7 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
       <SaveManager 
         isOpen={showSaveManager}
         onClose={() => setShowSaveManager(false)}
-        onSave={(name) => saveGame(name)}
+        onSave={(name) => saveGameCallback(name)}
         gameData={{
           playerName,
           coins,
@@ -1599,6 +1700,8 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
         musicEnabled={musicEnabled}
         onToggleMusic={toggleMusic}
       />
+
+
 
       <AnimatePresence>
         {showMarketplace && (
@@ -1687,6 +1790,23 @@ export default function NeighborVille({ initialGameState, showTutorialProp = fal
                 if (updates.experience !== undefined) setExperience(updates.experience);
               }}
             />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showBuildingModal && selectedBuilding && selectedTile !== null && (
+          <BuildingModal
+            building={selectedBuilding}
+            onClose={() => {
+              setShowBuildingModal(false);
+              setSelectedBuilding(null);
+              setSelectedTile(null);
+            }}
+            onComplete={handleBuildingComplete}
+            onSaveGame={async () => saveGameCallback(undefined, false)}
+            selectedIndex={selectedTile}
+            playerCoins={coins}
+          />
         )}
       </AnimatePresence>
 

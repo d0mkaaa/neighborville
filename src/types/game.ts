@@ -1,3 +1,16 @@
+export interface BuildingUpgrade {
+  id: string;
+  name: string;
+  description: string;
+  cost: number;
+  incomeBoost: number;
+  happinessBoost: number;
+  energyEfficiency?: number;
+  waterEfficiency?: number;
+  level: number;
+  icon: string;
+}
+
 export interface Building {
   id: string;
   name: string;
@@ -25,6 +38,10 @@ export interface Building {
   isConnectedToPower?: boolean;
   isConnectedToWater?: boolean;
   connectedBuildings?: number[];
+  level?: number;
+  maxLevel?: number;
+  upgrades?: BuildingUpgrade[];
+  currentUpgrades?: string[];
 }
 
 export interface UnlockCondition {
@@ -122,10 +139,12 @@ export interface TimeBasedBonus {
 }
 
 export interface CoinHistoryEntry {
+  id: string;
   day: number;
   balance: number;
-  income: number;
-  expenses: number;
+  amount: number;
+  type: 'income' | 'expense';
+  description: string;
   timestamp: number;
 }
 
