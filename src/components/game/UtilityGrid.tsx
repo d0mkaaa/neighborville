@@ -79,6 +79,15 @@ export default function UtilityGrid({
     }
   };
 
+  const calculateGridDistance = (index1: number, index2: number, gridCols: number): number => {
+    const x1 = index1 % gridCols;
+    const y1 = Math.floor(index1 / gridCols);
+    const x2 = index2 % gridCols;
+    const y2 = Math.floor(index2 / gridCols);
+    
+    return Math.abs(x1 - x2) + Math.abs(y1 - y2);
+  };
+
   const gridCols = Math.sqrt(gridSize);
 
   const handleMouseDown = (
@@ -124,7 +133,14 @@ export default function UtilityGrid({
         : building.needsWater;
 
     if (canConnect && index !== dragStart.index) {
-      onConnectUtility(dragStart.index, index, dragStart.type);
+      const distance = calculateGridDistance(dragStart.index, index, Math.sqrt(gridSize));
+      const maxDistance = dragStart.type === "power" ? 3 : 3;
+      
+      if (distance > maxDistance) {
+        console.log(`Too far! ${dragStart.type === 'power' ? 'Power' : 'Water'} can only reach ${maxDistance} tiles away`);
+      } else {
+        onConnectUtility(dragStart.index, index, dragStart.type);
+      }
     }
 
     setDragStart(null);
@@ -393,7 +409,7 @@ export default function UtilityGrid({
                 </div>
               </div>
               <div className="mt-2 text-xs text-gray-500">
-                Drag from generators/supplies to buildings to connect utilities
+                Drag from generators/supplies to buildings to connect utilities. Power: 3 tiles, Water: 3 tiles
               </div>
             </div>
           </motion.div>

@@ -47,6 +47,21 @@ export default function GameGrid({
   const { rows, cols } = getGridDimensions(maxSize);
   const currentDimensions = getGridDimensions(gridSize);
 
+  const handleTileClick = (index: number) => {
+    const building = grid[index];
+    if (building && !selectedBuilding) {
+      onBuildingManage(building, index);
+    } else {
+      onTileClick(index);
+    }
+  };
+
+  const handleDeleteBuilding = (index: number) => {
+    if (typeof index === 'number' && !isNaN(index) && index >= 0 && index < grid.length) {
+      onDeleteBuilding(index);
+    }
+  };
+
   return (
     <div className="bg-white rounded-xl shadow-md p-4">
       <h2 className="font-medium mb-4 lowercase text-gray-800">your neighborhood</h2>
@@ -81,17 +96,10 @@ export default function GameGrid({
             );
           }
           
-          const isOccupiedHouse = grid[index] && 
-                                (grid[index]?.id === 'house' || grid[index]?.id === 'apartment') && 
-                                grid[index]?.isOccupied;
-          
-          const handleClick = () => {
-            if (grid[index] && !selectedBuilding) {
-              onBuildingManage(grid[index]!, index);
-            } else {
-              onTileClick(index);
-            }
-          };
+          const building = grid[index];
+          const isOccupiedHouse = building && 
+                                (building.id === 'house' || building.id === 'apartment') && 
+                                building.isOccupied;
           
           return (
             <motion.div
@@ -99,25 +107,25 @@ export default function GameGrid({
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               layout
-              onClick={handleClick}
+              onClick={() => handleTileClick(index)}
               className={`aspect-ratio-1 rounded-lg flex flex-col items-center justify-center cursor-pointer ${
                 selectedTile === index ? 'ring-2 ring-emerald-500' : ''
               } ${
-                !grid[index] ? 'bg-emerald-50 hover:bg-emerald-100' : 'text-white'
+                !building ? 'bg-emerald-50 hover:bg-emerald-100' : 'text-white'
               }`}
               style={{ 
-                backgroundColor: grid[index] ? grid[index].color : '',
+                backgroundColor: building ? building.color : '',
               }}
             >
-              {grid[index] ? (
+              {building ? (
                 <motion.div 
                   initial={{ scale: 0, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   transition={{ type: "spring", damping: 12 }}
                   className="flex flex-col items-center relative w-full h-full justify-center"
                 >
-                  {getIcon(grid[index].icon)}
-                  <span className="text-xs mt-1 lowercase font-medium">{grid[index].name}</span>
+                  {building.icon && getIcon(building.icon)}
+                  <span className="text-xs mt-1 lowercase font-medium">{building.name}</span>
                   
                   {isOccupiedHouse && (
                     <motion.div 
@@ -128,7 +136,7 @@ export default function GameGrid({
                     </motion.div>
                   )}
                   
-                  {grid[index].income > 0 && (
+                  {building.income > 0 && (
                     <motion.div 
                       className="absolute bottom-1 right-1 bg-white bg-opacity-90 rounded-full p-0.5"
                       whileHover={{ scale: 1.2 }}
@@ -202,7 +210,7 @@ export default function GameGrid({
                 <motion.button
                   whileHover={{ scale: 1.1, backgroundColor: "#fee2e2" }}
                   whileTap={{ scale: 0.9 }}
-                  onClick={() => onDeleteBuilding(selectedTile)}
+                  onClick={() => handleDeleteBuilding(selectedTile)}
                   className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
                 >
                   <Trash2 size={16} />
