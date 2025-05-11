@@ -73,10 +73,12 @@ function App() {
       totalEnergyUsage: 0,
       lastBillDay: 0,
       coinHistory: [{
+        id: crypto.randomUUID(),
         day: 1,
-        balance: 5000,
-        income: 0,
-        expenses: 0,
+        balance: 2000,
+        amount: 0,
+        type: 'income',
+        description: 'Initial balance',
         timestamp: Date.now()
       }],
       weather: 'sunny'
