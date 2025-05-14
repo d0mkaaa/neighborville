@@ -1,5 +1,5 @@
 import express from 'express';
-import { sendVerificationEmail, generateVerificationCode, sendTestEmail } from '../services/email.js';
+import { sendVerificationEmail, generateVerificationCode } from '../services/email.js';
 import { storeVerificationCode, findUserByEmail, createUser } from '../services/userService.js';
 
 const router = express.Router();
