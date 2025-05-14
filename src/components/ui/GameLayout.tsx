@@ -1,5 +1,4 @@
 import React from 'react';
-import Footer from './Footer';
 
 interface GameLayoutProps {
   header: React.ReactNode;
@@ -42,7 +41,6 @@ export default function GameLayout({
       
       {children}
       
-      <Footer />
     </div>
   );
 }

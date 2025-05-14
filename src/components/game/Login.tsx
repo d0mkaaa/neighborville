@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Upload, Info, User, Play } from "lucide-react";
+import { Upload, Info, User, Play, PlusCircle, ArrowRight } from "lucide-react";
 import BackgroundBubbles from "./BackgroundBubbles";
 import type { GameProgress } from "../../types/game";
 import GlassCard from "../ui/GlassCard";
 import Button from "../ui/Button";
 import SaveCard from "../ui/SaveCard";
+import { useAuth } from "../../context/AuthContext";
 
 const SAVE_KEY = "neighborville_save";
 
@@ -16,13 +17,18 @@ type LoginProps = {
 };
 
 export default function Login({ onStartGame, onLoadGame, onShowTutorial }: LoginProps) {
+  const { user, isAuthenticated } = useAuth();
   const [playerName, setPlayerName] = useState("");
   const [savedGames, setSavedGames] = useState<{key: string, name: string, date: string, data: GameProgress}[]>([]);
   const [showSaves, setShowSaves] = useState(false);
   
   useEffect(() => {
     loadSavedGames();
-  }, []);
+    
+    if (user?.username) {
+      setPlayerName(user.username);
+    }
+  }, [user]);
   
   const loadSavedGames = () => {
     try {
@@ -99,53 +105,104 @@ export default function Login({ onStartGame, onLoadGame, onShowTutorial }: Login
         >
           {!showSaves ? (
             <>
-              <h2 className="text-2xl font-medium text-gray-800 mb-6 lowercase">
-                build your dream neighborhood
-              </h2>
-              
-              <div className="mb-6">
-                <label className="block text-gray-700 text-sm mb-2 lowercase">
-                  your name
-                </label>
-                <input
-                  type="text"
-                  value={playerName}
-                  onChange={(e) => setPlayerName(e.target.value)}
-                  className="w-full px-4 py-3 rounded-lg bg-gray-100 text-gray-900 border border-gray-300 placeholder-gray-500 outline-none focus:ring-2 focus:ring-emerald-500 transition-all duration-200 lowercase text-lg"
-                  placeholder="enter your name"
-                />
-              </div>
-              
-              <Button
-                variant="success"
-                size="lg"
-                fullWidth
-                icon={<Play size={20} />}
-                onClick={handleStartGame}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white"
-              >
-                start building
-              </Button>
-              
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                <Button
-                  variant="secondary"
-                  icon={<Info size={16} />}
-                  onClick={onShowTutorial}
-                  className="bg-gray-200 text-gray-800 hover:bg-gray-300"
-                >
-                  how to play
-                </Button>
-                
-                <Button
-                  variant="secondary"
-                  icon={<Upload size={16} />}
-                  onClick={() => setShowSaves(true)}
-                  className="bg-gray-200 text-gray-800 hover:bg-gray-300"
-                >
-                  load game
-                </Button>
-              </div>
+              {isAuthenticated && user ? (
+                <>
+                  <div className="bg-emerald-50 rounded-lg p-4 mb-6 border border-emerald-100">
+                    <div className="flex items-center">
+                      <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center mr-4">
+                        <User size={18} className="text-emerald-700" />
+                      </div>
+                      <div>
+                        <p className="text-emerald-800 font-medium">Welcome back, {user.username}!</p>
+                        <p className="text-sm text-emerald-600">Ready to build a new city?</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 gap-4">
+                    <Button
+                      variant="success"
+                      size="lg"
+                      fullWidth
+                      icon={<PlusCircle size={20} />}
+                      onClick={() => onStartGame(user.username || playerName)}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                    >
+                      start new city
+                    </Button>
+                  
+                    <Button
+                      variant="secondary"
+                      size="lg"
+                      fullWidth
+                      icon={<ArrowRight size={20} />}
+                      onClick={() => setShowSaves(true)}
+                      className="border border-emerald-200 bg-white hover:bg-emerald-50 text-emerald-700"
+                    >
+                      continue saved city
+                    </Button>
+                    
+                    <Button
+                      variant="ghost"
+                      icon={<Info size={16} />}
+                      onClick={onShowTutorial}
+                      className="text-gray-700 hover:bg-gray-100"
+                    >
+                      how to play
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h2 className="text-2xl font-medium text-gray-800 mb-6 lowercase">
+                    build your dream neighborhood
+                  </h2>
+                  
+                  <div className="mb-6">
+                    <label className="block text-gray-700 text-sm mb-2 lowercase">
+                      your name
+                    </label>
+                    <input
+                      type="text"
+                      value={playerName}
+                      onChange={(e) => setPlayerName(e.target.value)}
+                      className="w-full px-4 py-3 rounded-lg bg-gray-100 text-gray-900 border border-gray-300 placeholder-gray-500 outline-none focus:ring-2 focus:ring-emerald-500 transition-all duration-200 lowercase text-lg"
+                      placeholder="enter your name"
+                    />
+                  </div>
+                  
+                  <Button
+                    variant="success"
+                    size="lg"
+                    fullWidth
+                    icon={<Play size={20} />}
+                    onClick={handleStartGame}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                  >
+                    start building
+                  </Button>
+                  
+                  <div className="mt-4 grid grid-cols-2 gap-3">
+                    <Button
+                      variant="secondary"
+                      icon={<Info size={16} />}
+                      onClick={onShowTutorial}
+                      className="bg-gray-200 text-gray-800 hover:bg-gray-300"
+                    >
+                      how to play
+                    </Button>
+                    
+                    <Button
+                      variant="secondary"
+                      icon={<Upload size={16} />}
+                      onClick={() => setShowSaves(true)}
+                      className="bg-gray-200 text-gray-800 hover:bg-gray-300"
+                    >
+                      load game
+                    </Button>
+                  </div>
+                </>
+              )}
             </>
           ) : (
             <>
@@ -184,23 +241,18 @@ export default function Login({ onStartGame, onLoadGame, onShowTutorial }: Login
                 size="lg"
                 fullWidth
                 icon={<Play size={20} />}
-                onClick={() => setShowSaves(false)}
+                onClick={() => {
+                  setShowSaves(false);
+                  const name = user?.username || playerName || 'Mayor';
+                  if (name) onStartGame(name);
+                }}
                 className="mt-4 bg-emerald-600 hover:bg-emerald-700 text-white"
               >
-                start new game instead
+                start new city instead
               </Button>
             </>
           )}
         </GlassCard>
-        
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1, duration: 1 }}
-          className="absolute bottom-8 text-white text-xs text-center drop-shadow"
-        >
-          Created for neighborhood.hackclub.com
-        </motion.div>
       </div>
     </div>
   );

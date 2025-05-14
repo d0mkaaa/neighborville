@@ -1,25 +1,46 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Save, Trash2, X, Calendar, Clock } from "lucide-react";
+import { Save, Trash2, X, Calendar, Clock, CloudUpload, CheckCircle, AlertCircle, Download, UploadCloud, CloudOff, LogIn, Loader2 } from "lucide-react";
 import type { GameProgress } from "../../types/game";
+import { cloudSave } from "../../utils/cloudsave";
+import { useAuth } from "../../context/AuthContext";
 
 const SAVE_KEY = "neighborville_save";
 
-type SaveManagerProps = {
+interface SaveManagerProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (name?: string) => void;
+  onSaveToServer?: () => Promise<boolean>;
   gameData: GameProgress;
-};
+  isAuthenticated?: boolean;
+  lastServerSaveTime?: Date | null;
+  onShowLogin?: () => void;
+}
 
-export default function SaveManager({ isOpen, onClose, onSave, gameData }: SaveManagerProps) {
-  const [savedGames, setSavedGames] = useState<{key: string, name: string, date: string, data: GameProgress}[]>([]);
-  const [saveName, setSaveName] = useState("");
+export default function SaveManager({ 
+  isOpen, 
+  onClose, 
+  onSave, 
+  onSaveToServer, 
+  gameData, 
+  isAuthenticated,
+  lastServerSaveTime,
+  onShowLogin
+}: SaveManagerProps) {
+  const [savedGames, setSavedGames] = useState<{key: string, name: string, date: string}[]>([]);
+  const [saveName, setSaveName] = useState<string>("");
   const [showConfirmDelete, setShowConfirmDelete] = useState<string | null>(null);
+  const [isSavingToServer, setIsSavingToServer] = useState<boolean>(false);
+  const [serverSaveSuccess, setServerSaveSuccess] = useState<boolean | null>(null);
+  
+  const { user } = useAuth();
+  const isGuest = !!user?.isGuest;
   
   useEffect(() => {
     if (isOpen) {
       loadSavedGames();
+      setServerSaveSuccess(null);
     }
   }, [isOpen]);
   
@@ -28,11 +49,18 @@ export default function SaveManager({ isOpen, onClose, onSave, gameData }: SaveM
       const keys = Object.keys(localStorage);
       const gameKeys = keys.filter(key => key.startsWith(SAVE_KEY));
       
-      const games = gameKeys.map(key => {
-        const data = JSON.parse(localStorage.getItem(key) || "{}") as GameProgress;
+      const filteredKeys = gameKeys.filter(key => !key.includes('autosave'));
+      
+      const games = filteredKeys.map(key => {
+        let data = {playerName: 'Unknown'};
+        try {
+          data = JSON.parse(localStorage.getItem(key) || '{}');
+        } catch (e) {
+          console.error('Error parsing saved game data', e);
+        }
         
         let timestamp = Date.now();
-        const nameParts = key.split("_");
+        const nameParts = key.split('_');
         
         if (nameParts.length > 2) {
           const possibleTimestamp = parseInt(nameParts[2]);
@@ -41,53 +69,98 @@ export default function SaveManager({ isOpen, onClose, onSave, gameData }: SaveM
           }
         }
         
-        const date = new Date(timestamp).toLocaleDateString('en-US', {
-          year: 'numeric',
-          month: 'short',
-          day: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit'
-        });
+        const date = new Date(timestamp).toLocaleDateString();
         
         return { 
           key,
-          name: data.playerName || 'Unnamed Player', 
-          date, 
-          data 
+          name: data.playerName || 'Unnamed Save', 
+          date 
         };
       });
       
-      setSavedGames(games.sort((a, b) => {
-        const timeA = a.key.split('_')[2] ? parseInt(a.key.split('_')[2]) : 0;
-        const timeB = b.key.split('_')[2] ? parseInt(b.key.split('_')[2]) : 0;
-        return timeB - timeA;
-      }));
+      setSavedGames(games);
     } catch (error) {
-      console.error("Error loading saved games", error);
+      console.error('Error loading saved games', error);
     }
   };
   
   const handleQuickSave = () => {
+    const timestamp = Date.now();
+    
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      ...gameData,
+      saveTimestamp: timestamp
+    }));
+    
     onSave();
-    onClose();
   };
   
   const handleNamedSave = () => {
-    if (saveName.trim()) {
-      onSave(saveName);
-      setSaveName("");
-      onClose();
+    const timestamp = Date.now();
+    const name = saveName.trim() ? saveName : `${gameData.playerName}'s City`;
+    
+    const key = `${SAVE_KEY}_${timestamp}_${name.replace(/\s/g, '_')}`;
+    
+    localStorage.setItem(key, JSON.stringify({
+      ...gameData,
+      saveTimestamp: timestamp,
+      saveName: name
+    }));
+    
+    loadSavedGames();
+    
+    setSaveName('');
+    
+    onSave(name);
+  };
+  
+  const handleSaveToServer = async () => {
+    if (onSaveToServer) {
+      setIsSavingToServer(true);
+      setServerSaveSuccess(null);
+      
+      try {
+        console.log('SaveManager: Initiating save to server');
+        const success = await onSaveToServer();
+        console.log('SaveManager: Server save result:', success);
+        setServerSaveSuccess(success);
+        
+        if (success) {
+          loadSavedGames();
+        }
+      } catch (error) {
+        console.error("Error saving to server:", error);
+        setServerSaveSuccess(false);
+      } finally {
+        setIsSavingToServer(false);
+      }
     }
   };
   
   const handleDeleteSave = (key: string) => {
     try {
-      localStorage.removeItem(key);
-      setSavedGames(prev => prev.filter(game => game.key !== key));
-      setShowConfirmDelete(null);
+      if (confirm('Are you sure you want to delete this save?')) {
+        localStorage.removeItem(key);
+        loadSavedGames();
+      }
     } catch (error) {
-      console.error("Error deleting save", error);
+      console.error('Error deleting save', error);
     }
+  };
+  
+  const formatServerSaveTime = () => {
+    if (!lastServerSaveTime) return 'Not saved to server yet';
+    
+    const now = new Date();
+    const diff = now.getTime() - lastServerSaveTime.getTime();
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+    
+    if (days > 0) return `Last saved ${days} day${days > 1 ? 's' : ''} ago`;
+    if (hours > 0) return `Last saved ${hours} hour${hours > 1 ? 's' : ''} ago`;
+    if (minutes > 0) return `Last saved ${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+    return 'Saved just now';
   };
   
   return (
@@ -119,6 +192,34 @@ export default function SaveManager({ isOpen, onClose, onSave, gameData }: SaveM
                 <X size={20} />
               </button>
             </div>
+            
+            {isGuest && onShowLogin && (
+              <div className="bg-blue-50 border-b border-blue-100 p-4">
+                <div className="flex items-start">
+                  <div className="bg-blue-100 rounded-full p-2 mr-3">
+                    <CloudUpload className="text-blue-600" size={20} />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-sm font-medium text-blue-800">Playing as Guest</h3>
+                    <p className="text-xs text-blue-600 mt-1">
+                      Your progress is only saved on this device. Create an account to save your city to the cloud!
+                    </p>
+                    <div className="mt-2">
+                      <button 
+                        onClick={() => {
+                          onShowLogin();
+                          onClose();
+                        }}
+                        className="bg-blue-500 text-white text-xs px-3 py-1.5 rounded flex items-center gap-1.5 hover:bg-blue-600 transition-colors"
+                      >
+                        <LogIn size={14} />
+                        Sign Up / Log In
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
             
             <div className="p-5">
               <div className="mb-4">
@@ -175,7 +276,7 @@ export default function SaveManager({ isOpen, onClose, onSave, gameData }: SaveM
                           <div className="text-gray-800 font-medium text-sm">{save.name}</div>
                           <div className="text-gray-500 text-xs flex items-center">
                             <Calendar size={12} className="mr-1" />
-                            day {save.data.day}
+                            day {gameData.day}
                             <Clock size={12} className="ml-2 mr-1" />
                             {save.date}
                           </div>

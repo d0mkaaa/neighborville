@@ -1,3 +1,68 @@
+export type Building = {
+  id: string;
+  name: string;
+  type?: string;
+  color: string;
+  income: number;
+  happiness: number;
+  upgrades?: string[];
+  level?: number;
+  cost?: number;
+  occupants?: string[];
+  occupantIds?: any[];
+  residentCapacity?: number;
+  residents?: number;
+  energy?: number;
+  needsElectricity?: boolean;
+  isConnectedToPower?: boolean;
+  needsWater?: boolean;
+  isConnectedToWater?: boolean;
+  energyUsage?: number;
+  isPowerGenerator?: boolean;
+  isWaterSupply?: boolean;
+  isOccupied?: boolean;
+  icon?: string;
+  levelRequired?: number;
+  unlocked?: boolean;
+  lastCollectedIncome?: number;
+  currentUpgrades?: string[];
+  powerOutput?: number;
+  waterOutput?: number;
+  connectedBuildings?: number[];
+  residenceTier?: string;
+};
+
+export type Neighbor = {
+  id: string | number;
+  name: string;
+  type?: string;
+  dailyRent: number;
+  happiness: number;
+  preferences?: string[];
+  unlocked?: boolean;
+  hasHome?: boolean;
+  housingPreference?: string;
+  maxNeighbors?: number;
+  likes?: string[] | string;
+  dislikes?: string[] | string;
+  houseIndex?: number;
+  unlockCondition?: UnlockCondition | null;
+  avatar?: string;
+  trait?: string;
+};
+
+export type Neighborhood = {
+  name: string;
+  buildings: Building[];
+  neighbors: Neighbor[];
+  stats: {
+    totalHappiness: number;
+    totalIncome: number;
+    totalResidents: number;
+    totalBuildings: number;
+  };
+};
+
 export interface BuildingUpgrade {
   id: string;
   name: string;
@@ -11,39 +76,6 @@ export interface BuildingUpgrade {
   icon: string;
 }
 
-export interface Building {
-  id: string;
-  name: string;
-  icon: string;
-  cost: number;
-  happiness: number;
-  income: number;
-  color: string;
-  energyUsage?: number;
-  residentCapacity?: number;
-  occupants?: number[];
-  levelRequired?: number;
-  unlocked?: boolean;
-  isOccupied?: boolean;
-  occupantId?: number;
-  residenceTier?: 'basic' | 'premium';
-  occupantIds?: number[];
-  lastCollectedIncome?: number;
-  needsElectricity?: boolean;
-  needsWater?: boolean;
-  isPowerGenerator?: boolean;
-  isWaterSupply?: boolean;
-  powerOutput?: number;
-  waterOutput?: number;
-  isConnectedToPower?: boolean;
-  isConnectedToWater?: boolean;
-  connectedBuildings?: number[];
-  level?: number;
-  maxLevel?: number;
-  upgrades?: BuildingUpgrade[];
-  currentUpgrades?: string[];
-}
-
 export interface UnlockCondition {
   type: 'building' | 'level' | 'happiness' | 'day' | 'achievement';
   buildingId?: string;
@@ -51,23 +83,6 @@ export interface UnlockCondition {
   level?: number;
   day?: number;
   description: string;
-}
-
-export interface Neighbor {
-  id: number;
-  name: string;
-  avatar: string;
-  trait: string;
-  likes: string;
-  dislikes: string;
-  unlocked: boolean;
-  unlockCondition: UnlockCondition | null;
-  hasHome?: boolean;
-  houseIndex?: number;
-  dailyRent?: number;
-  happiness?: number;
-  housingPreference?: 'house' | 'apartment' | 'any';
-  maxNeighbors?: number;
 }
 
 export interface EventOption {
@@ -89,7 +104,7 @@ export interface GameEvent {
   weight?: number;
   minimumDay?: number;
   timeOfDay?: TimeOfDay;
-  affectedNeighbors?: number[];
+  affectedNeighbors?: (number | string)[];
 }
 
 export interface ScheduledEvent {
@@ -131,11 +146,55 @@ export type TimeOfDay = 'morning' | 'day' | 'evening' | 'night';
 
 export type WeatherType = 'sunny' | 'rainy' | 'cloudy' | 'stormy' | 'snowy';
 
+export type BonusType = 'happiness' | 'income' | 'energy' | 'garden' | 'tourism' | 'commercial' | 'residential' | 'education' | 'reputation' | 'experience';
+
 export interface TimeBasedBonus {
   buildingId: string;
   timeOfDay: TimeOfDay;
   incomeMultiplier?: number;
   happinessMultiplier?: number;
+}
+
+export interface SeasonalBonus {
+  type: BonusType;
+  amount: number;
+  description: string;
+}
+
+export interface Season {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  colorTheme: string;
+  durationDays: number;
+  startDay: number;
+  bonuses: SeasonalBonus[];
+}
+
+export interface SeasonalEventOption {
+  id: string;
+  name: string;
+  cost: number;
+  reward: {
+    type: BonusType;
+    amount: number;
+  };
+}
+
+export interface SeasonalEvent {
+  id: string;
+  name: string;
+  description: string;
+  season: string;
+  icon: string;
+  duration: number;
+  triggerDayInSeason: number;
+  bonuses: SeasonalBonus[];
+  options: SeasonalEventOption[];
+  selectedOption?: string;
+  active?: boolean;
+  dayStarted?: number;
 }
 
 export interface CoinHistoryEntry {
@@ -160,7 +219,7 @@ export interface GameProgress {
   neighbors: Neighbor[];
   achievements: Achievement[];
   events: ScheduledEvent[];
-  unlockedNeighborIds?: number[];
+  unlockedNeighborIds?: (number | string)[];
   gameTime?: number;
   gameMinutes?: number;
   timeOfDay?: TimeOfDay;
@@ -173,6 +232,9 @@ export interface GameProgress {
   weather?: WeatherType;
   powerGrid?: PowerGridState;
   waterGrid?: WaterGridState;
+  currentSeason?: Season;
+  activeSeasonalEvents?: SeasonalEvent[];
+  reputation?: number;
 }
 
 export interface PowerGridState {

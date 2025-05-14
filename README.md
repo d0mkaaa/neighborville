@@ -12,8 +12,9 @@ A city-building simulation game built for [Hack Club Neighborhood](https://neigh
 - **Achievement System**: Unlock achievements as you develop your neighborhood
 - **Energy Management**: Monitor and reduce your city's energy consumption
 - **Housing System**: Assign your neighbors to appropriate housing based on their preferences
+- **Email Verification**: Secure user authentication with simulated email verification codes
 
-## 🚀 Technologies Used
+## 🚀 tools used
 
 - [React](https://react.dev/) - UI framework
 - [TypeScript](https://www.typescriptlang.org/) - Type-safe JavaScript
@@ -21,10 +22,17 @@ A city-building simulation game built for [Hack Club Neighborhood](https://neigh
 - [Tailwind CSS](https://tailwindcss.com/) - Styling
 - [Framer Motion](https://www.framer.com/motion/) - Animations
 - [Lucide Icons](https://lucide.dev/) - UI icons
+- [Docker](https://www.docker.com/) - Containerization
+- [Nginx](https://nginx.org/) - Web server
 
 ## 🛠️ Development
 
-### Getting Started
+### prerequisites
+
+- [Docker](https://docs.docker.com/get-docker/)
+- [Docker Compose](https://docs.docker.com/compose/install/)
+
+### getting started
 
 1. Clone the repository:
    ```bash
@@ -32,40 +40,64 @@ A city-building simulation game built for [Hack Club Neighborhood](https://neigh
    cd neighborville
    ```
 
-2. Install dependencies:
+2. Create and configure your environment variables:
    ```bash
-   npm install
+   cp .env.example .env
+   ```
+   Edit the `.env` file with your configuration values.
+
+3. Build and start the containers:
+   ```bash
+   docker-compose up --build
    ```
 
-3. Start the development server:
-   ```bash
-   npm run dev
-   ```
+4. Open [http://localhost](http://localhost) in your browser
 
-4. Open [http://localhost:5173](http://localhost:5173) in your browser
+### Environment Variables
 
-### Building for Production
+The following environment variables are available:
 
-```bash
-npm run build
-```
+- `VITE_API_URL`: Your API server URL
+- `VITE_WS_URL`: Your WebSocket server URL
+- `VITE_EMAIL_FROM`: Email sender address (e.g., hello@domka.me)
+- `VITE_EMAIL_FROM_NAME`: Email sender name
 
-### Preview Production Build
+### authentication system
 
-```bash
-npm run preview
-```
+NeighborVille features a comprehensive authentication system with the following features:
+
+1. **Session Management**:
+   - Browser-local sessions with configurable expiration time
+   - Automatic session refresh for active users
+   - Ability to manage multiple sessions across devices
+
+2. **User Types**:
+   - Guest users with limited functionality
+   - Registered users with email verification
+   - User settings persistence
+
+3. **Security Features**:
+   - Session validation on app load and during usage
+   - Automatic logout on session expiration
+   - Session tracking with user agent information
+
+4. **Environment Configuration**:
+   - Configurable session timeout via environment variables
+   - Mailtrap integration for production email testing
+   - Development fallbacks for email verification
 
 ## 📚 Project Structure
 
 - `src/components/game/` - Game components like buildings, residents, events
 - `src/components/ui/` - Reusable UI components
+- `src/components/auth/` - Authentication components and flows
+- `src/services/` - Services for email verification and storage
 - `src/data/` - Game data (buildings, events, neighbors, achievements)
 - `src/types/` - TypeScript type definitions
 
 ## 👥 Contributing
 
-Contributions are welcome! Feel free to open issues or submit pull requests to help improve NeighborVille.
+Contributions are welcome! Feel free to open issues or submit pull requests to help improve neighborville.
 
 ## 📜 License
 

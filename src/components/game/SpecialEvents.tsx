@@ -775,7 +775,6 @@ export default function SpecialEventsManager({
         coins: gameData.coins - offer.salePrice
       });
       
-      // right now it just shows a notification
       setEventNotifications(prev => [...prev, {
         id: `purchase_${offer.id}`,
         message: `Purchased ${offer.name}!`,

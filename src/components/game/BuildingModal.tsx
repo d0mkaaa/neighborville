@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, Hammer, Shuffle, Rotate3D, CheckCircle, Timer } from "lucide-react";
 import type { Building } from "../../types/game";
 
-type PuzzleType = 'memory' | 'sequence' | 'connect';
+type PuzzleType = 'memory' | 'sequence' | 'connect' | 'rotation';
 
 type BuildingModalProps = {
   building: Building;
@@ -15,11 +15,11 @@ type BuildingModalProps = {
 };
 
 export default function BuildingModal({ building, onClose, onComplete, selectedIndex, playerCoins }: BuildingModalProps) {
-  console.log('BuildingModal rendered with:', { building, selectedIndex, playerCoins });
   
   const [phase, setPhase] = useState<'start' | 'puzzle' | 'building' | 'complete'>('start');
+  const [difficultyLevel, setDifficultyLevel] = useState<1|2|3>(1);
   const [puzzleType] = useState<PuzzleType>(() => {
-    const allTypes: PuzzleType[] = ['memory', 'sequence', 'connect'];
+    const allTypes: PuzzleType[] = ['memory', 'sequence', 'connect', 'rotation'];
     
     const completedPuzzleKey = `completed_puzzles_${building.id}`;
     const storedCompletedPuzzles = localStorage.getItem(completedPuzzleKey);
@@ -47,6 +47,10 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
   const [flippedCards, setFlippedCards] = useState<number[]>([]);
   const [matchedCards, setMatchedCards] = useState<number[]>([]);
   const [buildingProgress, setBuildingProgress] = useState(0);
+
+  const [rotationPieces, setRotationPieces] = useState<{id: number, rotation: number, correctRotation: number, image: string}[]>([]);
+  const [completedRotations, setCompletedRotations] = useState<number[]>([]);
+  const [totalRotationPieces, setTotalRotationPieces] = useState<number>(4);
   
   const [sequence, setSequence] = useState<number[]>([]);
   const [playerSequence, setPlayerSequence] = useState<number[]>([]);
@@ -59,25 +63,29 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
   const [requiredConnections, setRequiredConnections] = useState<number>(5);
   
   const [attempts, setAttempts] = useState(0);
-  const maxAttempts = puzzleType === 'memory' ? 999 : 3;
+  const maxAttempts = puzzleType === 'memory' ? 999 : (puzzleType === 'rotation' ? 999 : 3 + difficultyLevel);
   
   useEffect(() => {
     if (puzzleType === 'memory') {
-      const items = ['🔨', '🪚'];
+      const baseItems = ['🔨', '🪚', '🧹', '🔧'];
+      const items = baseItems.slice(0, 2 + difficultyLevel);
       const shuffled = [...items, ...items].sort(() => Math.random() - 0.5);
       setMemoryCards(shuffled);
     } else if (puzzleType === 'sequence') {
-      const seq = Array.from({ length: 4 }, () => Math.floor(Math.random() * 4));
+      const seqLength = 3 + difficultyLevel;
+      const seq = Array.from({ length: seqLength }, () => Math.floor(Math.random() * 4));
       setSequence(seq);
     } else if (puzzleType === 'connect') {
       initializeConnectPuzzle();
+    } else if (puzzleType === 'rotation') {
+      initializeRotationPuzzle();
     }
-  }, [puzzleType]);
+  }, [puzzleType, difficultyLevel]);
   
   const initializeConnectPuzzle = () => {
     const points = [];
     const gridSize = 8;
-    const numPoints = 6;
+    const numPoints = 4 + difficultyLevel;
     
     for (let i = 0; i < numPoints; i++) {
       let x, y;
@@ -121,6 +129,60 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
       return () => clearInterval(timer);
     }
   }, [phase]);
+  
+  const initializeRotationPuzzle = () => {
+    const images = ['🔨', '🧰', '🔧', '🪚', '🧹', '⚙️'];
+    const pieces = [];
+    
+    const numPieces = 2 + difficultyLevel * 2;
+    setTotalRotationPieces(numPieces);
+    
+    for (let i = 0; i < numPieces; i++) {
+      const correctRotation = Math.floor(Math.random() * 4) * 90;
+      pieces.push({
+        id: i,
+        rotation: Math.floor(Math.random() * 4) * 90,
+        correctRotation,
+        image: images[i % images.length]
+      });
+    }
+    
+    setRotationPieces(pieces);
+    setCompletedRotations([]);
+  };
+  
+  const handleRotationPiece = (index: number) => {
+    const updatedPieces = [...rotationPieces];
+    const piece = updatedPieces[index];
+    
+    piece.rotation = (piece.rotation + 90) % 360;
+    
+    if (piece.rotation === piece.correctRotation && !completedRotations.includes(index)) {
+      const newCompleted = [...completedRotations, index];
+      setCompletedRotations(newCompleted);
+      
+      if (newCompleted.length === totalRotationPieces) {
+        const completedPuzzleKey = `completed_puzzles_${building.id}`;
+        const storedPuzzles = localStorage.getItem(completedPuzzleKey);
+        let completedPuzzles: PuzzleType[] = [];
+        
+        try {
+          completedPuzzles = storedPuzzles ? JSON.parse(storedPuzzles) : [];
+        } catch (e) {
+          console.error('Error parsing completed puzzles:', e);
+        }
+        
+        if (!completedPuzzles.includes(puzzleType)) {
+          completedPuzzles.push(puzzleType);
+          localStorage.setItem(completedPuzzleKey, JSON.stringify(completedPuzzles));
+        }
+        
+        setTimeout(() => setPhase('building'), 500);
+      }
+    }
+    
+    setRotationPieces(updatedPieces);
+  };
   
   const handleMemoryCardClick = (index: number) => {
     if (flippedCards.includes(index) || matchedCards.includes(index)) return;
@@ -331,6 +393,22 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
                     <span className="font-medium">income:</span> {building.income}c/day
                   </div>
                 </div>
+                <div className="mb-4">
+                  <p className="text-sm text-gray-600 mb-2">Select difficulty:</p>
+                  <div className="flex gap-2 mb-4">
+                    {[1, 2, 3].map((level) => (
+                      <button
+                        key={level}
+                        onClick={() => setDifficultyLevel(level as 1|2|3)}
+                        className={`flex-1 py-1 rounded ${difficultyLevel === level 
+                          ? 'bg-emerald-500 text-white' 
+                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                      >
+                        {level === 1 ? 'Easy' : level === 2 ? 'Medium' : 'Hard'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
@@ -417,6 +495,52 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
               </motion.div>
             )}
 
+            {phase === 'puzzle' && puzzleType === 'rotation' && (
+              <motion.div
+                key="rotation"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+              >
+                <h3 className="text-lg font-medium text-gray-800 mb-4 text-center">blueprint alignment</h3>
+                <p className="text-sm text-gray-600 mb-4 text-center">
+                  rotate the pieces to match the blueprint ({completedRotations.length}/{totalRotationPieces} pieces)
+                </p>
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  {rotationPieces.map((piece, index) => (
+                    <motion.div
+                      key={index}
+                      onClick={() => handleRotationPiece(index)}
+                      style={{
+                        transform: `rotate(${piece.rotation}deg)`,
+                        backgroundColor: completedRotations.includes(index) ? '#d1fae5' : '#f3f4f6',
+                        borderColor: completedRotations.includes(index) ? '#10b981' : '#e5e7eb'
+                      }}
+                      className="aspect-square rounded-lg flex items-center justify-center cursor-pointer border-2 transition-all duration-300"
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      <span className="text-2xl">{piece.image}</span>
+                      {completedRotations.includes(index) && (
+                        <motion.div
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                          className="absolute inset-0 flex items-center justify-center"
+                        >
+                          <div className="absolute inset-0 bg-emerald-500 opacity-20 rounded-lg"></div>
+                          <CheckCircle className="text-emerald-500 opacity-80" size={20} />
+                        </motion.div>
+                      )}
+                    </motion.div>
+                  ))}
+                </div>
+                <div className="text-center text-sm text-gray-600 mb-4">
+                  <p>Click on a piece to rotate it clockwise</p>
+                  <p>Difficulty: {difficultyLevel === 1 ? 'Easy' : difficultyLevel === 2 ? 'Medium' : 'Hard'}</p>
+                </div>
+              </motion.div>
+            )}
+            
             {phase === 'puzzle' && puzzleType === 'connect' && (
               <motion.div
                 key="connect"

@@ -9,7 +9,7 @@ export type MarketItem = {
   description: string;
   price: number;
   sellerType: 'resident' | 'system' | 'traveling_merchant';
-  sellerId?: number;
+  sellerId?: string | number;
   itemType: 'material' | 'service' | 'rare' | 'building_upgrade' | 'boost' | 'decoration';
   quantity: number;
   icon: string;

@@ -69,19 +69,32 @@ export default function HappinessAnalytics({
     const contributors: HappinessContributor[] = [];
     
     unlockedNeighbors.forEach(neighbor => {
-      const hasPreference = buildings.some(b => 
-        b.name.toLowerCase() === neighbor.likes.toLowerCase() &&
-        grid.some(g => g?.id === b.id)
-      );
+      const hasPreference = buildings.some(b => {
+        if (neighbor.likes && Array.isArray(neighbor.likes)) {
+          return neighbor.likes.some(like => typeof like === 'string' && b.name && typeof b.name === 'string' && b.name.toLowerCase() === like.toLowerCase()) &&
+            grid.some(g => g?.id === b.id);
+        } else if (neighbor.likes && typeof neighbor.likes === 'string') {
+          return b.name && typeof b.name === 'string' && neighbor.likes && typeof neighbor.likes === 'string' && b.name.toLowerCase() === neighbor.likes.toLowerCase() &&
+            grid.some(g => g?.id === b.id);
+        }
+        return false;
+      });
       
-      const hasDislike = buildings.some(b => 
-        b.name.toLowerCase() === neighbor.dislikes.toLowerCase() &&
-        grid.some(g => g?.id === b.id)
-      );
+      const hasDislike = buildings.some(b => {
+        if (neighbor.dislikes && Array.isArray(neighbor.dislikes)) {
+          return neighbor.dislikes.some(dislike => typeof dislike === 'string' && b.name && typeof b.name === 'string' && b.name.toLowerCase() === dislike.toLowerCase()) &&
+            grid.some(g => g?.id === b.id);
+        } else if (neighbor.dislikes && typeof neighbor.dislikes === 'string') {
+          return b.name && typeof b.name === 'string' && neighbor.dislikes && typeof neighbor.dislikes === 'string' && b.name.toLowerCase() === neighbor.dislikes.toLowerCase() &&
+            grid.some(g => g?.id === b.id);
+        }
+        return false;
+      });
       
       if (hasPreference) {
+        const likesDisplay = Array.isArray(neighbor.likes) ? neighbor.likes.join(', ') : neighbor.likes;
         contributors.push({
-          name: `${neighbor.name} (likes ${neighbor.likes})`,
+          name: `${neighbor.name} (likes ${likesDisplay})`,
           value: 10,
           type: 'neighbor' as const,
         });

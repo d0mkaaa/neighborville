@@ -1,20 +1,40 @@
 import React from 'react';
 import Footer from './Footer';
 import { motion } from 'framer-motion';
+import Navbar from './Navbar';
+import { useAuth } from '../../context/AuthContext';
 
 interface AppLayoutProps {
   header?: React.ReactNode;
   children: React.ReactNode;
   showFooter?: boolean;
+  showNavbar?: boolean;
   timeOfDay?: 'morning' | 'day' | 'evening' | 'night';
+  onShowLeaderboard?: () => void;
+  onShowProfileSettings?: () => void;
+  onShowLogin?: () => void;
+  onLogout?: () => void;
+  isInGame?: boolean;
+  onExitGame?: () => void;
+  onStartFreshGame?: () => void;
 }
 
 export default function AppLayout({ 
   header, 
   children, 
   showFooter = true,
-  timeOfDay = 'day'
+  showNavbar = true,
+  timeOfDay = 'day',
+  onShowLeaderboard = () => {},
+  onShowProfileSettings = () => {},
+  onShowLogin = () => {},
+  onLogout = () => {},
+  isInGame = false,
+  onExitGame,
+  onStartFreshGame
 }: AppLayoutProps) {
+  const { logout } = useAuth();
+  
   const getBackgroundGradient = () => {
     switch (timeOfDay) {
       case 'morning':
@@ -28,6 +48,11 @@ export default function AppLayout({
       default:
         return 'from-emerald-100/80 via-cyan-100/80 to-blue-100/80';
     }
+  };
+
+  const handleLogout = () => {
+    logout();
+    onLogout();
   };
 
   return (
@@ -48,6 +73,25 @@ export default function AppLayout({
       </motion.div>
 
       <div className="relative z-10 min-h-screen backdrop-blur-[2px] flex flex-col">
+        {showNavbar && (
+          <motion.div 
+            initial={{ y: -50, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ duration: 0.5 }}
+            className="sticky top-0 z-20"
+          >
+            <Navbar 
+              onShowLeaderboard={onShowLeaderboard}
+              onShowProfileSettings={onShowProfileSettings}
+              onShowLogin={onShowLogin}
+              onLogout={handleLogout}
+              isInGame={isInGame}
+              onExitGame={onExitGame}
+              onStartFreshGame={onStartFreshGame}
+            />
+          </motion.div>
+        )}
+        
         {header && (
           <motion.div 
             initial={{ y: -50, opacity: 0 }}

@@ -1,6 +1,8 @@
 import type { Achievement } from "../types/game";
 
 export const ACHIEVEMENTS: Achievement[] = [
+  // original achievements
+  
   { 
     id: 'first_building', 
     title: 'first steps', 
@@ -98,6 +100,117 @@ export const ACHIEVEMENTS: Achievement[] = [
     description: 'unlock 5 neighbors', 
     completed: false,
     xpReward: 45
+  },
+  
+  // season achievements
+  { 
+    id: 'first_season_change', 
+    title: 'changing seasons', 
+    description: 'experience your first season change', 
+    completed: false,
+    xpReward: 20
+  },
+  { 
+    id: 'full_year', 
+    title: 'full cycle', 
+    description: 'complete a full year (all four seasons)', 
+    completed: false,
+    xpReward: 100
+  },
+  { 
+    id: 'spring_event', 
+    title: 'spring celebration', 
+    description: 'participate in a spring seasonal event', 
+    completed: false,
+    xpReward: 25
+  },
+  { 
+    id: 'summer_event', 
+    title: 'summer fun', 
+    description: 'participate in a summer seasonal event', 
+    completed: false,
+    xpReward: 25
+  },
+  { 
+    id: 'autumn_event', 
+    title: 'autumn festivities', 
+    description: 'participate in an autumn seasonal event', 
+    completed: false,
+    xpReward: 25
+  },
+  { 
+    id: 'winter_event', 
+    title: 'winter wonderland', 
+    description: 'participate in a winter seasonal event', 
+    completed: false,
+    xpReward: 25
+  },
+  { 
+    id: 'all_season_events', 
+    title: 'seasonal expert', 
+    description: 'participate in events from all four seasons', 
+    completed: false,
+    xpReward: 75
+  },
+  
+  // building upgrade achievements
+  { 
+    id: 'first_upgrade', 
+    title: 'home improvement', 
+    description: 'upgrade your first building', 
+    completed: false,
+    xpReward: 30
+  },
+  { 
+    id: 'five_upgrades', 
+    title: 'renovation master', 
+    description: 'install 5 building upgrades', 
+    completed: false,
+    xpReward: 50
+  },
+  { 
+    id: 'eco_friendly', 
+    title: 'environmentalist', 
+    description: 'install 3 eco-friendly upgrades', 
+    completed: false,
+    xpReward: 40
+  },
+  
+  // puzzle achievements
+  { 
+    id: 'memory_master', 
+    title: 'memory master', 
+    description: 'complete 5 memory puzzles', 
+    completed: false,
+    xpReward: 30
+  },
+  { 
+    id: 'sequence_master', 
+    title: 'sequence master', 
+    description: 'complete 5 sequence puzzles', 
+    completed: false,
+    xpReward: 30
+  },
+  { 
+    id: 'connect_master', 
+    title: 'blueprint master', 
+    description: 'complete 5 connect puzzles', 
+    completed: false,
+    xpReward: 30
+  },
+  { 
+    id: 'rotation_master', 
+    title: 'rotation master', 
+    description: 'complete 5 rotation puzzles', 
+    completed: false,
+    xpReward: 30
+  },
+  { 
+    id: 'hard_mode', 
+    title: 'challenge seeker', 
+    description: 'complete 3 puzzles on hard difficulty', 
+    completed: false,
+    xpReward: 60
   },
   { 
     id: 'full_grid', 

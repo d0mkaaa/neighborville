@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { User, Save, Award, AlertCircle, Calendar, Clock, Settings, Play, Pause, TrendingUp } from 'lucide-react';
+import { User, Save, Award, AlertCircle, Calendar, Clock, Settings, Play, Pause, TrendingUp, Volume2, VolumeX } from 'lucide-react';
 import ProgressBar from './ProgressBar';
 import Button from '../ui/Button';
 import WeatherForecast from './WeatherForecast';
@@ -11,6 +11,7 @@ interface GameHeaderProps {
   playerName: string;
   coins: number;
   happiness: number;
+  energy: number;
   day: number;
   level: number;
   experience: number;
@@ -28,6 +29,7 @@ interface GameHeaderProps {
   onShowSettings: () => void;
   onShowTutorial: () => void;
   onShowAchievements: () => void;
+  onLogout?: () => void;
   onToggleTimePause: () => void;
   onTimeChange: (newTime: number, newTimeOfDay: TimeOfDay) => void;
   onShowHappinessAnalytics: () => void;
@@ -37,12 +39,17 @@ interface GameHeaderProps {
   onPlayerNameClick?: () => void;
   autoSaving?: boolean;
   lastSaveTime?: Date | null;
+  onProfileClick: () => void;
+  isMusicPlaying: boolean;
+  onToggleMusic: () => void;
+  onSaveGame?: () => void;
 }
 
 export default function GameHeader({
   playerName,
   coins,
   happiness,
+  energy,
   day,
   level,
   experience,
@@ -68,7 +75,12 @@ export default function GameHeader({
   onShowCoinHistory,
   onPlayerNameClick,
   autoSaving,
-  lastSaveTime
+  lastSaveTime,
+  onProfileClick,
+  isMusicPlaying,
+  onToggleMusic,
+  onLogout,
+  onSaveGame
 }: GameHeaderProps) {
   const getTimeOfDayColor = () => {
     switch(timeOfDay) {
@@ -257,6 +269,16 @@ export default function GameHeader({
                 />
               )}
             </div>
+            
+            {onSaveGame && (
+              <button 
+                onClick={onSaveGame}
+                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
+                title="Save Game"
+              >
+                <Save size={18} className="text-emerald-600" />
+              </button>
+            )}
             
             <Button
               variant="secondary"

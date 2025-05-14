@@ -6,8 +6,8 @@ import type { Building, Neighbor } from "../../types/game";
 type ResidentAssignmentProps = {
   neighbors: Neighbor[];
   grid: (Building | null)[];
-  onAssignResident: (neighborId: number, houseIndex: number) => void;
-  onRemoveResident: (neighborId: number) => void;
+  onAssignResident: (neighborId: string | number, houseIndex: number) => void;
+  onRemoveResident: (neighborId: string | number) => void;
 };
 
 export default function ResidentAssignment({
@@ -17,7 +17,7 @@ export default function ResidentAssignment({
   onRemoveResident
 }: ResidentAssignmentProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [selectedNeighbor, setSelectedNeighbor] = useState<number | null>(null);
+  const [selectedNeighbor, setSelectedNeighbor] = useState<string | number | null>(null);
 
   const availableNeighbors = neighbors.filter(n => n.unlocked && !n.hasHome);
   const housedNeighbors = neighbors.filter(n => n.unlocked && n.hasHome);
