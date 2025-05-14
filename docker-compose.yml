@@ -1,28 +1,23 @@
 services:
   neighborville:
-    build:
-      context: .
-      args:
-        - VITE_API_URL=${VITE_API_URL}
-        - VITE_WS_URL=${VITE_WS_URL}
-    container_name: neighborville-frontend
-    expose:
-      - "80"
-    env_file:
-      - .env
+    build: .
+    container_name: neighborville
+    ports:
+      - "80:80"
+      - "443:443"
     environment:
       - NODE_ENV=production
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - /etc/nginx/ssl:/etc/nginx/ssl:ro
     restart: unless-stopped
-    depends_on:
-      - api
   
   api:
     build:
       context: ./server
       dockerfile: Dockerfile
     container_name: neighborville-api
-    expose:
-      - "3001"
+    network_mode: "host"
     env_file:
       - .env
     environment:
@@ -35,8 +30,8 @@ services:
       - MAILTRAP_PASS=${MAILTRAP_PASS}
       - EMAIL_FROM=${EMAIL_FROM}
       - EMAIL_FROM_NAME=${EMAIL_FROM_NAME}
-      - MONGO_URI=mongodb://mongo:27017/neighborville
-      - REDIS_URI=redis://redis:6379
+      - MONGO_URI=mongodb://localhost:27017/neighborville
+      - REDIS_URI=redis://localhost:6379
       - JWT_SECRET=${JWT_SECRET}
       - COOKIE_SECRET=${COOKIE_SECRET}
     restart: unless-stopped
@@ -44,25 +39,10 @@ services:
       - mongo
       - redis
 
-  nginx:
-    image: nginx:alpine
-    container_name: neighborville-nginx
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - /etc/nginx/ssl:/etc/nginx/ssl:ro
-    restart: unless-stopped
-    depends_on:
-      - api
-      - neighborville
-      
   mongo:
     image: mongo:latest
     container_name: neighborville-mongo
-    expose:
-      - "27017"
+    network_mode: "host"
     volumes:
       - mongo-data:/data/db
     restart: unless-stopped
@@ -72,8 +52,7 @@ services:
   redis:
     image: redis:alpine
     container_name: neighborville-redis
-    expose:
-      - "6379"
+    network_mode: "host"
     volumes:
       - redis-data:/data
     restart: unless-stopped
@@ -84,10 +63,6 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     command: --cleanup --interval 30
     restart: unless-stopped
-
-networks:
-  default:
-    name: neighborville-network
 
 volumes:
   mongo-data:
