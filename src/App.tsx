@@ -304,7 +304,7 @@ function App() {
       <AnimatePresence>
         {showAuthModal && (
           <AuthModal 
-            onClose={() => setShowAuthModal(false)}
+            onClose={() => {}}
             onLogin={(userData) => {
               login({
                 ...userData,

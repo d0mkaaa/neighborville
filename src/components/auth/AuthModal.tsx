@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Mail, Lock, User, ArrowRight, CheckCircle, Play, RefreshCcw, AlertCircle } from 'lucide-react';
+import { Mail, Lock, User, ArrowRight, CheckCircle, Play, RefreshCcw, AlertCircle } from 'lucide-react';
 import { sendVerificationEmail } from '../../services/emailService';
 import { verifyEmail } from '../../services/userService';
 
@@ -106,22 +106,17 @@ export default function AuthModal({ onClose, onLogin }: AuthModalProps) {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
-      onClick={onClose}
     >
       <motion.div
         initial={{ scale: 0.9, opacity: 0, y: 20 }}
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.9, opacity: 0, y: 20 }}
         className="bg-white rounded-xl shadow-xl max-w-md w-full overflow-hidden"
-        onClick={e => e.stopPropagation()}
       >
         <div className="p-4 bg-gradient-to-r from-blue-500 to-indigo-600 text-white flex justify-between items-center">
           <h2 className="text-lg font-medium">
             Welcome to NeighborVille
           </h2>
-          <button onClick={onClose} className="text-white/80 hover:text-white">
-            <X size={20} />
-          </button>
         </div>
 
         <div className="p-6">

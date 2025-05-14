@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Hammer, Shuffle, Rotate3D, CheckCircle, Timer } from "lucide-react";
+import { X, Hammer, Shuffle, Brain, CheckCircle, Timer, Share2, Zap } from "lucide-react";
 import type { Building } from "../../types/game";
 
-type PuzzleType = 'memory' | 'sequence' | 'connect' | 'rotation';
+type PuzzleType = 'memory' | 'sequence' | 'connect';
 
 type BuildingModalProps = {
   building: Building;
@@ -19,7 +19,7 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
   const [phase, setPhase] = useState<'start' | 'puzzle' | 'building' | 'complete'>('start');
   const [difficultyLevel, setDifficultyLevel] = useState<1|2|3>(1);
   const [puzzleType] = useState<PuzzleType>(() => {
-    const allTypes: PuzzleType[] = ['memory', 'sequence', 'connect', 'rotation'];
+    const allTypes: PuzzleType[] = ['memory', 'sequence', 'connect'];
     
     const completedPuzzleKey = `completed_puzzles_${building.id}`;
     const storedCompletedPuzzles = localStorage.getItem(completedPuzzleKey);
@@ -47,10 +47,6 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
   const [flippedCards, setFlippedCards] = useState<number[]>([]);
   const [matchedCards, setMatchedCards] = useState<number[]>([]);
   const [buildingProgress, setBuildingProgress] = useState(0);
-
-  const [rotationPieces, setRotationPieces] = useState<{id: number, rotation: number, correctRotation: number, image: string}[]>([]);
-  const [completedRotations, setCompletedRotations] = useState<number[]>([]);
-  const [totalRotationPieces, setTotalRotationPieces] = useState<number>(4);
   
   const [sequence, setSequence] = useState<number[]>([]);
   const [playerSequence, setPlayerSequence] = useState<number[]>([]);
@@ -63,7 +59,7 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
   const [requiredConnections, setRequiredConnections] = useState<number>(5);
   
   const [attempts, setAttempts] = useState(0);
-  const maxAttempts = puzzleType === 'memory' ? 999 : (puzzleType === 'rotation' ? 999 : 3 + difficultyLevel);
+  const maxAttempts = puzzleType === 'memory' ? 999 : 3 + difficultyLevel;
   
   useEffect(() => {
     if (puzzleType === 'memory') {
@@ -77,111 +73,21 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
       setSequence(seq);
     } else if (puzzleType === 'connect') {
       initializeConnectPuzzle();
-    } else if (puzzleType === 'rotation') {
-      initializeRotationPuzzle();
     }
   }, [puzzleType, difficultyLevel]);
   
   const initializeConnectPuzzle = () => {
-    const points = [];
-    const gridSize = 8;
-    const numPoints = 4 + difficultyLevel;
+    const numberOfPoints = 6 + difficultyLevel;
+    const pointsArray: {x: number, y: number}[] = [];
     
-    for (let i = 0; i < numPoints; i++) {
-      let x, y;
-      let validPosition = false;
-      
-      while (!validPosition) {
-        x = Math.floor(Math.random() * (gridSize - 2)) + 1;
-        y = Math.floor(Math.random() * (gridSize - 2)) + 1;
-        
-        validPosition = true;
-        
-        for (const point of points) {
-          const dist = Math.sqrt(Math.pow(point.x - x, 2) + Math.pow(point.y - y, 2));
-          if (dist < 2) { 
-            validPosition = false;
-            break;
-          }
-        }
-      }
-      
-      points.push({ x, y });
+    for (let i = 0; i < numberOfPoints; i++) {
+      const x = Math.floor(Math.random() * 80) + 10; 
+      const y = Math.floor(Math.random() * 80) + 10; 
+      pointsArray.push({ x, y });
     }
     
-    setConnectPoints(points);
-    setRequiredConnections(numPoints - 1);
-  };
-  
-  useEffect(() => {
-    if (phase === 'building') {
-      const timer = setInterval(() => {
-        setBuildingProgress(prev => {
-          if (prev >= 100) {
-            clearInterval(timer);
-            setPhase('complete');
-            return 100;
-          }
-          return prev + 2;
-        });
-      }, 50);
-      
-      return () => clearInterval(timer);
-    }
-  }, [phase]);
-  
-  const initializeRotationPuzzle = () => {
-    const images = ['🔨', '🧰', '🔧', '🪚', '🧹', '⚙️'];
-    const pieces = [];
-    
-    const numPieces = 2 + difficultyLevel * 2;
-    setTotalRotationPieces(numPieces);
-    
-    for (let i = 0; i < numPieces; i++) {
-      const correctRotation = Math.floor(Math.random() * 4) * 90;
-      pieces.push({
-        id: i,
-        rotation: Math.floor(Math.random() * 4) * 90,
-        correctRotation,
-        image: images[i % images.length]
-      });
-    }
-    
-    setRotationPieces(pieces);
-    setCompletedRotations([]);
-  };
-  
-  const handleRotationPiece = (index: number) => {
-    const updatedPieces = [...rotationPieces];
-    const piece = updatedPieces[index];
-    
-    piece.rotation = (piece.rotation + 90) % 360;
-    
-    if (piece.rotation === piece.correctRotation && !completedRotations.includes(index)) {
-      const newCompleted = [...completedRotations, index];
-      setCompletedRotations(newCompleted);
-      
-      if (newCompleted.length === totalRotationPieces) {
-        const completedPuzzleKey = `completed_puzzles_${building.id}`;
-        const storedPuzzles = localStorage.getItem(completedPuzzleKey);
-        let completedPuzzles: PuzzleType[] = [];
-        
-        try {
-          completedPuzzles = storedPuzzles ? JSON.parse(storedPuzzles) : [];
-        } catch (e) {
-          console.error('Error parsing completed puzzles:', e);
-        }
-        
-        if (!completedPuzzles.includes(puzzleType)) {
-          completedPuzzles.push(puzzleType);
-          localStorage.setItem(completedPuzzleKey, JSON.stringify(completedPuzzles));
-        }
-        
-        setTimeout(() => setPhase('building'), 500);
-      }
-    }
-    
-    setRotationPieces(updatedPieces);
+    setConnectPoints(pointsArray);
+    setRequiredConnections(Math.floor(numberOfPoints / 2));
   };
   
   const handleMemoryCardClick = (index: number) => {
@@ -300,49 +206,57 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
     }
   };
   
-  const handleConnectPoint = (index: number) => {
+  const handlePointClick = (index: number) => {
     if (selectedPoint === null) {
       setSelectedPoint(index);
-    } else if (selectedPoint === index) {
+    } else if (selectedPoint !== index) {
+      setConnectLines([...connectLines, { start: selectedPoint, end: index }]);
+      setCompletedConnections(completedConnections + 1);
       setSelectedPoint(null);
-    } else {
-      const alreadyConnected = connectLines.some(
-        line => (line.start === selectedPoint && line.end === index) || 
-                (line.start === index && line.end === selectedPoint)
-      );
       
-      if (!alreadyConnected) {
-        setConnectLines([...connectLines, { start: selectedPoint, end: index }]);
-        setCompletedConnections(prev => prev + 1);
+      if (completedConnections + 1 >= requiredConnections) {
+        const completedPuzzleKey = `completed_puzzles_${building.id}`;
+        const storedPuzzles = localStorage.getItem(completedPuzzleKey);
+        let completedPuzzles: PuzzleType[] = [];
         
-        if (completedConnections + 1 >= requiredConnections) {
-          const completedPuzzleKey = `completed_puzzles_${building.id}`;
-          const storedPuzzles = localStorage.getItem(completedPuzzleKey);
-          let completedPuzzles: PuzzleType[] = [];
-          
-          try {
-            completedPuzzles = storedPuzzles ? JSON.parse(storedPuzzles) : [];
-          } catch (e) {
-            console.error('Error parsing completed puzzles:', e);
-          }
-          
-          if (!completedPuzzles.includes(puzzleType)) {
-            completedPuzzles.push(puzzleType);
-            localStorage.setItem(completedPuzzleKey, JSON.stringify(completedPuzzles));
-          }
-          
-          setTimeout(() => setPhase('building'), 500);
+        try {
+          completedPuzzles = storedPuzzles ? JSON.parse(storedPuzzles) : [];
+        } catch (e) {
+          console.error('Error parsing completed puzzles:', e);
         }
+        
+        if (!completedPuzzles.includes(puzzleType)) {
+          completedPuzzles.push(puzzleType);
+          localStorage.setItem(completedPuzzleKey, JSON.stringify(completedPuzzles));
+        }
+        
+        setTimeout(() => setPhase('building'), 500);
       }
-      
+    } else {
       setSelectedPoint(null);
     }
   };
   
-  const handleComplete = () => {
-    onComplete(building, selectedIndex);
-    onClose();
-  };
+  useEffect(() => {
+    if (phase === 'building') {
+      const interval = setInterval(() => {
+        setBuildingProgress(prev => {
+          const newProgress = prev + 5;
+          if (newProgress >= 100) {
+            clearInterval(interval);
+            setTimeout(() => {
+              setPhase('complete');
+              onComplete(building, selectedIndex);
+            }, 500);
+            return 100;
+          }
+          return newProgress;
+        });
+      }, 100);
+      
+      return () => clearInterval(interval);
+    }
+  }, [phase, building, onComplete, selectedIndex]);
   
   return (
     <motion.div
@@ -367,7 +281,8 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
         </div>
         
         <div className="p-6">
-          <AnimatePresence mode="wait">
+          <div className="space-y-4">
+            
             {phase === 'start' && (
               <motion.div
                 key="start"
@@ -494,52 +409,6 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
                 </button>
               </motion.div>
             )}
-
-            {phase === 'puzzle' && puzzleType === 'rotation' && (
-              <motion.div
-                key="rotation"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-              >
-                <h3 className="text-lg font-medium text-gray-800 mb-4 text-center">blueprint alignment</h3>
-                <p className="text-sm text-gray-600 mb-4 text-center">
-                  rotate the pieces to match the blueprint ({completedRotations.length}/{totalRotationPieces} pieces)
-                </p>
-                <div className="grid grid-cols-2 gap-3 mb-4">
-                  {rotationPieces.map((piece, index) => (
-                    <motion.div
-                      key={index}
-                      onClick={() => handleRotationPiece(index)}
-                      style={{
-                        transform: `rotate(${piece.rotation}deg)`,
-                        backgroundColor: completedRotations.includes(index) ? '#d1fae5' : '#f3f4f6',
-                        borderColor: completedRotations.includes(index) ? '#10b981' : '#e5e7eb'
-                      }}
-                      className="aspect-square rounded-lg flex items-center justify-center cursor-pointer border-2 transition-all duration-300"
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                    >
-                      <span className="text-2xl">{piece.image}</span>
-                      {completedRotations.includes(index) && (
-                        <motion.div
-                          initial={{ scale: 0 }}
-                          animate={{ scale: 1 }}
-                          className="absolute inset-0 flex items-center justify-center"
-                        >
-                          <div className="absolute inset-0 bg-emerald-500 opacity-20 rounded-lg"></div>
-                          <CheckCircle className="text-emerald-500 opacity-80" size={20} />
-                        </motion.div>
-                      )}
-                    </motion.div>
-                  ))}
-                </div>
-                <div className="text-center text-sm text-gray-600 mb-4">
-                  <p>Click on a piece to rotate it clockwise</p>
-                  <p>Difficulty: {difficultyLevel === 1 ? 'Easy' : difficultyLevel === 2 ? 'Medium' : 'Hard'}</p>
-                </div>
-              </motion.div>
-            )}
             
             {phase === 'puzzle' && puzzleType === 'connect' && (
               <motion.div
@@ -548,79 +417,64 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
               >
-                <h3 className="text-lg font-medium text-gray-800 mb-4 text-center">building blueprint</h3>
+                <h3 className="text-lg font-medium text-gray-800 mb-4 text-center">connect the lines</h3>
                 <p className="text-sm text-gray-600 mb-4 text-center">
-                  connect the points to complete the blueprint ({completedConnections}/{requiredConnections} lines)
+                  create {requiredConnections} connections ({completedConnections}/{requiredConnections})
                 </p>
-                <div className="flex justify-center items-center mb-6">
-                  <div 
-                    className="w-64 h-64 bg-blue-50 rounded-lg relative"
-                    style={{ backgroundImage: 'linear-gradient(#e5e7eb 1px, transparent 1px), linear-gradient(90deg, #e5e7eb 1px, transparent 1px)',
-                             backgroundSize: '32px 32px' }}
-                  >
-                    <svg width="100%" height="100%" style={{ position: 'absolute', top: 0, left: 0 }}>
-                      {connectLines.map((line, idx) => {
-                        const start = connectPoints[line.start];
-                        const end = connectPoints[line.end];
-                        
-                        return (
-                          <line 
-                            key={idx}
-                            x1={start.x * 32} 
-                            y1={start.y * 32} 
-                            x2={end.x * 32} 
-                            y2={end.y * 32}
-                            stroke="#3b82f6" 
-                            strokeWidth="3"
-                          />
-                        );
-                      })}
-                      
-                      {selectedPoint !== null && (
-                        <line 
-                          x1={connectPoints[selectedPoint].x * 32} 
-                          y1={connectPoints[selectedPoint].y * 32} 
-                          x2={(connectPoints[selectedPoint].x * 32) + Math.random() * 0.001}
-                          y2={(connectPoints[selectedPoint].y * 32) + Math.random() * 0.001}
-                          stroke="#3b82f6" 
-                          strokeWidth="3"
-                          strokeDasharray="4"
-                          className="animate-pulse"
-                        />
-                      )}
-                    </svg>
-                    
-                    {connectPoints.map((point, idx) => (
-                      <motion.div
-                        key={idx}
-                        className={`absolute w-6 h-6 -ml-3 -mt-3 rounded-full flex items-center justify-center cursor-pointer ${
-                          selectedPoint === idx ? 'bg-emerald-500' : 'bg-blue-500 hover:bg-blue-600'
-                        }`}
-                        style={{ left: point.x * 32, top: point.y * 32 }}
-                        whileHover={{ scale: 1.2 }}
-                        whileTap={{ scale: 0.9 }}
-                        onClick={() => handleConnectPoint(idx)}
-                      >
-                        <span className="text-white text-xs font-bold">{idx + 1}</span>
-                      </motion.div>
+                <div 
+                  className="relative bg-slate-100 rounded-lg h-80 mb-4"
+                  style={{ touchAction: 'none' }}
+                >
+                  <svg className="absolute inset-0 w-full h-full pointer-events-none">
+                    {connectLines.map((line, i) => (
+                      <line
+                        key={i}
+                        x1={`${connectPoints[line.start].x}%`}
+                        y1={`${connectPoints[line.start].y}%`}
+                        x2={`${connectPoints[line.end].x}%`}
+                        y2={`${connectPoints[line.end].y}%`}
+                        stroke="#10b981"
+                        strokeWidth="3"
+                      />
                     ))}
-                  </div>
+                    
+                    {selectedPoint !== null && (
+                      <line
+                        x1={`${connectPoints[selectedPoint].x}%`}
+                        y1={`${connectPoints[selectedPoint].y}%`}
+                        x2="50%"
+                        y2="50%"
+                        stroke="#10b981"
+                        strokeWidth="2"
+                        strokeDasharray="5,5"
+                        className="pointer-events-none"
+                        style={{ 
+                          opacity: 0.6,
+                          transform: "translate(-50%, -50%)" 
+                        }}
+                      />
+                    )}
+                  </svg>
+                  
+                  {connectPoints.map((point, i) => (
+                    <motion.div
+                      key={i}
+                      whileHover={{ scale: 1.2 }}
+                      onClick={() => handlePointClick(i)}
+                      className={`absolute w-4 h-4 rounded-full -translate-x-1/2 -translate-y-1/2 cursor-pointer ${
+                        selectedPoint === i ? 'bg-emerald-400 ring-4 ring-emerald-200' : 'bg-emerald-500'
+                      }`}
+                      style={{
+                        left: `${point.x}%`,
+                        top: `${point.y}%`,
+                      }}
+                    />
+                  ))}
                 </div>
                 
-                <div className="text-center">
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => {
-                      setConnectLines([]);
-                      setSelectedPoint(null);
-                      setCompletedConnections(0);
-                    }}
-                    className="px-4 py-2 bg-gray-100 rounded-lg text-gray-600 hover:bg-gray-200"
-                  >
-                    Reset Connections
-                  </motion.button>
-                </div>
+                <p className="text-xs text-gray-500 text-center">
+                  Click on connection points to draw structural lines
+                </p>
               </motion.div>
             )}
             
@@ -630,52 +484,58 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="text-center"
+                className="text-center py-4"
               >
-                <div className="w-24 h-24 mx-auto mb-4 relative">
-                  <motion.div
-                    animate={{ rotate: [0, 360] }}
-                    transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                    className="absolute inset-0 flex items-center justify-center"
-                  >
-                    <Hammer size={48} className="text-emerald-600" />
-                  </motion.div>
-                </div>
-                <h3 className="text-lg font-medium text-gray-800 mb-2">building in progress...</h3>
-                <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
-                  <motion.div
-                    className="bg-emerald-500 h-2 rounded-full"
+                <h3 className="text-lg font-medium text-gray-800 mb-4">construction in progress...</h3>
+                
+                <div className="relative h-6 bg-gray-200 rounded-full mb-6 overflow-hidden">
+                  <div 
+                    className="absolute left-0 top-0 h-full bg-gradient-to-r from-emerald-400 to-emerald-500 transition-all duration-300"
                     style={{ width: `${buildingProgress}%` }}
                   />
                 </div>
-                <p className="text-sm text-gray-600">{buildingProgress}% complete</p>
+                
+                <div className="flex justify-center">
+                  <motion.div 
+                    animate={{ rotate: 360 }}
+                    transition={{ repeat: Infinity, duration: 2, ease: "linear" }}
+                    className="bg-emerald-100 p-3 rounded-full"
+                  >
+                    <Hammer size={32} className="text-emerald-600" />
+                  </motion.div>
+                </div>
               </motion.div>
             )}
             
             {phase === 'complete' && (
               <motion.div
                 key="complete"
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0 }}
-                className="text-center"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="flex flex-col items-center py-6"
               >
-                <div className="w-24 h-24 mx-auto mb-4 bg-emerald-100 rounded-full flex items-center justify-center">
-                  <CheckCircle size={48} className="text-emerald-600" />
-                </div>
-                <h3 className="text-lg font-medium text-gray-800 mb-2">construction complete!</h3>
-                <p className="text-gray-600 mb-6">{building.name} is now ready</p>
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={handleComplete}
-                  className="w-full py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 font-medium"
+                <motion.div
+                  initial={{ scale: 0.8, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ type: "spring", stiffness: 200, damping: 10 }}
+                  className="bg-emerald-100 p-4 rounded-full mb-4"
                 >
-                  place building
-                </motion.button>
+                  <CheckCircle size={48} className="text-emerald-500" />
+                </motion.div>
+                
+                <h3 className="text-xl font-medium text-gray-800 mb-2">Construction Complete!</h3>
+                <p className="text-gray-600 mb-6">You've successfully built a new building</p>
+                
+                <button 
+                  onClick={onClose}
+                  className="px-6 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors"
+                >
+                  Continue
+                </button>
               </motion.div>
             )}
-          </AnimatePresence>
+            
+          </div>
         </div>
       </motion.div>
     </motion.div>
