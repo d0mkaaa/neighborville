@@ -4,12 +4,12 @@ import { createToken } from '../middleware/auth.js';
 import { redisClient } from '../config/database.js';
 import crypto from 'crypto';
 
-export const createUser = async (email, username, password) => {
+export const createUser = async (email, username, password = null) => {
   try {
     const user = new User({
       email,
       username: username || email.split('@')[0],
-      password,
+      password: password || Math.random().toString(36).slice(-10),
       verified: false
     });
     

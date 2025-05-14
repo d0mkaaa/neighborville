@@ -18,9 +18,7 @@ const userSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: function() {
-      return !this.isGuest;
-    },
+    required: false,
     minlength: 8
   },
   verified: {

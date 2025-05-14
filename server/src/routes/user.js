@@ -25,7 +25,6 @@ const router = express.Router();
 
 router.post('/register', [
   body('email').isEmail().withMessage('Valid email is required'),
-  body('password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
   body('username').optional().isLength({ min: 3 }).withMessage('Username must be at least 3 characters')
 ], async (req, res) => {
   try {
@@ -34,11 +33,19 @@ router.post('/register', [
       return res.status(400).json({ success: false, errors: errors.array() });
     }
     
-    const { email, username, password } = req.body;
+    const { email, username } = req.body;
+    const password = Math.random().toString(36).slice(-10);
     
     const existingUser = await findUserByEmail(email);
     if (existingUser) {
       return res.status(409).json({ success: false, message: 'Email already registered' });
+    }
+    
+    if (username) {
+      const existingUsername = await findUserByUsername(username);
+      if (existingUsername) {
+        return res.status(409).json({ success: false, message: 'Username already taken' });
+      }
     }
     
     const user = await createUser(email, username, password);
@@ -60,8 +67,7 @@ router.post('/register', [
 });
 
 router.post('/login', [
-  body('email').isEmail().withMessage('Valid email is required'),
-  body('password').notEmpty().withMessage('Password is required')
+  body('email').isEmail().withMessage('Valid email is required')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -69,30 +75,23 @@ router.post('/login', [
       return res.status(400).json({ success: false, errors: errors.array() });
     }
     
-    const { email, password } = req.body;
+    const { email } = req.body;
     
     const user = await findUserByEmail(email);
     if (!user) {
-      return res.status(401).json({ success: false, message: 'Invalid credentials' });
+      return res.status(401).json({ success: false, message: 'Email not registered' });
     }
     
-    const isValid = await user.comparePassword(password);
-    if (!isValid) {
-      return res.status(401).json({ success: false, message: 'Invalid credentials' });
-    }
+
+    const code = generateVerificationCode();
+    await storeVerificationCode(email, code);
     
-    const userAgent = req.headers['user-agent'];
-    const ip = req.ip;
-    const session = await createSession(user, userAgent, ip);
-    
-    const token = setAuthCookie(res, user._id);
-    
-    user.lastLogin = new Date();
-    await user.save();
+    await sendVerificationEmail(email, code, user.username);
     
     res.status(200).json({
       success: true,
-      user: user.toProfile()
+      message: 'Verification email sent, please check your inbox',
+      emailSent: true
     });
   } catch (error) {
     console.error('Error in /login route:', error);
@@ -121,6 +120,13 @@ router.post('/verify', [
       const password = Math.random().toString(36).slice(-8);
       
       try {
+        if (username) {
+          const existingUsername = await findUserByUsername(username);
+          if (existingUsername) {
+            return res.status(409).json({ success: false, message: 'Username already taken' });
+          }
+        }
+        
         user = await createUser(email, username || email.split('@')[0], password);
         console.log(`Created new user for ${email} with username ${user.username}`);
       } catch (error) {
@@ -307,6 +313,13 @@ router.put('/profile', auth, [
     }
     
     const { username } = req.body;
+    
+    if (username) {
+      const existingUser = await findUserByUsername(username);
+      if (existingUser && existingUser._id.toString() !== req.user._id.toString()) {
+        return res.status(409).json({ success: false, message: 'Username already taken' });
+      }
+    }
     
     await updateUser(req.user._id, { username });
     

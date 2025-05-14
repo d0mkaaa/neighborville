@@ -1,6 +1,6 @@
 import express from 'express';
 import { sendVerificationEmail, generateVerificationCode } from '../services/email.js';
-import { storeVerificationCode, findUserByEmail, createUser } from '../services/userService.js';
+import { storeVerificationCode, findUserByEmail, createUser, findUserByUsername } from '../services/userService.js';
 
 const router = express.Router();
 
@@ -17,6 +17,11 @@ router.post('/send-verification', async (req, res) => {
     
     if (!existingUser && username) {
       try {
+        const existingUsername = await findUserByUsername(username);
+        if (existingUsername) {
+          return res.status(409).json({ success: false, message: 'Username already taken' });
+        }
+        
         const tempPassword = Math.random().toString(36).slice(-8);
         await createUser(email, username, tempPassword);
         console.log(`Pre-created user for ${email} with username ${username}`);
