@@ -1,6 +1,6 @@
 import type { GameProgress } from '../types/game';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API_BASE_URL = import.meta.env.VITE_API_URL;
 
 export const saveGameToServer = async (gameData: GameProgress): Promise<boolean> => {
   try {
