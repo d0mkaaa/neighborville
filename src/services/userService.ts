@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL;
+import { API_URL } from '../config/apiConfig';
 
 export interface User {
   id: string;
@@ -39,7 +39,7 @@ export const register = async (
   username?: string
 ): Promise<AuthResponse> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/user/register`, {
+    const response = await fetch(`${API_URL}/api/user/register`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -66,7 +66,26 @@ export const login = async (
   password: string
 ): Promise<AuthResponse> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/user/login`, {
+    const checkUser = await fetch(`${API_URL}/api/user/check-registered`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ email })
+    }).catch(() => null);
+    
+    if (!checkUser || !checkUser.ok) {
+      const data = checkUser ? await checkUser.json() : null;
+      
+      if (data && data.exists === false) {
+        return {
+          success: false,
+          message: 'This email is not registered. Please create an account first.'
+        };
+      }
+    }
+    
+    const response = await fetch(`${API_URL}/api/user/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -79,6 +98,11 @@ export const login = async (
     });
 
     const data = await response.json();
+    
+    if (data.success) {
+      localStorage.setItem('neighborville_last_login', new Date().toISOString());
+    }
+    
     return data;
   } catch (error) {
     console.error('Error during login:', error);
@@ -91,7 +115,7 @@ export const login = async (
 
 export const logout = async (): Promise<boolean> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/user/logout`, {
+    const response = await fetch(`${API_URL}/api/user/logout`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -109,13 +133,22 @@ export const logout = async (): Promise<boolean> => {
 
 export const getCurrentUser = async (): Promise<User | null> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/user/me`, {
+    const response = await fetch(`${API_URL}/api/user/me`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json'
       },
       credentials: 'include'
     });
+    
+    if (response.status === 401) {
+      sessionStorage.removeItem('neighborville_playerName');
+      sessionStorage.removeItem('neighborville_is_guest');
+      window.dispatchEvent(new CustomEvent('auth:unauthorized', { 
+        detail: { message: 'Authentication required' }
+      }));
+      return null;
+    }
     
     if (!response.ok) {
       return null;
@@ -139,7 +172,7 @@ export const verifyEmail = async (
   code: string
 ): Promise<{ success: boolean; user?: any; message?: string }> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/user/verify`, {
+    const response = await fetch(`${API_URL}/api/user/verify`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -175,7 +208,7 @@ export const resendVerification = async (
   email: string
 ): Promise<boolean> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/user/resend-verification`, {
+    const response = await fetch(`${API_URL}/api/user/resend-verification`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -204,7 +237,7 @@ export const updateUserSettings = async (
       return false;
     }
     
-    const response = await fetch(`${API_BASE_URL}/api/user/${userId}/settings`, {
+    const response = await fetch(`${API_URL}/api/user/${userId}/settings`, {
       method: 'PUT',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -236,7 +269,7 @@ export const updateUser = async (
     
     const { username, ...allowedUpdates } = userData;
     
-    const response = await fetch(`${API_BASE_URL}/api/user/${userId}`, {
+    const response = await fetch(`${API_URL}/api/user/${userId}`, {
       method: 'PUT',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -255,7 +288,7 @@ export const updateUser = async (
 
 export const createGuestUser = async (): Promise<User> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/user/guest`, {
+    const response = await fetch(`${API_URL}/api/user/guest`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -265,7 +298,7 @@ export const createGuestUser = async (): Promise<User> => {
     const data = await response.json();
     
     if (data.success && data.token) {
-      localStorage.setItem('auth_token', data.token);
+      sessionStorage.setItem('auth_token', data.token);
     }
     
     return data.user;
@@ -292,7 +325,7 @@ export const createGuestUser = async (): Promise<User> => {
 
 export const getUserProfile = async (): Promise<User | null> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/user/profile`, {
+    const response = await fetch(`${API_URL}/api/user/profile`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json'
@@ -319,7 +352,7 @@ export const getUserProfile = async (): Promise<User | null> => {
 
 export const getUserSessions = async () => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/user/sessions`, {
+    const response = await fetch(`${API_URL}/api/user/sessions`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json'

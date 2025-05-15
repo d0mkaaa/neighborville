@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Medal, Trophy, Calendar, Home, User, Star, ArrowUpDown, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { API_URL } from "../../config/apiConfig";
 
 interface LeaderboardEntry {
   username: string;
@@ -31,7 +32,7 @@ export default function Leaderboard({ onClose, onViewProfile }: LeaderboardProps
       setError(null);
       
       try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/user/leaderboard?sort=${sortBy}&page=${page}&limit=10`, {
+        const response = await fetch(`${API_URL}/api/user/leaderboard?sort=${sortBy}&page=${page}&limit=10`, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json'

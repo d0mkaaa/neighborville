@@ -11,6 +11,7 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const isDevelopment = process.env.NODE_ENV === 'development';
 
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173,http://localhost:80,http://localhost,http://localhost:3000,http://127.0.0.1:5173,http://frontend:5173').split(',');
 
@@ -42,8 +43,8 @@ app.use(cors({
     
     console.log(`CORS request from origin: ${origin}`);
     
-    if (process.env.NODE_ENV !== 'production') {
-      console.log(`Development mode: allowing origin ${origin}`);
+    if (isDevelopment) {
+      console.log(`Development mode: allowing all origins`);
       return callback(null, true);
     }
     
@@ -71,22 +72,13 @@ app.get('/health', (req, res) => {
 
 app.get('/', (req, res) => {
   res.status(200).json({ 
-    message: 'NeighborVille API Server', 
+    message: 'neighborville API Server', 
     version: '1.0.0',
-    endpoints: [
-      { path: '/api/email/send-verification', method: 'POST', description: 'Send verification email' },
-      { path: '/api/user/register', method: 'POST', description: 'Register a new user' },
-      { path: '/api/user/login', method: 'POST', description: 'Login user' },
-      { path: '/api/user/verify', method: 'POST', description: 'Verify email address' },
-      { path: '/api/user/logout', method: 'POST', description: 'Logout user' },
-      { path: '/api/user/me', method: 'GET', description: 'Get current user profile' },
-      { path: '/api/user/resend-verification', method: 'POST', description: 'Resend verification email' },
-      { path: '/health', method: 'GET', description: 'Health check endpoint' }
-    ]
+    environment: isDevelopment ? 'development' : 'production'
   });
 });
 
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Server running in ${isDevelopment ? 'DEVELOPMENT' : 'PRODUCTION'} mode on port ${PORT}`);
   console.log(`Health check: http://localhost:${PORT}/health`);
 }); 

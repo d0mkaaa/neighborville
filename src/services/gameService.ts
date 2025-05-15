@@ -1,6 +1,5 @@
 import type { GameProgress } from '../types/game';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL;
+import { API_URL } from '../config/apiConfig';
 
 export const saveGameToServer = async (gameData: GameProgress): Promise<boolean> => {
   try {
@@ -10,7 +9,7 @@ export const saveGameToServer = async (gameData: GameProgress): Promise<boolean>
       return false;
     }
     
-    const response = await fetch(`${API_BASE_URL}/api/user/game/save`, {
+    const response = await fetch(`${API_URL}/api/user/game/save`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -23,6 +22,7 @@ export const saveGameToServer = async (gameData: GameProgress): Promise<boolean>
       const status = response.status;
       if (status === 401 || status === 403) {
         localStorage.setItem('neighborville_is_guest', 'true');
+        window.dispatchEvent(new CustomEvent('auth:unauthorized'));
         return false;
       }
       
@@ -55,7 +55,7 @@ export const loadGameFromServer = async (): Promise<{gameData: GameProgress | nu
       return { gameData: null, lastSave: null };
     }
     
-    const response = await fetch(`${API_BASE_URL}/api/user/game/load`, {
+    const response = await fetch(`${API_URL}/api/user/game/load`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json'

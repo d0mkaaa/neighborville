@@ -1,0 +1,87 @@
+services:
+  neighborville:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: neighborville-dev
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=${NODE_ENV}
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.dev.conf:/etc/nginx/nginx.conf:ro
+    restart: unless-stopped
+    networks:
+      - neighborville-dev-net
+  
+  api:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: neighborville-api-dev
+    expose:
+      - "3001"
+    ports:
+      - "3001:3001"
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=${NODE_ENV}
+      - PORT=3001
+      - ALLOWED_ORIGINS=http://localhost,http://localhost:80,http://localhost:5173
+      - MAILTRAP_HOST=${MAILTRAP_HOST}
+      - MAILTRAP_PORT=${MAILTRAP_PORT}
+      - MAILTRAP_USER=${MAILTRAP_USER}
+      - MAILTRAP_PASS=${MAILTRAP_PASS}
+      - EMAIL_FROM=${EMAIL_FROM}
+      - EMAIL_FROM_NAME=${EMAIL_FROM_NAME}
+      - MONGO_URI=mongodb://mongo:27017/neighborville
+      - REDIS_URI=redis://redis:6379
+      - JWT_SECRET=${JWT_SECRET}
+      - COOKIE_SECRET=${COOKIE_SECRET}
+    restart: unless-stopped
+    depends_on:
+      - mongo
+      - redis
+    networks:
+      - neighborville-dev-net
+    volumes:
+      - ./server:/app
+      - /app/node_modules
+
+  mongo:
+    image: mongo:latest
+    container_name: neighborville-mongo-dev
+    expose:
+      - "27017"
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-dev-data:/data/db
+    restart: unless-stopped
+    environment:
+      - MONGO_INITDB_DATABASE=neighborville
+    networks:
+      - neighborville-dev-net
+      
+  redis:
+    image: redis:alpine
+    container_name: neighborville-redis-dev
+    expose:
+      - "6379"
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-dev-data:/data
+    restart: unless-stopped
+    networks:
+      - neighborville-dev-net
+
+networks:
+  neighborville-dev-net:
+
+volumes:
+  mongo-dev-data:
+  redis-dev-data: 

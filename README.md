@@ -53,11 +53,18 @@ A city-building simulation game built for [Hack Club Neighborhood](https://neigh
 
 4. Open [http://localhost](http://localhost) in your browser
 
+### Production Mode
+
+In production, the application will use:
+
+1. The `VITE_API_URL` environment variable for API requests
+2. The CORS settings defined in `ALLOWED_ORIGINS` for server security
+
 ### Environment Variables
 
 The following environment variables are available:
 
-- `VITE_API_URL`: Your API server URL
+- `VITE_API_URL`: Your API server URL (only needed in production)
 - `VITE_WS_URL`: Your WebSocket server URL
 - `VITE_EMAIL_FROM`: Email sender address (e.g., hello@domka.me)
 - `VITE_EMAIL_FROM_NAME`: Email sender name
@@ -86,6 +93,38 @@ NeighborVille features a comprehensive authentication system with the following 
    - Mailtrap integration for production email testing
    - Development fallbacks for email verification
 
+## Authentication System
+
+### Security Improvements
+
+The authentication system has been enhanced with the following improvements:
+
+1. **Session-based Storage**: User data is now stored in `sessionStorage` instead of `localStorage` for improved security. This means user data is automatically cleared when the browser session ends.
+
+2. **Automatic 401 Handling**: The system now properly detects unauthorized (401) responses from the API and automatically shows the login modal. This ensures users aren't left in a broken state when their session expires.
+
+3. **Event-based Authentication**: The system uses custom events (`auth:unauthorized`) to communicate authentication failures across components, ensuring a consistent user experience.
+
+4. **Centralized Auth Context**: All authentication logic is centralized in the AuthContext, making it easier to maintain and extend.
+
+### Usage
+
+The authentication system provides the following hooks and components:
+
+```tsx
+// Using the auth context
+const { 
+  user,             // Current user object or null
+  isAuthenticated,  // Whether the user is authenticated (not a guest)
+  isGuest,          // Whether the user is a guest
+  login,            // Function to log in a user
+  logout,           // Function to log out
+  refreshAuth,      // Function to refresh authentication
+  showLogin,        // Whether to show the login modal
+  setShowLogin      // Function to show/hide the login modal
+} = useAuth();
+```
+
 ## 📚 Project Structure
 
 - `src/components/game/` - Game components like buildings, residents, events
@@ -102,3 +141,34 @@ Contributions are welcome! Feel free to open issues or submit pull requests to h
 ## 📜 License
 
 This project is open source and available under the [MIT License](LICENSE).
+
+## Development Environment
+
+### Local Development without SSL
+
+For local development, you can use the provided development configuration that doesn't require SSL certificates.
+
+1. Build and run the development environment:
+   ```bash
+   # Run with development configuration
+   docker-compose -f docker-compose.dev.yml up --build
+   ```
+
+2. Access the application:
+   - Frontend: [http://localhost](http://localhost)
+   - API: [http://api.localhost](http://api.localhost) (add this to your hosts file)
+
+3. For development without Docker:
+   ```bash
+   # Start the backend server
+   cd server
+   NODE_ENV=development npm run dev
+
+   # Start the frontend in a separate terminal
+   npm run dev
+   ```
+
+This development setup:
+- Uses the `nginx.dev.conf` which doesn't require SSL certificates
+- Configures all services to work on standard non-SSL ports
+- Sets NODE_ENV to development automatically

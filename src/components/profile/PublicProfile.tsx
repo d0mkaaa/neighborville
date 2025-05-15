@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { User, Calendar, Home, Star, Clock, Lock, AlertCircle, Loader2, Building, Users, DollarSign } from 'lucide-react';
+import { API_URL } from "../../config/apiConfig";
 
 interface PublicProfileProps {
   username: string;
@@ -42,7 +43,7 @@ export default function PublicProfile({ username, onClose }: PublicProfileProps)
       setIsPrivate(false);
       
       try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/user/profile/${username}`, {
+        const response = await fetch(`${API_URL}/api/user/profile/${username}`, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json'

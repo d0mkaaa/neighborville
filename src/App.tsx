@@ -17,27 +17,41 @@ import PublicProfile from './components/profile/PublicProfile';
 import SettingsModal from './components/game/SettingsModal';
 import SaveManager from './components/game/SaveManager';
 import { saveGameToServer } from './services/gameService';
+import SecuritySettings from './components/profile/SecuritySettings';
 
 function App() {
-  const { user, isLoading: authLoading, isGuest, login, logout, refreshAuth } = useAuth();
+  const { user, isLoading: authLoading, isGuest, login, logout, refreshAuth, showLogin, setShowLogin } = useAuth();
   const [gameStarted, setGameStarted] = useState(false);
   const [gameState, setGameState] = useState<GameProgress | null>(null);
   const [loading, setLoading] = useState(true);
   const [showContinueModal, setShowContinueModal] = useState(false);
   const [savedGameFound, setSavedGameFound] = useState<GameProgress | null>(null);
   const [showTutorial, setShowTutorial] = useState(false);
-  const [showAuthModal, setShowAuthModal] = useState(false);
   const [showProfileSettings, setShowProfileSettings] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showPublicProfile, setShowPublicProfile] = useState(false);
   const [selectedUsername, setSelectedUsername] = useState<string>('');
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>('day');
   const [showSettings, setShowSettings] = useState(false);
+  const [showSecuritySettings, setShowSecuritySettings] = useState(false);
   const [musicEnabled, setMusicEnabled] = useState(true);
   const [audioRef, setAudioRef] = useState<React.RefObject<HTMLAudioElement> | null>(null);
   const [showPlayerStats, setShowPlayerStats] = useState(false);
   const [showSaveManager, setShowSaveManager] = useState(false);
   const [lastSaveTime, setLastSaveTime] = useState<Date | null>(null);
+
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      console.log('Unauthorized event detected, showing login modal');
+      setShowLogin(true);
+    };
+    
+    window.addEventListener('auth:unauthorized', handleUnauthorized);
+    
+    return () => {
+      window.removeEventListener('auth:unauthorized', handleUnauthorized);
+    };
+  }, [setShowLogin]);
 
   useEffect(() => {
     const checkLoginStatus = async () => {
@@ -48,20 +62,16 @@ function App() {
       const storedName = localStorage.getItem('neighborville_playerName');
       
       if (user || storedName) {
-        setShowAuthModal(false);
-        
         if (storedName && !user) {
           setTimeout(async () => {
             await refreshAuth();
           }, 300);
         }
-      } else {
-        setShowAuthModal(true);
       }
     };
     
     checkLoginStatus();
-  }, [user, authLoading]);
+  }, [user, authLoading, refreshAuth]);
   
   useEffect(() => {
     const loadSavedGame = async () => {
@@ -177,7 +187,7 @@ function App() {
         setShowContinueModal(true);
       }
     } else {
-      setShowAuthModal(true);
+      setShowLogin(true);
     }
   };
 
@@ -242,6 +252,12 @@ function App() {
     }
   };
 
+  useEffect(() => {
+    if (showLogin && !loading && !user) {
+      setGameStarted(false);
+    }
+  }, [showLogin, loading, user]);
+
   if (loading) {
     return (
       <AppLayout 
@@ -278,6 +294,7 @@ function App() {
             savedGame={savedGameFound}
             onContinue={handleContinueGame}
             onNewGame={handleShowLogin}
+            onLoadGame={handleLoadGame}
           />
         </div>
       </AppLayout>
@@ -290,7 +307,7 @@ function App() {
       showNavbar={!gameStarted}
       onShowLeaderboard={() => setShowLeaderboard(true)}
       onShowProfileSettings={() => setShowProfileSettings(true)}
-      onShowLogin={() => setShowAuthModal(true)}
+      onShowLogin={() => setShowLogin(true)}
       onLogout={handleExitGame}
       isInGame={gameStarted}
       onExitGame={handleExitGame}
@@ -302,23 +319,23 @@ function App() {
     >
       <BackgroundBubbles />
       <AnimatePresence>
-        {showAuthModal && (
-          <AuthModal 
-            onClose={() => {}}
-            onLogin={(userData) => {
-              login({
-                ...userData,
-                verified: true,
-                email: userData.email || ''
-              });
-              setShowAuthModal(false);
-            }}
-          />
+        {showLogin && !loading && !user && (
+          <AuthModal onClose={() => {}} onLogin={login} />
         )}
 
         {showProfileSettings && (
           <ProfileSettings 
             onClose={() => setShowProfileSettings(false)}
+            onShowSecuritySettings={() => {
+              setShowProfileSettings(false);
+              setShowSecuritySettings(true);
+            }}
+          />
+        )}
+
+        {showSecuritySettings && (
+          <SecuritySettings 
+            onClose={() => setShowSecuritySettings(false)}
           />
         )}
 
@@ -353,7 +370,7 @@ function App() {
             }}
             onShowLogin={() => {
               setShowSettings(false);
-              setShowAuthModal(true);
+              setShowLogin(true);
             }}
           />
         )}
@@ -368,6 +385,7 @@ function App() {
           initialGameState={gameState} 
           showTutorialProp={showTutorial}
           onTimeChange={handleTimeChange}
+          onLoadGame={handleLoadGame}
         />
       ) : (
         <Login 
@@ -381,6 +399,9 @@ function App() {
         isOpen={showSaveManager}
         onClose={() => setShowSaveManager(false)}
         onSave={(name) => saveGameCallback(name)}
+        onLoadGame={(gameData) => {
+          handleLoadGame(gameData);
+        }}
         onSaveToServer={async () => {
           if (!gameState) {
             return false;
@@ -424,7 +445,7 @@ function App() {
         }}
         isAuthenticated={!!user && !user.isGuest}
         lastServerSaveTime={lastSaveTime}
-        onShowLogin={() => setShowAuthModal(true)}
+        onShowLogin={() => setShowLogin(true)}
       />
     </AppLayout>
   );

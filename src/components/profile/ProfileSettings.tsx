@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { User, Eye, EyeOff, X, Save, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
+import { User, Eye, EyeOff, X, Save, Loader2, CheckCircle, AlertCircle, Shield } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 interface ProfileSettingsProps {
   onClose: () => void;
+  onShowSecuritySettings?: () => void;
 }
 
-export default function ProfileSettings({ onClose }: ProfileSettingsProps) {
+export default function ProfileSettings({ onClose, onShowSecuritySettings }: ProfileSettingsProps) {
   const { user } = useAuth();
   const [profileVisibility, setProfileVisibility] = useState<'public' | 'private'>('public');
   const [showBio, setShowBio] = useState(true);
@@ -27,7 +28,7 @@ export default function ProfileSettings({ onClose }: ProfileSettingsProps) {
       setBio(user.profileSettings.bio || '');
     } else {
       try {
-        const savedSettings = localStorage.getItem('profile_settings');
+        const savedSettings = sessionStorage.getItem('profile_settings');
         if (savedSettings) {
           const parsedSettings = JSON.parse(savedSettings);
           setProfileVisibility(parsedSettings.visibility || 'public');
@@ -36,7 +37,7 @@ export default function ProfileSettings({ onClose }: ProfileSettingsProps) {
           setShowActivity(parsedSettings.showActivity !== undefined ? parsedSettings.showActivity : true);
         }
       } catch (error) {
-        console.error('Error loading profile settings from localStorage:', error);
+        console.error('Error loading profile settings from sessionStorage:', error);
       }
     }
   }, [user]);
@@ -54,7 +55,7 @@ export default function ProfileSettings({ onClose }: ProfileSettingsProps) {
         bio
       };
       
-      localStorage.setItem('profile_settings', JSON.stringify(profileSettings));
+      sessionStorage.setItem('profile_settings', JSON.stringify(profileSettings));
       
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/user/profile/settings`, {
         method: 'PUT',
@@ -109,6 +110,24 @@ export default function ProfileSettings({ onClose }: ProfileSettingsProps) {
             <X size={20} />
           </button>
         </div>
+        
+        {onShowSecuritySettings && (
+          <div className="flex border-b border-gray-200">
+            <button
+              className="flex-1 py-2.5 text-center text-sm font-medium text-emerald-600 border-b-2 border-emerald-500"
+            >
+              <User size={16} className="inline mr-1.5" />
+              Profile
+            </button>
+            <button
+              onClick={onShowSecuritySettings}
+              className="flex-1 py-2.5 text-center text-sm font-medium text-gray-500 hover:text-gray-700"
+            >
+              <Shield size={16} className="inline mr-1.5" />
+              Security
+            </button>
+          </div>
+        )}
         
         <div className="p-6 space-y-6">
           <div>

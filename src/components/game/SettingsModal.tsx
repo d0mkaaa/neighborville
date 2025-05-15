@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Volume2, VolumeX, HelpCircle, Settings as SettingsIcon, Music, User, LogOut, Shield, Save, Eye, EyeOff, AlertCircle, CloudUpload, LogIn } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import { API_URL } from "../../config/apiConfig";
 
 type SettingsModalProps = {
   isOpen: boolean;
@@ -12,6 +13,11 @@ type SettingsModalProps = {
   onShowTutorial: () => void;
   onShowStats: () => void;
   onShowLogin?: () => void;
+  isAuthenticated?: boolean;
+  user?: any;
+  onLogin?: (userData: { id: string; username: string; email?: string; isGuest?: boolean }) => void;
+  onLogout?: () => void;
+  onShowAuthModal?: () => void;
 };
 
 interface ProfileSettings {
@@ -29,9 +35,18 @@ export default function SettingsModal({
   audioRef,
   onShowTutorial,
   onShowStats,
-  onShowLogin
+  onShowLogin,
+  isAuthenticated: propIsAuthenticated,
+  user: propUser,
+  onLogin,
+  onLogout: propOnLogout,
+  onShowAuthModal
 }: SettingsModalProps) {
-  const { user, logout, isGuest } = useAuth();
+  const authContext = useAuth();
+  const user = propUser || authContext.user;
+  const isAuthenticated = propIsAuthenticated !== undefined ? propIsAuthenticated : authContext.isAuthenticated;
+  const isGuest = user?.isGuest || authContext.isGuest;
+  const logout = authContext.logout;
   const [activeTab, setActiveTab] = useState<'game' | 'account' | 'profile'>('game');
   const [username, setUsername] = useState(user?.username || '');
   const [activeSessions, setActiveSessions] = useState<number>(0);
@@ -82,7 +97,7 @@ export default function SettingsModal({
       const fetchUserData = async () => {
         setIsLoadingUserData(true);
         try {
-          const response = await fetch(`${import.meta.env.VITE_API_URL}/api/user/profile`, {
+          const response = await fetch(`${API_URL}/api/user/profile`, {
             method: 'GET',
             headers: {
               'Content-Type': 'application/json'
@@ -105,7 +120,7 @@ export default function SettingsModal({
             }
           }
           
-          const sessionsResponse = await fetch(`${import.meta.env.VITE_API_URL}/api/user/sessions`, {
+          const sessionsResponse = await fetch(`${API_URL}/api/user/sessions`, {
             method: 'GET',
             headers: {
               'Content-Type': 'application/json'
@@ -166,7 +181,7 @@ export default function SettingsModal({
     }
     
     try {
-      await fetch(`${import.meta.env.VITE_API_URL}/api/user/profile`, {
+      await fetch(`${API_URL}/api/user/profile`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json'
@@ -190,7 +205,7 @@ export default function SettingsModal({
     }
     
     try {
-      await fetch(`${import.meta.env.VITE_API_URL}/api/user/settings`, {
+      await fetch(`${API_URL}/api/user/settings`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json'
@@ -214,7 +229,7 @@ export default function SettingsModal({
     }
     
     try {
-      await fetch(`${import.meta.env.VITE_API_URL}/api/user/sessions`, {
+      await fetch(`${API_URL}/api/user/sessions`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json'
@@ -231,7 +246,11 @@ export default function SettingsModal({
   };
 
   const handleLogout = () => {
-    logout();
+    if (propOnLogout) {
+      propOnLogout();
+    } else {
+      logout();
+    }
     onClose();
   };
 
@@ -256,7 +275,7 @@ export default function SettingsModal({
       
       localStorage.setItem('profile_settings', JSON.stringify(profileSettings));
       
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/user/profile/settings`, {
+      const response = await fetch(`${API_URL}/api/user/profile/settings`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json'
@@ -298,6 +317,7 @@ export default function SettingsModal({
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.95, opacity: 0 }}
             className="bg-white max-w-md w-full rounded-xl shadow-xl overflow-hidden"
+            onClick={e => e.stopPropagation()}
           >
             <div className="bg-emerald-500 text-white p-4 flex justify-between items-center">
               <h2 className="text-lg font-medium lowercase flex items-center gap-2">
@@ -326,7 +346,11 @@ export default function SettingsModal({
                     <div className="mt-2">
                       <button 
                         onClick={() => {
-                          onShowLogin?.();
+                          if (onShowAuthModal) {
+                            onShowAuthModal();
+                          } else {
+                            onShowLogin?.();
+                          }
                           onClose();
                         }}
                         className="bg-blue-500 text-white text-xs px-3 py-1.5 rounded flex items-center gap-1.5 hover:bg-blue-600 transition-colors"
@@ -353,7 +377,7 @@ export default function SettingsModal({
                   Game
                 </button>
                 
-                {!isGuest && (
+                {user && !isGuest && (
                   <>
                     <button
                       onClick={() => setActiveTab('profile')}
@@ -460,7 +484,11 @@ export default function SettingsModal({
                         </p>
                         <button
                           onClick={() => {
-                            onShowLogin?.();
+                            if (onShowAuthModal) {
+                              onShowAuthModal();
+                            } else {
+                              onShowLogin?.();
+                            }
                             onClose();
                           }}
                           className="w-full bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600 transition-colors flex items-center justify-center gap-2"
@@ -474,7 +502,7 @@ export default function SettingsModal({
                 </div>
               )}
               
-              {activeTab === 'profile' && !isGuest && (
+              {activeTab === 'profile' && !isGuest && user && (
                 <div className="space-y-4">
                   <div className="flex items-center gap-4">
                     <div className="w-16 h-16 rounded-full bg-blue-500 flex items-center justify-center text-white text-2xl font-bold">
@@ -597,96 +625,88 @@ export default function SettingsModal({
                 </div>
               )}
               
-              {activeTab === 'account' && !isGuest && (
+              {activeTab === 'account' && !isGuest && user && (
                 <div className="space-y-4">
-                  {user ? (
-                    <>
-                      <div>
-                        <h3 className="text-sm font-medium text-gray-700 lowercase mb-3">account info</h3>
-                        <div className="bg-gray-50 rounded-lg p-4">
-                          <div className="flex items-center mb-4">
-                            <div className="w-12 h-12 bg-emerald-200 rounded-full flex items-center justify-center">
-                              <User size={24} className="text-emerald-800" />
-                            </div>
-                            <div className="ml-3">
-                              <p className="text-gray-900 font-medium">{user.username}</p>
-                              <p className="text-sm text-gray-500">
-                                {user.isGuest ? 'Guest Account' : user.email}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="border-t border-gray-200 pt-4">
-                            <div className="flex justify-between text-sm mb-1">
-                              <span className="text-gray-600">Account created</span>
-                              <span className="text-gray-800">
-                                {user.createdAt 
-                                  ? new Date(user.createdAt).toLocaleDateString() 
-                                  : isLoadingUserData ? 'Loading...' : 'Unknown'}
-                              </span>
-                            </div>
-                            <div className="flex justify-between text-sm mb-1">
-                              <span className="text-gray-600">Last login</span>
-                              <span className="text-gray-800">
-                                {isLoadingUserData 
-                                  ? 'Loading...' 
-                                  : lastLoginDate 
-                                    ? lastLoginDate.toLocaleString() 
-                                    : 'Never'}
-                              </span>
-                            </div>
-                            {(lastSaveDate || isLoadingUserData) && (
-                              <div className="flex justify-between text-sm">
-                                <span className="text-gray-600">Last game save</span>
-                                <span className="text-gray-800">
-                                  {isLoadingUserData 
-                                    ? 'Loading...' 
-                                    : lastSaveDate 
-                                      ? lastSaveDate.toLocaleString() 
-                                      : 'Never'}
-                                </span>
-                              </div>
-                            )}
-                          </div>
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-700 lowercase mb-3">account info</h3>
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="flex items-center mb-4">
+                        <div className="w-12 h-12 bg-emerald-200 rounded-full flex items-center justify-center">
+                          <User size={24} className="text-emerald-800" />
                         </div>
-                      </div>
-
-                      <div>
-                        <h3 className="text-sm font-medium text-gray-700 lowercase mb-3">
-                          <div className="flex items-center">
-                            <Shield size={16} className="text-gray-500 mr-2" />
-                            security
-                          </div>
-                        </h3>
-                        <div className="bg-gray-50 rounded-lg p-4">
-                          <p className="text-sm text-gray-700 mb-3">
-                            You currently have {activeSessions} active session(s).
+                        <div className="ml-3">
+                          <p className="text-gray-900 font-medium">{user.username}</p>
+                          <p className="text-sm text-gray-500">
+                            {user.isGuest ? 'Guest Account' : user.email}
                           </p>
-                          
-                          {activeSessions > 1 && (
-                            <button
-                              onClick={handleEndOtherSessions}
-                              className="w-full py-2 px-4 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm"
-                            >
-                              Log out other sessions
-                            </button>
-                          )}
                         </div>
                       </div>
 
-                      <button
-                        onClick={handleLogout}
-                        className="w-full py-2 flex items-center justify-center bg-red-100 text-red-600 rounded-lg hover:bg-red-200"
-                      >
-                        <LogOut size={16} className="mr-2" />
-                        Log Out
-                      </button>
-                    </>
-                  ) : (
-                    <div className="text-center py-6">
-                      <p className="text-gray-700 mb-3">Please log in to view your account.</p>
+                      <div className="border-t border-gray-200 pt-4">
+                        <div className="flex justify-between text-sm mb-1">
+                          <span className="text-gray-600">Account created</span>
+                          <span className="text-gray-800">
+                            {user.createdAt 
+                              ? new Date(user.createdAt).toLocaleDateString() 
+                              : isLoadingUserData ? 'Loading...' : 'Unknown'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-sm mb-1">
+                          <span className="text-gray-600">Last login</span>
+                          <span className="text-gray-800">
+                            {isLoadingUserData 
+                              ? 'Loading...' 
+                              : lastLoginDate 
+                                ? lastLoginDate.toLocaleString() 
+                                : 'Never'}
+                          </span>
+                        </div>
+                        {(lastSaveDate || isLoadingUserData) && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-600">Last game save</span>
+                            <span className="text-gray-800">
+                              {isLoadingUserData 
+                                ? 'Loading...' 
+                                : lastSaveDate 
+                                  ? lastSaveDate.toLocaleString() 
+                                  : 'Never'}
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  )}
+                  </div>
+
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-700 lowercase mb-3">
+                      <div className="flex items-center">
+                        <Shield size={16} className="text-gray-500 mr-2" />
+                        security
+                      </div>
+                    </h3>
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <p className="text-sm text-gray-700 mb-3">
+                        You currently have {activeSessions} active session(s).
+                      </p>
+                      
+                      {activeSessions > 1 && (
+                        <button
+                          onClick={handleEndOtherSessions}
+                          className="w-full py-2 px-4 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm"
+                        >
+                          Log out other sessions
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={handleLogout}
+                    className="w-full py-2 flex items-center justify-center bg-red-100 text-red-600 rounded-lg hover:bg-red-200"
+                  >
+                    <LogOut size={16} className="mr-2" />
+                    Log Out
+                  </button>
                 </div>
               )}
             </div>

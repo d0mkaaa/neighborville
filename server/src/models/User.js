@@ -47,6 +47,19 @@ const userSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.Mixed,
     default: null
   },
+  gameSaves: {
+    type: [
+      {
+        id: String,
+        playerName: String,
+        data: mongoose.Schema.Types.Mixed,
+        timestamp: Number,
+        saveType: String,
+        version: String
+      }
+    ],
+    default: []
+  },
   lastSave: {
     type: Date,
     default: null

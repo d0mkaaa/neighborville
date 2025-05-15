@@ -76,10 +76,10 @@ export const login = async (
 
 export const logout = async (): Promise<boolean> => {
   try {
-    const token = localStorage.getItem('auth_token');
+    const token = sessionStorage.getItem('auth_token');
     
     if (!token) {
-      localStorage.removeItem('auth_token');
+      sessionStorage.removeItem('auth_token');
       return true;
     }
     
@@ -93,12 +93,12 @@ export const logout = async (): Promise<boolean> => {
       })
     });
     
-    localStorage.removeItem('auth_token');
+    sessionStorage.removeItem('auth_token');
     
     return response.status === 200;
   } catch (error) {
     console.error('Error during logout:', error);
-    localStorage.removeItem('auth_token');
+    sessionStorage.removeItem('auth_token');
     return false;
   }
 };

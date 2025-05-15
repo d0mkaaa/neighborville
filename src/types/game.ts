@@ -235,6 +235,8 @@ export interface GameProgress {
   currentSeason?: Season;
   activeSeasonalEvents?: SeasonalEvent[];
   reputation?: number;
+  saveName?: string;
+  saveTimestamp?: number;
 }
 
 export interface PowerGridState {

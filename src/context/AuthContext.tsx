@@ -11,6 +11,9 @@ interface AuthContextType {
   logout: () => Promise<void>;
   createGuest: () => Promise<User>;
   refreshAuth: () => Promise<boolean>;
+  checkAuthStatus: () => Promise<boolean>;
+  showLogin: boolean;
+  setShowLogin: (show: boolean) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -27,11 +30,37 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
+const saveToSession = (key: string, value: string) => {
+  try {
+    sessionStorage.setItem(key, value);
+  } catch (e) {
+    console.warn('Failed to save to sessionStorage', e);
+  }
+};
+
+const getFromSession = (key: string): string | null => {
+  try {
+    return sessionStorage.getItem(key);
+  } catch (e) {
+    console.warn('Failed to get from sessionStorage', e);
+    return null;
+  }
+};
+
+const removeFromSession = (key: string) => {
+  try {
+    sessionStorage.removeItem(key);
+  } catch (e) {
+    console.warn('Failed to remove from sessionStorage', e);
+  }
+};
+
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [lastAuthCheck, setLastAuthCheck] = useState<number>(0);
   const [isGuest, setIsGuest] = useState<boolean>(false);
+  const [showLogin, setShowLogin] = useState<boolean>(false);
 
   useEffect(() => {
     checkAuth();
@@ -41,8 +70,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     try {
       setIsLoading(true);
       
-      const storedName = localStorage.getItem('neighborville_playerName');
-      const storedGuestFlag = localStorage.getItem('neighborville_is_guest');
+      const storedName = getFromSession('neighborville_playerName');
+      const storedGuestFlag = getFromSession('neighborville_is_guest');
       
       const userData = await getCurrentUser();
       
@@ -50,15 +79,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         setUser(userData);
         setIsGuest(!!userData.isGuest);
         
-        localStorage.setItem('neighborville_playerName', userData.username);
-        localStorage.setItem('neighborville_is_guest', userData.isGuest ? 'true' : 'false');
+        saveToSession('neighborville_playerName', userData.username);
+        saveToSession('neighborville_is_guest', userData.isGuest ? 'true' : 'false');
         
         setLastAuthCheck(Date.now());
         setIsLoading(false);
         return true;
       } else if (storedName) {
         setIsGuest(true);
-        localStorage.setItem('neighborville_is_guest', 'true');
+        saveToSession('neighborville_is_guest', 'true');
         
         setUser({
           id: `local-${Date.now()}`,
@@ -74,14 +103,16 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       } else {
         setUser(null);
         setIsGuest(false);
+        setShowLogin(true);
         setIsLoading(false);
         return false;
       }
     } catch (error) {
-      const storedName = localStorage.getItem('neighborville_playerName');
+      console.error('Error checking authentication:', error);
+      const storedName = getFromSession('neighborville_playerName');
       if (storedName) {
         setIsGuest(true);
-        localStorage.setItem('neighborville_is_guest', 'true');
+        saveToSession('neighborville_is_guest', 'true');
         setUser({
           id: `local-${Date.now()}`,
           username: storedName,
@@ -92,6 +123,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       } else {
         setUser(null);
         setIsGuest(false);
+        setShowLogin(true);
       }
       setIsLoading(false);
       return !!storedName;
@@ -114,12 +146,13 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const login = (newUser: User) => {
     setUser(newUser);
     setIsGuest(!!newUser.isGuest);
+    setShowLogin(false);
     
     if (newUser.username) {
-      localStorage.setItem('neighborville_playerName', newUser.username);
+      saveToSession('neighborville_playerName', newUser.username);
     }
     
-    localStorage.setItem('neighborville_is_guest', newUser.isGuest ? 'true' : 'false');
+    saveToSession('neighborville_is_guest', newUser.isGuest ? 'true' : 'false');
     setLastAuthCheck(Date.now());
   };
 
@@ -127,21 +160,33 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     await logoutUser();
     setUser(null);
     setIsGuest(false);
-    localStorage.removeItem('neighborville_playerName');
-    localStorage.removeItem('neighborville_is_guest');
+    removeFromSession('neighborville_playerName');
+    removeFromSession('neighborville_is_guest');
+    setShowLogin(true);
   };
 
   const createGuest = async () => {
     const guestUser = await createGuestUser();
     setUser(guestUser);
     setIsGuest(true);
+    setShowLogin(false);
     
     if (guestUser.username) {
-      localStorage.setItem('neighborville_playerName', guestUser.username);
+      saveToSession('neighborville_playerName', guestUser.username);
     }
     
-    localStorage.setItem('neighborville_is_guest', 'true');
+    saveToSession('neighborville_is_guest', 'true');
     return guestUser;
+  };
+
+  const checkAuthStatus = async (): Promise<boolean> => {
+    try {
+      const userData = await getCurrentUser();
+      return !!userData && !userData.isGuest;
+    } catch (error) {
+      console.error('Error verifying auth status:', error);
+      return false;
+    }
   };
 
   return (
@@ -154,7 +199,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         login,
         logout,
         createGuest,
-        refreshAuth
+        refreshAuth,
+        checkAuthStatus,
+        showLogin,
+        setShowLogin
       }}
     >
       {children}

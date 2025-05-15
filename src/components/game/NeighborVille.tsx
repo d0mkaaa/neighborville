@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Home, Zap, User, Calendar, Settings, Award, AlertCircle, X, CheckCircle, Volume2, VolumeX } from "lucide-react";
+import { Plus, Home, Zap, User, Calendar, Settings, Award, AlertCircle, X, CheckCircle, Volume2, VolumeX, TrendingUp, Save } from "lucide-react";
 import { getAvailableUpgrades, calculateUpgradedStats } from "../../data/upgrades";
 import AppLayout from "../ui/AppLayout";
 import GameHeader from "./GameHeader";
@@ -46,17 +46,20 @@ import type { ExtendedNotification } from "./NotificationSystem";
 import AuthModal from '../auth/AuthModal';
 import PublicProfileModal from '../profile/PublicProfileModal';
 import { useAuth } from '../../context/AuthContext';
+import Leaderboard from '../profile/Leaderboard';
 
 interface NeighborVilleProps {
   initialGameState?: GameProgress | null;
   showTutorialProp?: boolean;
   onTimeChange?: (newTimeOfDay: TimeOfDay) => void;
+  onLoadGame?: (gameData: GameProgress) => void;
 }
 
 export default function NeighborVille({ 
   initialGameState, 
   showTutorialProp = false,
-  onTimeChange
+  onTimeChange,
+  onLoadGame
 }: NeighborVilleProps) {
   const [playerName, setPlayerName] = useState("");
   const [coins, setCoins] = useState(2000);
@@ -84,35 +87,7 @@ export default function NeighborVille({
   const [activeTab, setActiveTab] = useState('buildings');
   const [autoSaving, setAutoSaving] = useState(false);
   const [lastSaveTime, setLastSaveTime] = useState<Date | null>(null);
-  
-  const [buildings, setBuildings] = useState<Building[]>(initialBuildings);
-  const [neighbors, setNeighbors] = useState<Neighbor[]>(neighborProfiles);
-  const [achievements, setAchievements] = useState<Achievement[]>(ACHIEVEMENTS);
-  const [bills, setBills] = useState<Bill[]>([]);
-  const [currentEvent, setCurrentEvent] = useState<GameEvent | null>(null);
-  const [recentEvents, setRecentEvents] = useState<RecentEvent[]>([]);
-  const [showNeighborUnlock, setShowNeighborUnlock] = useState<Neighbor | null>(null);
-  const [showNeighborList, setShowNeighborList] = useState(false);
-  const [showAchievements, setShowAchievements] = useState(false);
-  const [showAchievementUnlock, setShowAchievementUnlock] = useState<Achievement | null>(null);
-  const [showBuildingInfo, setShowBuildingInfo] = useState<{building: Building, index: number} | null>(null);
-  const [showCalendar, setShowCalendar] = useState(false);
-  const [dayRecords, setDayRecords] = useState<{
-    day: number;
-    coins: number;
-    happiness: number;
-    residents: number;
-    buildings: number;
-    income: number;
-    expenses: number;
-    events: { name: string; type: 'good' | 'bad' | 'neutral' }[];
-  }[]>([]);
-  const [showCoinHistory, setShowCoinHistory] = useState(false);
-  const [coinHistory, setCoinHistory] = useState<CoinHistoryEntry[]>([]);
-  const [showPlayerStats, setShowPlayerStats] = useState(false);
-  const [showMarketplace, setShowMarketplace] = useState(false);
-  const [showSpecialEvents, setShowSpecialEvents] = useState(false);
-  const [showBuildingModal, setShowBuildingModal] = useState(false);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
   
   const [weatherForecast, setWeatherForecast] = useState<WeatherType[]>([]);
   const [showWeatherForecast, setShowWeatherForecast] = useState(false);
@@ -164,12 +139,55 @@ export default function NeighborVille({
 
   const { user, isAuthenticated } = useAuth();
 
+  const [buildings, setBuildings] = useState<Building[]>(initialBuildings);
+  const [neighbors, setNeighbors] = useState<Neighbor[]>(neighborProfiles);
+  const [achievements, setAchievements] = useState<Achievement[]>(ACHIEVEMENTS);
+  const [bills, setBills] = useState<Bill[]>([]);
+  const [currentEvent, setCurrentEvent] = useState<GameEvent | null>(null);
+  const [recentEvents, setRecentEvents] = useState<RecentEvent[]>([]);
+  const [showNeighborUnlock, setShowNeighborUnlock] = useState<Neighbor | null>(null);
+  const [showNeighborList, setShowNeighborList] = useState(false);
+  const [showAchievements, setShowAchievements] = useState(false);
+  const [showAchievementUnlock, setShowAchievementUnlock] = useState<Achievement | null>(null);
+  const [showBuildingInfo, setShowBuildingInfo] = useState<{building: Building, index: number} | null>(null);
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [dayRecords, setDayRecords] = useState<{
+    day: number;
+    coins: number;
+    happiness: number;
+    residents: number;
+    buildings: number;
+    income: number;
+    expenses: number;
+    events: { name: string; type: 'good' | 'bad' | 'neutral' }[];
+  }[]>([]);
+  const [showCoinHistory, setShowCoinHistory] = useState(false);
+  const [coinHistory, setCoinHistory] = useState<CoinHistoryEntry[]>([]);
+  const [showPlayerStats, setShowPlayerStats] = useState(false);
+  const [showMarketplace, setShowMarketplace] = useState(false);
+  const [showSpecialEvents, setShowSpecialEvents] = useState(false);
+  const [showBuildingModal, setShowBuildingModal] = useState(false);
+
   useEffect(() => {
     if (initialGameState) {
       loadGameState(initialGameState);
     } else {
       initializeNewGame();
     }
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      saveGameCallback(undefined, true);
+      
+      e.preventDefault();
+      e.returnValue = "You have unsaved progress. Are you sure you want to leave?";
+      return e.returnValue;
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
   }, [initialGameState]);
 
   useEffect(() => {
@@ -725,35 +743,7 @@ export default function NeighborVille({
         waterGrid
       };
       
-      localStorage.setItem('neighborville_save', JSON.stringify(gameStateWithBuilding));
-      
-      const saveToServer = async () => {
-        try {
-          if (isAuthenticated && user && !user.isGuest) {
-            const result = await saveGameToServer(gameStateWithBuilding);
-            if (result) {
-              setLastSaveTime(new Date());
-              addNotification(`${building.name} built and saved to cloud!`, 'success');
-            } else {
-              const retryResult = await saveGameToServer(gameStateWithBuilding);
-              if (retryResult) {
-                setLastSaveTime(new Date());
-                addNotification(`${building.name} built and saved to cloud!`, 'success');
-              } else {
-                addNotification('Building added but cloud save failed. Manual save recommended.', 'warning');
-              }
-            }
-          } else {
-            addNotification(`${building.name} built and saved locally!`, 'success');
-          }
-        } catch (error) {
-          addNotification('Building added but save failed. Manual save recommended.', 'warning');
-        }
-      };
-      
-      saveToServer();
-    } else {
-      addNotification('Not enough coins', 'error');
+      sessionStorage.setItem('neighborville_save', JSON.stringify(gameStateWithBuilding));
     }
   };
 
@@ -1408,7 +1398,7 @@ export default function NeighborVille({
     const now = Date.now();
     const lastSaveTimestamp = localStorage.getItem('neighborville_last_save_timestamp');
     
-    if (isAutoSave && !shouldSaveGame(lastSaveTimestamp, 300000)) {
+    if (isAutoSave && !shouldSaveGame(lastSaveTimestamp, 60000)) {
       return;
     }
 
@@ -1444,16 +1434,17 @@ export default function NeighborVille({
       
       if (isAutoSave) {
         localStorage.setItem('neighborville_last_save_timestamp', now.toString());
-        
         localStorage.setItem('neighborville_autosave', JSON.stringify(gameState));
       }
       
-      if ((!isAutoSave || day % 5 === 0) && isAuthenticated && user && !user.isGuest) {
+      const saveType = isAutoSave ? 'auto' : 'manual';
+      
+      if (isAuthenticated && user && !user.isGuest) {
         try {
-          const saveResult = await saveGameToServer(gameState);
+          const saveResult = await cloudSave.saveToCloud(gameState, saveType);
           
-          if (!saveResult) {
-            await saveGameToServer(gameState);
+          if (!saveResult && !isAutoSave) {
+            await cloudSave.saveToCloud(gameState, saveType);
           }
           
           setLastSaveTime(new Date());
@@ -1487,8 +1478,7 @@ export default function NeighborVille({
   useEffect(() => {
     const autoSaveInterval = setInterval(() => {
       saveGameCallback(undefined, true);
-    }, 900000);
-
+    }, 600000);
     return () => clearInterval(autoSaveInterval);
   }, [saveGameCallback]);
 
@@ -1609,17 +1599,20 @@ export default function NeighborVille({
 
   const handleLogin = (userData: { id: string; username: string; email?: string; isGuest?: boolean }) => {
     setPlayerName(userData.username);
-    localStorage.setItem('neighborville_playerName', userData.username);
+    sessionStorage.setItem('neighborville_playerName', userData.username);
     setShowAuthModal(false);
   };
 
-  const handleViewProfile = (profile: typeof selectedProfile) => {
-    setSelectedProfile(profile);
-    setShowPublicProfile(true);
+  const handleViewProfile = (username: string) => {
+    console.log('Viewing profile for:', username);
+    
+    addNotification(`Viewing ${username}'s profile coming soon!`, 'info');
+    
+    setShowLeaderboard(false);
   };
 
   useEffect(() => {
-    const storedName = localStorage.getItem('neighborville_playerName');
+    const storedName = sessionStorage.getItem('neighborville_playerName');
     const isGuestUser = storedName?.startsWith('Guest_') || user?.isGuest;
     
     console.log('AUTH DEBUG: NeighborVille auth check - storedName =', storedName || 'null', 
@@ -1635,11 +1628,17 @@ export default function NeighborVille({
       setShowAuthModal(false);
       
       if (!playerName) {
-        const newPlayerName = user?.username || storedName || 'Mayor';
+        const newPlayerName = (user?.username && !user.username.includes('@')) 
+          ? user.username 
+          : (storedName && !storedName.includes('@')) 
+            ? storedName 
+            : 'Mayor';
+            
         console.log('AUTH DEBUG: Setting playerName to', newPlayerName);
         setPlayerName(newPlayerName);
-        if (user?.username) {
-          localStorage.setItem('neighborville_playerName', user.username);
+        
+        if (user?.username && !user.username.includes('@')) {
+          sessionStorage.setItem('neighborville_playerName', user.username);
         }
       }
     }
@@ -1649,6 +1648,10 @@ export default function NeighborVille({
     setPlayerName("");
     localStorage.removeItem('neighborville_playerName');
     setShowAuthModal(true);
+  };
+
+  const handleSaveGame = () => {
+    saveGameCallback(undefined, false);
   };
 
   return (
@@ -1684,25 +1687,16 @@ export default function NeighborVille({
             onToggleWeatherForecast={() => setShowWeatherForecast(!showWeatherForecast)}
             onShowCoinHistory={() => setShowCoinHistory(true)}
             onPlayerNameClick={handlePlayerNameClick}
+            autoSaving={autoSaving}
+            lastSaveTime={lastSaveTime}
             onProfileClick={() => setShowAuthModal(true)}
             isMusicPlaying={musicEnabled}
             onToggleMusic={toggleMusic}
             onLogout={handleLogout}
+            onSaveGame={handleSaveGame}
           />
           
           <AnimatePresence>
-            {autoSaving && (
-              <motion.div
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                className="absolute top-4 right-4 bg-emerald-500 text-white px-3 py-1 rounded-full text-sm flex items-center gap-2 shadow-lg z-50"
-              >
-                <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
-                Auto-saving...
-              </motion.div>
-            )}
-            
             {hourlyCoinBonus > 0 && (
               <motion.div
                 initial={{ opacity: 0, scale: 0.5, y: 50 }}
@@ -1717,6 +1711,7 @@ export default function NeighborVille({
         </div>
       }
       timeOfDay={timeOfDay}
+      showFooter={false}
     >
       
       <NotificationSystem 
@@ -1850,6 +1845,16 @@ export default function NeighborVille({
         <motion.button
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.9 }}
+          onClick={() => setShowLeaderboard(true)}
+          className="w-12 h-12 bg-gradient-to-br from-amber-400 to-amber-500 text-white rounded-full shadow-lg transition-all flex items-center justify-center"
+          title="Leaderboard"
+        >
+          🏆
+        </motion.button>
+        
+        <motion.button
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
           onClick={() => setShowMarketplace(true)}
           className="w-12 h-12 bg-gradient-to-br from-amber-500 to-orange-600 text-white rounded-full shadow-lg transition-all flex items-center justify-center"
         >
@@ -1866,10 +1871,57 @@ export default function NeighborVille({
         </motion.button>
       </div>
       
+      <AnimatePresence>
+        {(autoSaving || lastSaveTime) && (
+          <motion.div 
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+            className="fixed top-24 right-4 z-30 group"
+          >
+            <div className="relative">
+              <motion.div
+                whileHover={{ scale: 1.1 }}
+                className={`rounded-full shadow-md w-10 h-10 flex items-center justify-center cursor-help ${
+                  autoSaving ? 'bg-emerald-500' : 'bg-white/80 backdrop-blur-sm'
+                }`}
+              >
+                {autoSaving ? (
+                  <div className="relative">
+                    <Save size={18} className="text-white z-10 relative" />
+                    <motion.div 
+                      animate={{ scale: [1, 1.5, 1] }}
+                      transition={{ repeat: Infinity, duration: 2 }}
+                      className="absolute inset-0 rounded-full bg-emerald-300/50"
+                    />
+                  </div>
+                ) : (
+                  <Save size={18} className="text-emerald-500" />
+                )}
+              </motion.div>
+              
+              <div className="absolute top-full right-0 mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-black/80 text-white text-xs p-2 rounded whitespace-nowrap pointer-events-none">
+                {autoSaving 
+                  ? 'Auto-saving game...' 
+                  : lastSaveTime 
+                    ? `Last saved: ${lastSaveTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}` 
+                    : ''}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      
       <SaveManager 
         isOpen={showSaveManager}
         onClose={() => setShowSaveManager(false)}
         onSave={(name) => saveGameCallback(name)}
+        onLoadGame={(gameData) => {
+          loadGameState(gameData);
+          if (onLoadGame) {
+            onLoadGame(gameData);
+          }
+        }}
         onSaveToServer={async () => {
           console.log('Manual server save triggered from SaveManager');
           
@@ -1940,6 +1992,8 @@ export default function NeighborVille({
         }}
         isAuthenticated={isAuthenticated}
         lastServerSaveTime={lastSaveTime}
+        onShowLogin={() => setShowAuthModal(true)}
+        addNotification={addNotification}
       />
 
       <MusicControls
@@ -2070,6 +2124,14 @@ export default function NeighborVille({
             onShowStats={() => {
               setShowSettings(false);
               setShowPlayerStats(true);
+            }}
+            isAuthenticated={isAuthenticated}
+            user={user}
+            onLogin={handleLogin}
+            onLogout={handleLogout}
+            onShowAuthModal={() => {
+              setShowSettings(false);
+              setShowAuthModal(true);
             }}
           />
         )}
@@ -2306,6 +2368,13 @@ export default function NeighborVille({
         <PublicProfileModal
           onClose={() => setShowPublicProfile(false)}
           profile={selectedProfile}
+        />
+      )}
+      
+      {showLeaderboard && (
+        <Leaderboard
+          onClose={() => setShowLeaderboard(false)}
+          onViewProfile={handleViewProfile}
         />
       )}
     </AppLayout>

@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL;
+import { API_URL } from '../config/apiConfig';
 
 export const sendVerificationEmail = async (
   email: string,
@@ -6,7 +6,7 @@ export const sendVerificationEmail = async (
   username?: string
 ): Promise<boolean> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/email/send-verification`, {
+    const response = await fetch(`${API_URL}/api/email/send-verification`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'

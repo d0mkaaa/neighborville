@@ -244,41 +244,30 @@ export default function GameHeader({
               <Button
                 variant="secondary"
                 size="sm"
-                icon={<Save size={16} />}
+                icon={<Save size={16} className={autoSaving ? "animate-pulse text-emerald-500" : ""} />}
                 onClick={onOpenSaveManager}
                 disabled={autoSaving}
+                className={autoSaving ? "border-emerald-500 bg-emerald-50" : ""}
               >
                 {autoSaving ? 'saving...' : 'save'}
               </Button>
-              
-              {lastSaveTime && !autoSaving && (
-                <div className="absolute -bottom-5 left-0 right-0 text-xs text-slate-500 text-center">
-                  {`Last saved: ${lastSaveTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`}
+              {lastSaveTime && (
+                <div className={`absolute -bottom-5 left-0 right-0 text-xs ${autoSaving ? "text-emerald-600 font-medium" : "text-slate-500"} text-center whitespace-nowrap`}>
+                  {autoSaving ? 'Saving game...' : `Last saved: ${lastSaveTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'})}`}
                 </div>
               )}
-              
               {autoSaving && (
                 <motion.div 
                   initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="absolute top-0 right-0 -mr-1 -mt-1 w-2 h-2 rounded-full bg-emerald-500"
+                  animate={{ opacity: [0.5, 1, 0.5] }}
+                  transition={{ repeat: Infinity, duration: 1.5 }}
+                  className="absolute top-0 right-0 -mr-1 -mt-1 w-3 h-3 rounded-full bg-emerald-500"
                   style={{
-                    boxShadow: '0 0 0 2px white',
-                    animation: 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite'
+                    boxShadow: '0 0 0 2px white'
                   }}
                 />
               )}
             </div>
-            
-            {onSaveGame && (
-              <button 
-                onClick={onSaveGame}
-                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
-                title="Save Game"
-              >
-                <Save size={18} className="text-emerald-600" />
-              </button>
-            )}
             
             <Button
               variant="secondary"

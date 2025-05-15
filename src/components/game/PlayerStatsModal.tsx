@@ -73,7 +73,7 @@ export default function PlayerStatsModal({ gameData, achievements, neighbors, gr
   ].find(item => item.level === nextLevel);
 
   useEffect(() => {
-    const savedSettings = localStorage.getItem('profile_settings');
+    const savedSettings = sessionStorage.getItem('profile_settings');
     if (savedSettings) {
       try {
         const settings = JSON.parse(savedSettings);
@@ -104,7 +104,7 @@ export default function PlayerStatsModal({ gameData, achievements, neighbors, gr
         showActivity
       };
       
-      localStorage.setItem('profile_settings', JSON.stringify(settings));
+      sessionStorage.setItem('profile_settings', JSON.stringify(settings));
       
       setTimeout(() => {
         setIsSaving(false);

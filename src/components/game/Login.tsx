@@ -32,7 +32,7 @@ export default function Login({ onStartGame, onLoadGame, onShowTutorial }: Login
   
   const loadSavedGames = () => {
     try {
-      const keys = Object.keys(localStorage);
+      const keys = Object.keys(sessionStorage);
       const gameKeys = keys.filter(key => key.startsWith(SAVE_KEY));
       
       if (gameKeys.length > 0) {
@@ -40,7 +40,7 @@ export default function Login({ onStartGame, onLoadGame, onShowTutorial }: Login
       }
       
       const games = gameKeys.map(key => {
-        const data = JSON.parse(localStorage.getItem(key) || "{}") as GameProgress;
+        const data = JSON.parse(sessionStorage.getItem(key) || "{}") as GameProgress;
         
         let timestamp = Date.now();
         const nameParts = key.split("_");

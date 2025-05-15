@@ -368,6 +368,122 @@ router.post('/game/save', auth, async (req, res) => {
   }
 });
 
+router.post('/game/saves/batch', auth, async (req, res) => {
+  try {
+    const { saves } = req.body;
+    
+    if (!saves || !Array.isArray(saves) || saves.length === 0) {
+      return res.status(400).json({ success: false, message: 'No valid saves provided' });
+    }
+    
+    const user = await findUserById(req.user._id);
+    
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    
+    if (!user.gameSaves) {
+      user.gameSaves = [];
+    }
+    
+    let savedCount = 0;
+    const processedIds = new Set();
+    
+    for (const save of saves) {
+      if (!save.id || !save.data || processedIds.has(save.id)) {
+        continue;
+      }
+      
+      processedIds.add(save.id);
+      
+      const existingIndex = user.gameSaves.findIndex(existingSave => existingSave.id === save.id);
+      
+      if (existingIndex >= 0) {
+        user.gameSaves[existingIndex] = {
+          id: save.id,
+          playerName: save.data.playerName || 'Unknown',
+          data: save.data,
+          timestamp: save.data.saveTimestamp || Date.now(),
+          saveType: save.saveType || 'manual',
+          version: save.data.version || '1.0'
+        };
+      } else {
+        user.gameSaves.push({
+          id: save.id,
+          playerName: save.data.playerName || 'Unknown',
+          data: save.data,
+          timestamp: save.data.saveTimestamp || Date.now(),
+          saveType: save.saveType || 'manual',
+          version: save.data.version || '1.0'
+        });
+      }
+      
+      savedCount++;
+    }
+    
+    if (user.gameSaves.length > 30) {
+      user.gameSaves.sort((a, b) => b.timestamp - a.timestamp);
+      user.gameSaves = user.gameSaves.slice(0, 30);
+    }
+    
+    user.lastSave = new Date();
+    await user.save();
+    
+    res.status(200).json({
+      success: true,
+      message: `Saved ${savedCount} game saves successfully`,
+      savedCount
+    });
+  } catch (error) {
+    console.error('Error in /game/saves/batch route:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+router.delete('/game/save/:id', auth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    if (!id) {
+      return res.status(400).json({ success: false, message: 'No save ID provided' });
+    }
+    
+    const user = await findUserById(req.user._id);
+    
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    
+    if (!user.gameSaves) {
+      user.gameSaves = [];
+    }
+    
+    const saveIndex = user.gameSaves.findIndex(save => save.id === id);
+    
+    if (saveIndex === -1) {
+      console.log(`Save ID ${id} not found in user's saves collection`);
+      
+      return res.status(200).json({
+        success: true,
+        message: 'Save not found on server, no action needed'
+      });
+    }
+    
+    user.gameSaves.splice(saveIndex, 1);
+    await user.save();
+    
+    console.log(`Server successfully deleted save ${id} for user ${user._id}`);
+    
+    res.status(200).json({
+      success: true,
+      message: 'Game save deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error in DELETE /game/save/:id route:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 router.get('/game/load', auth, async (req, res) => {
   try {
     const user = await findUserById(req.user._id);
@@ -577,6 +693,30 @@ router.get('/leaderboard', async (req, res) => {
     });
   } catch (error) {
     console.error('Error in GET /leaderboard route:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+router.post('/check-registered', [
+  body('email').isEmail().withMessage('Valid email is required')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+    
+    const { email } = req.body;
+    
+    const user = await findUserByEmail(email);
+    
+    return res.status(200).json({
+      success: true,
+      exists: !!user,
+      registered: !!user
+    });
+  } catch (error) {
+    console.error('Error in /check-registered route:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });

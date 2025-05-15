@@ -12,6 +12,7 @@ interface AppLayoutProps {
   timeOfDay?: 'morning' | 'day' | 'evening' | 'night';
   onShowLeaderboard?: () => void;
   onShowProfileSettings?: () => void;
+  onShowSecuritySettings?: () => void;
   onShowLogin?: () => void;
   onLogout?: () => void;
   isInGame?: boolean;
@@ -27,6 +28,7 @@ export default function AppLayout({
   timeOfDay = 'day',
   onShowLeaderboard = () => {},
   onShowProfileSettings = () => {},
+  onShowSecuritySettings = () => {},
   onShowLogin = () => {},
   onLogout = () => {},
   isInGame = false,
@@ -83,6 +85,7 @@ export default function AppLayout({
             <Navbar 
               onShowLeaderboard={onShowLeaderboard}
               onShowProfileSettings={onShowProfileSettings}
+              onShowSecuritySettings={onShowSecuritySettings}
               onShowLogin={onShowLogin}
               onLogout={handleLogout}
               isInGame={isInGame}

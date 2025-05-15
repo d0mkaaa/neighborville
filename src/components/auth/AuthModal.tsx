@@ -10,7 +10,7 @@ type AuthModalProps = {
 };
 
 export default function AuthModal({ onClose, onLogin }: AuthModalProps) {
-  const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
+  const [activeTab, setActiveTab] = useState<'login' | 'register'>('register');
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
@@ -33,10 +33,19 @@ export default function AuthModal({ onClose, onLogin }: AuthModalProps) {
     e.preventDefault();
     setError(null);
     
+    if (activeTab === 'register' && !username.trim()) {
+      setError('Username is required for registration');
+      return;
+    }
+    
     if (!isCodeSent) {
       setIsLoading(true);
       try {
-        const emailSent = await sendVerificationEmail(email, '', username);
+        const emailSent = await sendVerificationEmail(
+          email, 
+          '', 
+          activeTab === 'register' ? username : undefined
+        );
         
         if (emailSent) {
           setIsCodeSent(true);
@@ -59,10 +68,12 @@ export default function AuthModal({ onClose, onLogin }: AuthModalProps) {
           setError(null);
           setIsVerifying(true);
           
+          const finalUsername = activeTab === 'register' ? username : user.username;
+          
           setTimeout(() => {
             onLogin({
               id: user.id || email,
-              username: user.username || username || email.split('@')[0],
+              username: finalUsername || email.split('@')[0],
               email: user.email || email,
               isGuest: user.isGuest || false
             });
@@ -85,7 +96,11 @@ export default function AuthModal({ onClose, onLogin }: AuthModalProps) {
     setIsLoading(true);
     
     try {
-      const emailSent = await sendVerificationEmail(email, '', username);
+      const emailSent = await sendVerificationEmail(
+        email, 
+        '', 
+        activeTab === 'register' ? username : undefined
+      );
       
       if (emailSent) {
         setError(null);
@@ -97,6 +112,15 @@ export default function AuthModal({ onClose, onLogin }: AuthModalProps) {
       setError('An error occurred. Please try again later.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleTabChange = (tab: 'login' | 'register') => {
+    setActiveTab(tab);
+    setError(null);
+    if (isCodeSent) {
+      setIsCodeSent(false);
+      setVerificationCode('');
     }
   };
 
@@ -117,6 +141,12 @@ export default function AuthModal({ onClose, onLogin }: AuthModalProps) {
           <h2 className="text-lg font-medium">
             Welcome to NeighborVille
           </h2>
+          <button 
+            onClick={onClose}
+            className="text-white/80 hover:text-white transition-colors"
+          >
+            ×
+          </button>
         </div>
 
         <div className="p-6">
@@ -138,13 +168,13 @@ export default function AuthModal({ onClose, onLogin }: AuthModalProps) {
               <div className="w-full border-t border-gray-200"></div>
             </div>
             <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-white text-gray-500">Or sign in for cloud saves</span>
+              <span className="px-2 bg-white text-gray-500">Or create an account for cloud saves</span>
             </div>
           </div>
 
           <div className="flex border-b border-gray-200 mb-6">
             <button
-              onClick={() => setActiveTab('login')}
+              onClick={() => handleTabChange('login')}
               className={`px-4 py-2 text-sm font-medium transition-colors ${
                 activeTab === 'login'
                   ? 'text-blue-600 border-b-2 border-blue-500'
@@ -154,20 +184,41 @@ export default function AuthModal({ onClose, onLogin }: AuthModalProps) {
               Login
             </button>
             <button
-              onClick={() => setActiveTab('register')}
+              onClick={() => handleTabChange('register')}
               className={`px-4 py-2 text-sm font-medium transition-colors ${
                 activeTab === 'register'
                   ? 'text-blue-600 border-b-2 border-blue-500'
                   : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              Register
+              Register (Recommended)
             </button>
           </div>
 
           <form onSubmit={handleEmailSubmit} className="space-y-4">
             {!isCodeSent ? (
               <>
+                {activeTab === 'register' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Choose Your Username <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={username}
+                        onChange={e => setUsername(e.target.value)}
+                        className="w-full py-2 px-4 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="e.g., d0mkaaa"
+                        required={activeTab === 'register'}
+                        disabled={isLoading}
+                      />
+                      <User className="absolute left-3 top-2.5 text-gray-400" size={18} />
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">This will be displayed in the game and leaderboards</p>
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Email address
@@ -185,26 +236,6 @@ export default function AuthModal({ onClose, onLogin }: AuthModalProps) {
                     <Mail className="absolute left-3 top-2.5 text-gray-400" size={18} />
                   </div>
                 </div>
-
-                {activeTab === 'register' && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Username
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={username}
-                        onChange={e => setUsername(e.target.value)}
-                        className="w-full py-2 px-4 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Choose a username"
-                        required={activeTab === 'register'}
-                        disabled={isLoading}
-                      />
-                      <User className="absolute left-3 top-2.5 text-gray-400" size={18} />
-                    </div>
-                  </div>
-                )}
               </>
             ) : (
               <div>
@@ -237,6 +268,13 @@ export default function AuthModal({ onClose, onLogin }: AuthModalProps) {
               </div>
             )}
 
+            {error && (
+              <div className="bg-red-50 border border-red-100 rounded-lg p-3 flex items-start">
+                <AlertCircle size={18} className="text-red-500 mr-2 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-red-600">{error}</p>
+              </div>
+            )}
+
             <button
               type="submit"
               className={`w-full py-2 px-4 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center justify-center gap-2 ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
@@ -248,74 +286,56 @@ export default function AuthModal({ onClose, onLogin }: AuthModalProps) {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  Processing...
+                  {isCodeSent ? 'Verifying...' : 'Sending Code...'}
                 </>
               ) : (
                 <>
-                  {isCodeSent ? 'Verify Code' : 'Continue'}
-                  <ArrowRight size={18} />
+                  {isCodeSent ? (
+                    <>
+                      <CheckCircle size={18} />
+                      Verify Code
+                    </>
+                  ) : (
+                    <>
+                      <ArrowRight size={18} />
+                      {activeTab === 'login' ? 'Login with Email' : 'Create Account'}
+                    </>
+                  )}
                 </>
               )}
             </button>
           </form>
 
-          {isCodeSent && !error && !isVerifying && (
-            <div className="mt-4 p-3 bg-green-50 rounded-lg flex items-center gap-2 text-green-700">
-              <CheckCircle size={18} />
-              <span className="text-sm">Verification code sent to your email</span>
-            </div>
+          {!isCodeSent && (
+            <p className="mt-4 text-xs text-gray-500 text-center">
+              {activeTab === 'login' 
+                ? "Don't have an account? Click Register above." 
+                : "We'll send a verification code to your email"}
+            </p>
           )}
           
-          {isVerifying && (
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="mt-4 p-6 bg-blue-50 rounded-lg flex flex-col items-center gap-3 text-blue-700"
-            >
+          {activeTab === 'login' && !isCodeSent && (
+            <p className="mt-2 text-xs text-red-500 text-center">
+              Note: If you haven't registered yet, please click the Register tab
+            </p>
+          )}
+
+          <AnimatePresence>
+            {isVerifying && (
               <motion.div
-                initial={{ scale: 0.5, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ 
-                  type: "spring", 
-                  stiffness: 260, 
-                  damping: 20,
-                  delay: 0.2 
-                }}
-                className="w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center text-white"
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.8 }}
+                className="absolute inset-0 bg-white flex flex-col items-center justify-center p-6"
               >
-                <motion.div
-                  initial={{ opacity: 0, pathLength: 0 }}
-                  animate={{ opacity: 1, pathLength: 1 }}
-                  transition={{ duration: 0.5, delay: 0.5 }}
-                >
-                  <CheckCircle size={32} />
-                </motion.div>
+                <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mb-4">
+                  <CheckCircle size={32} className="text-green-500" />
+                </div>
+                <h3 className="text-xl font-medium text-gray-800 mb-2">Success!</h3>
+                <p className="text-gray-600 text-center mb-4">Your account has been verified. Logging in...</p>
               </motion.div>
-              <motion.span 
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.8 }}
-                className="text-lg font-medium"
-              >
-                Verification Successful!
-              </motion.span>
-              <motion.span 
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 1 }}
-                className="text-sm text-blue-600 text-center"
-              >
-                Logging you in...
-              </motion.span>
-            </motion.div>
-          )}
-          
-          {error && (
-            <div className="mt-4 p-3 bg-red-50 rounded-lg flex items-center gap-2 text-red-700">
-              <AlertCircle size={18} />
-              <span className="text-sm">{error}</span>
-            </div>
-          )}
+            )}
+          </AnimatePresence>
         </div>
       </motion.div>
     </motion.div>

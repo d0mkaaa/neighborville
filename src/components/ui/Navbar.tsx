@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { Trophy, User, Settings, LogOut, Home, PlusCircle, LogIn, CloudUpload } from 'lucide-react';
+import { Trophy, User, Settings, LogOut, Home, PlusCircle, LogIn, CloudUpload, Shield } from 'lucide-react';
 
 interface NavbarProps {
   onShowLeaderboard: () => void;
   onShowProfileSettings: () => void;
+  onShowSecuritySettings: () => void;
   onShowLogin: () => void;
   onLogout: () => void;
   isInGame: boolean;
@@ -15,6 +16,7 @@ interface NavbarProps {
 export default function Navbar({
   onShowLeaderboard,
   onShowProfileSettings,
+  onShowSecuritySettings,
   onShowLogin,
   onLogout,
   isInGame,
@@ -114,8 +116,21 @@ export default function Navbar({
                     className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
                   >
                     <Settings size={16} className="mr-2" />
-                    {isGuest ? 'Game Settings' : 'Profile & Settings'}
+                    {isGuest ? 'Game Settings' : 'Profile Settings'}
                   </button>
+                  
+                  {!isGuest && (
+                    <button
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        onShowSecuritySettings();
+                      }}
+                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                    >
+                      <Shield size={16} className="mr-2" />
+                      Security Settings
+                    </button>
+                  )}
                   
                   {isGuest && (
                     <button
