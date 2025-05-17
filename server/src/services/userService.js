@@ -242,14 +242,3 @@ export const updateUser = async (userId, userData) => {
     return false;
   }
 };
-
-export const createGuestUser = async () => {
-  try {
-    const guestUser = User.createGuest();
-    await guestUser.save();
-    return guestUser;
-  } catch (error) {
-    console.error('Error creating guest user:', error);
-    throw error;
-  }
-};

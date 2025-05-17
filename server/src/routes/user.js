@@ -15,7 +15,6 @@ import {
   deleteOtherSessions,
   updateUserSettings,
   updateUser,
-  createGuestUser,
   findUserByUsername
 } from '../services/userService.js';
 import { generateVerificationCode, sendVerificationEmail } from '../services/email.js';
@@ -109,54 +108,84 @@ router.post('/verify', [
       return res.status(400).json({ success: false, errors: errors.array() });
     }
     
-    const { email, code } = req.body;
+    const { email, code, username } = req.body;
     console.log(`Verification request received for ${email} with code ${code}`);
     
     let user = await findUserByEmail(email);
+    let isNewRegistration = false;
     
     if (!user) {
-      console.log(`User not found for email: ${email}, creating new user`);
-      const { username } = req.body;
-      const password = Math.random().toString(36).slice(-8);
+      console.log(`User not found for email: ${email}, this is a new registration`);
+      isNewRegistration = true;
+      
+      if (!username) {
+        const isValid = await verifyCode(email, code);
+        if (!isValid) {
+          return res.status(400).json({ 
+            success: false, 
+            message: 'Invalid or expired verification code' 
+          });
+        }
+        
+        return res.status(200).json({
+          success: true,
+          message: 'Code verified, username required',
+          isNewRegistration: true
+        });
+      }
       
       try {
         if (username) {
           const existingUsername = await findUserByUsername(username);
           if (existingUsername) {
-            return res.status(409).json({ success: false, message: 'Username already taken' });
+            return res.status(409).json({ 
+              success: false, 
+              message: 'Username already taken' 
+            });
           }
         }
         
-        user = await createUser(email, username || email.split('@')[0], password);
+        user = await createUser(email, username || email.split('@')[0]);
         console.log(`Created new user for ${email} with username ${user.username}`);
       } catch (error) {
         console.error(`Error creating user for ${email}:`, error);
-        return res.status(500).json({ success: false, message: 'Failed to create user' });
+        return res.status(500).json({ 
+          success: false, 
+          message: 'Failed to create user' 
+        });
       }
+    } else if (username && !user.username) {
+      user.username = username;
+      await user.save();
+      console.log(`Updated username for ${email} to ${username}`);
     }
     
     const isValid = await verifyCode(email, code);
     console.log(`Verification result for ${email}: ${isValid}`);
     
     if (!isValid) {
-      return res.status(400).json({ success: false, message: 'Invalid or expired verification code' });
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Invalid or expired verification code' 
+      });
     }
     
     await markUserVerified(email);
     console.log(`User ${email} marked as verified`);
-
     
     const userAgent = req.headers['user-agent'];
     const ip = req.ip;
     const session = await createSession(user, userAgent, ip);
     
-    const token = setAuthCookie(res, user._id);
+    const token = createToken(user._id);
+    setAuthCookie(res, user._id);
     
     res.status(200).json({
       success: true,
       message: 'Email verified successfully',
       user: user.toProfile(),
-      token: token
+      token: token,
+      isNewRegistration
     });
   } catch (error) {
     console.error('Error in /verify route:', error);
@@ -223,28 +252,6 @@ router.post('/resend-verification', [
     });
   } catch (error) {
     console.error('Error in /resend-verification route:', error);
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
-});
-
-router.post('/guest', async (req, res) => {
-  try {
-    const user = await createGuestUser();
-    
-    const userAgent = req.headers['user-agent'];
-    const ip = req.ip;
-    const session = await createSession(user, userAgent, ip);
-    
-    const token = createToken(user._id);
-    
-    res.cookie('token', token, cookieOptions);
-    
-    res.status(200).json({
-      success: true,
-      user: user.toProfile()
-    });
-  } catch (error) {
-    console.error('Error in /guest route:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -350,11 +357,42 @@ router.post('/game/save', auth, async (req, res) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
     
+    if (user._id.toString() !== req.user._id.toString()) {
+      console.error(`Security violation: User ${req.user._id} attempted to save data for user ${user._id}`);
+      return res.status(403).json({ success: false, message: 'Unauthorized access to user data' });
+    }
+    
     user.gameData = gameData;
     user.lastSave = new Date();
-    await user.save();
     
-    user.lastLogin = new Date();
+    if (!user.gameSaves) {
+      user.gameSaves = [];
+    }
+    
+    const saveId = gameData.saveId || `save-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    
+    const existingIndex = user.gameSaves.findIndex(save => save.id === saveId);
+    
+    const saveEntry = {
+      id: saveId,
+      playerName: gameData.playerName || 'Unknown',
+      data: gameData,
+      timestamp: gameData.saveTimestamp || Date.now(),
+      saveType: 'manual',
+      version: gameData.version || '1.0'
+    };
+    
+    if (existingIndex >= 0) {
+      user.gameSaves[existingIndex] = saveEntry;
+    } else {
+      user.gameSaves.push(saveEntry);
+    }
+    
+    if (user.gameSaves.length > 30) {
+      user.gameSaves.sort((a, b) => b.timestamp - a.timestamp);
+      user.gameSaves = user.gameSaves.slice(0, 30);
+    }
+    
     await user.save();
     
     res.status(200).json({
@@ -454,6 +492,14 @@ router.delete('/game/save/:id', auth, async (req, res) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
     
+    if (user._id.toString() !== req.user._id.toString()) {
+      console.error(`Security violation: User ${req.user._id} attempted to delete save for user ${user._id}`);
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Unauthorized access to user saves'
+      });
+    }
+    
     if (!user.gameSaves) {
       user.gameSaves = [];
     }
@@ -490,6 +536,11 @@ router.get('/game/load', auth, async (req, res) => {
     
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    
+    if (user._id.toString() !== req.user._id.toString()) {
+      console.error(`Security violation: User ${req.user._id} attempted to access data for user ${user._id}`);
+      return res.status(403).json({ success: false, message: 'Unauthorized access to user data' });
     }
     
     user.lastLogin = new Date();
@@ -717,6 +768,93 @@ router.post('/check-registered', [
     });
   } catch (error) {
     console.error('Error in /check-registered route:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+router.get('/game/saves', auth, async (req, res) => {
+  try {
+    const user = await findUserById(req.user._id);
+    
+    if (!user) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'User not found' 
+      });
+    }
+    
+    if (user._id.toString() !== req.user._id.toString()) {
+      console.error(`Security violation: User ${req.user._id} attempted to access saves for user ${user._id}`);
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Unauthorized access to user saves'
+      });
+    }
+    
+    if (!user.gameSaves || !Array.isArray(user.gameSaves)) {
+      return res.status(200).json({
+        success: true,
+        saves: []
+      });
+    }
+    
+    res.status(200).json({
+      success: true,
+      saves: user.gameSaves.map(save => ({
+        id: save.id,
+        playerName: save.playerName || 'Unknown',
+        data: save.data,
+        timestamp: save.timestamp || Date.now(),
+        saveType: save.saveType || 'manual',
+        version: save.version || '1.0'
+      }))
+    });
+  } catch (error) {
+    console.error('Error in GET /game/saves route:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+router.post('/update-username', [
+  body('email').isEmail().withMessage('Valid email is required'),
+  body('username').isLength({ min: 3 }).withMessage('Username must be at least 3 characters')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+    
+    const { email, username } = req.body;
+    
+    const user = await findUserByEmail(email);
+    
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    
+    const existingUser = await findUserByUsername(username);
+    if (existingUser && existingUser._id.toString() !== user._id.toString()) {
+      return res.status(409).json({ success: false, message: 'Username already taken' });
+    }
+    
+    await updateUser(user._id, { username });
+    
+    const session = await createSession(user, req.headers['user-agent'] || 'Unknown', req.ip);
+    const token = createToken(user._id);
+
+    setAuthCookie(res, token);
+    
+    const updatedUser = await findUserById(user._id);
+    
+    res.status(200).json({
+      success: true,
+      message: 'Username updated successfully',
+      token,
+      user: updatedUser.toProfile()
+    });
+  } catch (error) {
+    console.error('Error in /update-username route:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });

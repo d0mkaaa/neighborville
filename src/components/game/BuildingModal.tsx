@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Hammer, Shuffle, Brain, CheckCircle, Timer, Share2, Zap } from "lucide-react";
 import type { Building } from "../../types/game";
@@ -18,6 +18,19 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
   
   const [phase, setPhase] = useState<'start' | 'puzzle' | 'building' | 'complete'>('start');
   const [difficultyLevel, setDifficultyLevel] = useState<1|2|3>(1);
+  
+  const buildingRef = useRef(building);
+  const selectedIndexRef = useRef(selectedIndex);
+  const completeCallbackRef = useRef(onComplete);
+  const closeCallbackRef = useRef(onClose);
+  
+  useEffect(() => {
+    buildingRef.current = building;
+    selectedIndexRef.current = selectedIndex;
+    completeCallbackRef.current = onComplete;
+    closeCallbackRef.current = onClose;
+  }, [building, selectedIndex, onComplete, onClose]);
+
   const [puzzleType] = useState<PuzzleType>(() => {
     const allTypes: PuzzleType[] = ['memory', 'sequence', 'connect'];
     
@@ -60,7 +73,7 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
   
   const [attempts, setAttempts] = useState(0);
   const maxAttempts = puzzleType === 'memory' ? 999 : 3 + difficultyLevel;
-  
+
   useEffect(() => {
     if (puzzleType === 'memory') {
       const baseItems = ['🔨', '🪚', '🧹', '🔧'];
@@ -76,7 +89,7 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
     }
   }, [puzzleType, difficultyLevel]);
   
-  const initializeConnectPuzzle = () => {
+  const initializeConnectPuzzle = useCallback(() => {
     const numberOfPoints = 6 + difficultyLevel;
     const pointsArray: {x: number, y: number}[] = [];
     
@@ -88,9 +101,9 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
     
     setConnectPoints(pointsArray);
     setRequiredConnections(Math.floor(numberOfPoints / 2));
-  };
+  }, [difficultyLevel]);
   
-  const handleMemoryCardClick = (index: number) => {
+  const handleMemoryCardClick = useCallback((index: number) => {
     if (flippedCards.includes(index) || matchedCards.includes(index)) return;
     
     const newFlipped = [...flippedCards, index];
@@ -99,9 +112,9 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
     if (newFlipped.length === 2) {
       const [first, second] = newFlipped;
       if (memoryCards[first] === memoryCards[second]) {
-        setMatchedCards([...matchedCards, first, second]);
+        setMatchedCards(prev => [...prev, first, second]);
         if (matchedCards.length + 2 === memoryCards.length) {
-          const completedPuzzleKey = `completed_puzzles_${building.id}`;
+          const completedPuzzleKey = `completed_puzzles_${buildingRef.current.id}`;
           const storedPuzzles = localStorage.getItem(completedPuzzleKey);
           let completedPuzzles: PuzzleType[] = [];
           
@@ -119,16 +132,19 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
           setTimeout(() => setPhase('building'), 500);
         }
       } else {
-        setAttempts(prev => prev + 1);
-        if (attempts + 1 >= maxAttempts) {
-          onClose();
-        }
+        setAttempts(prev => {
+          const newAttempts = prev + 1;
+          if (newAttempts >= maxAttempts) {
+            closeCallbackRef.current();
+          }
+          return newAttempts;
+        });
       }
       setTimeout(() => setFlippedCards([]), 1000);
     }
-  };
+  }, [flippedCards, matchedCards, memoryCards, puzzleType, maxAttempts]);
   
-  const showSequence = async () => {
+  const showSequence = useCallback(async () => {
     setShowingSequence(true);
     for (let i = 0; i < sequence.length; i++) {
       await new Promise(resolve => setTimeout(resolve, 500));
@@ -156,9 +172,9 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
       }
     }
     setShowingSequence(false);
-  };
+  }, [sequence]);
   
-  const handleSequenceClick = (index: number) => {
+  const handleSequenceClick = useCallback((index: number) => {
     if (showingSequence) return;
     
     const button = document.querySelectorAll('.sequence-button')[index] as HTMLElement | undefined;
@@ -177,45 +193,20 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
       }
     }
     
-    const newPlayerSequence = [...playerSequence, index];
-    setPlayerSequence(newPlayerSequence);
-    
-    if (newPlayerSequence[newPlayerSequence.length - 1] !== sequence[newPlayerSequence.length - 1]) {
-      setAttempts(prev => prev + 1);
-      setPlayerSequence([]);
-      if (attempts + 1 >= maxAttempts) {
-        onClose();
-      }
-    } else if (newPlayerSequence.length === sequence.length) {
-      const completedPuzzleKey = `completed_puzzles_${building.id}`;
-      const storedPuzzles = localStorage.getItem(completedPuzzleKey);
-      let completedPuzzles: PuzzleType[] = [];
+    setPlayerSequence(prev => {
+      const newPlayerSequence = [...prev, index];
       
-      try {
-        completedPuzzles = storedPuzzles ? JSON.parse(storedPuzzles) : [];
-      } catch (e) {
-        console.error('Error parsing completed puzzles:', e);
-      }
-      
-      if (!completedPuzzles.includes(puzzleType)) {
-        completedPuzzles.push(puzzleType);
-        localStorage.setItem(completedPuzzleKey, JSON.stringify(completedPuzzles));
-      }
-      
-      setTimeout(() => setPhase('building'), 500);
-    }
-  };
-  
-  const handlePointClick = (index: number) => {
-    if (selectedPoint === null) {
-      setSelectedPoint(index);
-    } else if (selectedPoint !== index) {
-      setConnectLines([...connectLines, { start: selectedPoint, end: index }]);
-      setCompletedConnections(completedConnections + 1);
-      setSelectedPoint(null);
-      
-      if (completedConnections + 1 >= requiredConnections) {
-        const completedPuzzleKey = `completed_puzzles_${building.id}`;
+      if (newPlayerSequence[newPlayerSequence.length - 1] !== sequence[newPlayerSequence.length - 1]) {
+        setAttempts(prevAttempts => {
+          const newAttempts = prevAttempts + 1;
+          if (newAttempts >= maxAttempts) {
+            closeCallbackRef.current();
+          }
+          return newAttempts;
+        });
+        return [];
+      } else if (newPlayerSequence.length === sequence.length) {
+        const completedPuzzleKey = `completed_puzzles_${buildingRef.current.id}`;
         const storedPuzzles = localStorage.getItem(completedPuzzleKey);
         let completedPuzzles: PuzzleType[] = [];
         
@@ -232,31 +223,105 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
         
         setTimeout(() => setPhase('building'), 500);
       }
+      
+      return newPlayerSequence;
+    });
+  }, [showingSequence, sequence, puzzleType, maxAttempts]);
+  
+  const handlePointClick = useCallback((index: number) => {
+    if (selectedPoint === null) {
+      setSelectedPoint(index);
+    } else if (selectedPoint !== index) {
+      setConnectLines(prev => [...prev, { start: selectedPoint, end: index }]);
+      setCompletedConnections(prev => {
+        const newCompletedConnections = prev + 1;
+        
+        if (newCompletedConnections >= requiredConnections) {
+          const completedPuzzleKey = `completed_puzzles_${buildingRef.current.id}`;
+          const storedPuzzles = localStorage.getItem(completedPuzzleKey);
+          let completedPuzzles: PuzzleType[] = [];
+          
+          try {
+            completedPuzzles = storedPuzzles ? JSON.parse(storedPuzzles) : [];
+          } catch (e) {
+            console.error('Error parsing completed puzzles:', e);
+          }
+          
+          if (!completedPuzzles.includes(puzzleType)) {
+            completedPuzzles.push(puzzleType);
+            localStorage.setItem(completedPuzzleKey, JSON.stringify(completedPuzzles));
+          }
+          
+          setTimeout(() => setPhase('building'), 500);
+        }
+        
+        return newCompletedConnections;
+      });
+      setSelectedPoint(null);
     } else {
       setSelectedPoint(null);
     }
-  };
+  }, [selectedPoint, requiredConnections, puzzleType]);
   
   useEffect(() => {
-    if (phase === 'building') {
-      const interval = setInterval(() => {
-        setBuildingProgress(prev => {
-          const newProgress = prev + 5;
-          if (newProgress >= 100) {
-            clearInterval(interval);
-            setTimeout(() => {
-              setPhase('complete');
-              onComplete(building, selectedIndex);
-            }, 500);
-            return 100;
-          }
-          return newProgress;
-        });
-      }, 100);
+    if (phase !== 'building') return;
+    
+    const intervalRef = { current: null as number | null };
+    let isMounted = true;
+    
+    intervalRef.current = window.setInterval(() => {
+      if (!isMounted) return;
       
-      return () => clearInterval(interval);
-    }
-  }, [phase, building, onComplete, selectedIndex]);
+      setBuildingProgress(prev => {
+        const newProgress = prev + 5;
+        if (newProgress >= 100) {
+          if (intervalRef.current !== null) {
+            clearInterval(intervalRef.current);
+            intervalRef.current = null;
+          }
+          
+          if (isMounted) {
+            setTimeout(() => {
+              if (isMounted) {
+                setPhase('complete');
+                completeCallbackRef.current(buildingRef.current, selectedIndexRef.current);
+              }
+            }, 300);
+          }
+          
+          return 100;
+        }
+        return newProgress;
+      });
+    }, 100);
+    
+    return () => {
+      isMounted = false;
+      if (intervalRef.current !== null) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, [phase]);
+  
+  useEffect(() => {
+    if (phase !== 'complete') return;
+    
+    const closeTimerRef = { current: null as ReturnType<typeof setTimeout> | null };
+    
+    closeTimerRef.current = setTimeout(() => {
+      if (closeCallbackRef.current) {
+        closeCallbackRef.current();
+      }
+    }, 1500);
+    
+    return () => {
+      if (closeTimerRef.current !== null) {
+        clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = null;
+      }
+    };
+  }, [phase]);
   
   return (
     <motion.div
@@ -265,7 +330,7 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
       exit={{ opacity: 0 }}
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ backdropFilter: "blur(8px)", backgroundColor: "rgba(0,0,0,0.3)" }}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
+      onClick={(e) => e.target === e.currentTarget && closeCallbackRef.current()}
     >
       <motion.div
         initial={{ scale: 0.9, opacity: 0, y: 20 }}
@@ -275,7 +340,7 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
       >
         <div className="p-4 bg-gradient-to-r from-emerald-500 to-teal-600 text-white flex justify-between items-center">
           <h2 className="text-lg font-medium lowercase">building {building.name}</h2>
-          <button onClick={onClose} className="text-white/80 hover:text-white">
+          <button onClick={closeCallbackRef.current} className="text-white/80 hover:text-white">
             <X size={20} />
           </button>
         </div>
@@ -495,42 +560,34 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
                   />
                 </div>
                 
-                <div className="flex justify-center">
-                  <motion.div 
-                    animate={{ rotate: 360 }}
-                    transition={{ repeat: Infinity, duration: 2, ease: "linear" }}
-                    className="bg-emerald-100 p-3 rounded-full"
-                  >
-                    <Hammer size={32} className="text-emerald-600" />
-                  </motion.div>
+                <div className="w-20 h-20 mx-auto mb-4 rounded-full flex items-center justify-center bg-emerald-100">
+                  <Hammer size={32} className="text-emerald-500" />
                 </div>
+                
+                <p className="text-gray-600">Building {building.name}... {buildingProgress}%</p>
               </motion.div>
             )}
             
             {phase === 'complete' && (
               <motion.div
                 key="complete"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="flex flex-col items-center py-6"
+                initial={{ opacity: 0, scale: 0.5 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ type: "spring", damping: 12 }}
+                className="text-center py-4"
               >
-                <motion.div
-                  initial={{ scale: 0.8, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={{ type: "spring", stiffness: 200, damping: 10 }}
-                  className="bg-emerald-100 p-4 rounded-full mb-4"
-                >
-                  <CheckCircle size={48} className="text-emerald-500" />
-                </motion.div>
+                <div className="w-20 h-20 mx-auto mb-4 rounded-full flex items-center justify-center bg-green-100">
+                  <CheckCircle size={32} className="text-green-500" />
+                </div>
                 
-                <h3 className="text-xl font-medium text-gray-800 mb-2">Construction Complete!</h3>
-                <p className="text-gray-600 mb-6">You've successfully built a new building</p>
+                <h3 className="text-xl font-medium text-gray-800 mb-2">Building Complete!</h3>
+                <p className="text-gray-600 mb-6">You've successfully built a {building.name}</p>
                 
-                <button 
-                  onClick={onClose}
-                  className="px-6 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors"
+                <button
+                  onClick={closeCallbackRef.current}
+                  className="w-full py-2 bg-emerald-500 text-white rounded-lg font-medium hover:bg-emerald-600 transition-colors"
                 >
-                  Continue
+                  Close
                 </button>
               </motion.div>
             )}

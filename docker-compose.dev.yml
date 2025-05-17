@@ -79,6 +79,20 @@ services:
     networks:
       - neighborville-dev-net
 
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./src:/app/src
+      - ./public:/app/public
+    environment:
+      - NODE_ENV=development
+      - VITE_API_URL=http://localhost:3000/api
+    command: npm run dev -- --host 0.0.0.0
+
 networks:
   neighborville-dev-net:
 

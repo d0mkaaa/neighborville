@@ -25,10 +25,6 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  isGuest: {
-    type: Boolean,
-    default: false
-  },
   settings: {
     soundEnabled: { type: Boolean, default: true },
     musicEnabled: { type: Boolean, default: true },
@@ -75,7 +71,7 @@ const userSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 userSchema.pre('save', async function(next) {
-  if (!this.isModified('password') || this.isGuest) {
+  if (!this.isModified('password')) {
     return next();
   }
   
@@ -89,20 +85,7 @@ userSchema.pre('save', async function(next) {
 });
 
 userSchema.methods.comparePassword = async function(candidatePassword) {
-  if (this.isGuest) return false;
   return await bcrypt.compare(candidatePassword, this.password);
-};
-
-userSchema.statics.createGuest = function() {
-  const guestId = `guest_${Date.now()}`;
-  const guestUsername = `Guest_${Math.floor(Math.random() * 1000)}`;
-  
-  return new this({
-    username: guestUsername,
-    email: `${guestId}@guest.neighborville`,
-    isGuest: true,
-    verified: true
-  });
 };
 
 userSchema.methods.toProfile = function() {
@@ -111,7 +94,6 @@ userSchema.methods.toProfile = function() {
     username: this.username,
     email: this.email,
     verified: this.verified,
-    isGuest: this.isGuest,
     settings: this.settings,
     profileSettings: this.profileSettings,
     createdAt: this.createdAt,

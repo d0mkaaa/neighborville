@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Play, Plus, Calendar, Coins, Home, Smile, ChevronDown, ChevronUp, Cloud, Download, Trash, MoreHorizontal, Loader2, Save } from 'lucide-react';
 import type { GameProgress } from '../../types/game';
-import { loadGameFromServer } from '../../services/gameService';
-import { cloudSave } from '../../utils/cloudsave';
+import { loadGameFromServer, getAllSavesFromServer, deleteSaveFromServer } from '../../services/gameService';
 import { useAuth } from '../../context/AuthContext';
 
 interface SaveInfo {
@@ -11,7 +10,7 @@ interface SaveInfo {
   name: string;
   date: string;
   data: GameProgress;
-  type: 'local' | 'cloud';
+  type: 'cloud';
   timestamp: number;
 }
 
@@ -28,20 +27,20 @@ export default function ContinueModal({
   onNewGame,
   onLoadGame
 }: ContinueModalProps) {
-  const { user, isAuthenticated, isGuest, checkAuthStatus } = useAuth();
+  const { user, isAuthenticated, checkAuthStatus } = useAuth();
   const buildingCount = savedGame.grid.filter(tile => tile !== null).length;
   
   const [showMoreSaves, setShowMoreSaves] = useState(false);
   const [allSaves, setAllSaves] = useState<SaveInfo[]>([]);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'all' | 'local' | 'cloud'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'cloud'>('all');
   const [savesToDelete, setSavesToDelete] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
   const [authVerified, setAuthVerified] = useState(false);
 
   useEffect(() => {
     async function verifyAuth() {
-      if (isAuthenticated && !isGuest) {
+      if (isAuthenticated) {
         try {
           const status = await checkAuthStatus();
           setAuthVerified(status);
@@ -59,7 +58,6 @@ export default function ContinueModal({
     const handleUnauthorized = () => {
       console.log("Unauthorized event detected in ContinueModal");
       setAuthVerified(false);
-      setActiveTab('local');
     };
     
     window.addEventListener('auth:unauthorized', handleUnauthorized);
@@ -67,7 +65,7 @@ export default function ContinueModal({
     return () => {
       window.removeEventListener('auth:unauthorized', handleUnauthorized);
     };
-  }, [isAuthenticated, isGuest, checkAuthStatus]);
+  }, [isAuthenticated, checkAuthStatus]);
 
   useEffect(() => {
     if (showMoreSaves) {
@@ -78,106 +76,32 @@ export default function ContinueModal({
   const loadAllSaves = async () => {
     setLoading(true);
     
-    const localSaves = loadLocalSaves();
-    
     let cloudSaves: SaveInfo[] = [];
     if (authVerified) {
       try {
-        const { gameData } = await loadGameFromServer();
-        if (gameData) {
-          cloudSaves.push({
-            id: `server-${Date.now()}`,
-            name: gameData.playerName || 'Server Save',
-            date: new Date().toLocaleDateString(),
-            data: gameData,
-            type: 'cloud',
-            timestamp: Date.now()
-          });
-        }
+        const serverSaves = await getAllSavesFromServer();
         
-        const indexDBSaves = await loadIndexDBSaves();
-        cloudSaves = [...cloudSaves, ...indexDBSaves];
+        cloudSaves = serverSaves.map(save => ({
+          id: save.id,
+          name: save.data.saveName || save.data.playerName || 'Cloud Save',
+          date: new Date(save.timestamp).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          }),
+          data: save.data,
+          type: 'cloud' as const,
+          timestamp: save.timestamp
+        })).sort((a, b) => b.timestamp - a.timestamp);
+        
+        setAllSaves(cloudSaves);
       } catch (err) {
         console.error("Error loading cloud saves:", err);
-        setActiveTab('local');
       }
-    } else if (isAuthenticated && !isGuest) {
-      setActiveTab('local');
     }
     
-    const combined = [...localSaves, ...cloudSaves].sort((a, b) => b.timestamp - a.timestamp);
-    setAllSaves(combined);
     setLoading(false);
-  };
-
-  const loadLocalSaves = (): SaveInfo[] => {
-    try {
-      const keys = Object.keys(sessionStorage);
-      const gameKeys = keys.filter(key => 
-        key.startsWith('neighborville_save') || 
-        key.startsWith('neighborville_autosave')
-      );
-      
-      return gameKeys.map(key => {
-        const data = JSON.parse(sessionStorage.getItem(key) || '{}') as GameProgress;
-        
-        let timestamp = Date.now();
-        const nameParts = key.split('_');
-        
-        if (nameParts.length > 2) {
-          const possibleTimestamp = parseInt(nameParts[2]);
-          if (!isNaN(possibleTimestamp)) {
-            timestamp = possibleTimestamp;
-          }
-        }
-        
-        const saveDate = new Date(timestamp).toLocaleDateString('en-US', {
-          month: 'short',
-          day: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit'
-        });
-        
-        return {
-          id: key,
-          name: data.saveName || data.playerName || 'Unnamed Save',
-          date: saveDate,
-          data: data,
-          type: 'local',
-          timestamp: timestamp
-        };
-      });
-    } catch (error) {
-      console.error('Error loading local saves:', error);
-      return [];
-    }
-  };
-
-  const loadIndexDBSaves = async (): Promise<SaveInfo[]> => {
-    if (!authVerified) {
-      return [];
-    }
-    
-    try {
-      const saves = await cloudSave.getAllSaves();
-      
-      return saves.map(save => ({
-        id: save.id,
-        name: save.data.saveName || save.data.playerName || 'Cloud Save',
-        date: new Date(save.timestamp).toLocaleDateString('en-US', {
-          month: 'short',
-          day: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit'
-        }),
-        data: save.data,
-        type: 'cloud',
-        timestamp: save.timestamp
-      }));
-    } catch (error) {
-      console.error('Error loading IndexDB saves:', error);
-      return [];
-    }
   };
 
   const handleDeleteSaves = async () => {
@@ -187,11 +111,7 @@ export default function ContinueModal({
     
     for (const id of savesToDelete) {
       try {
-        if (id.startsWith('neighborville_')) {
-          sessionStorage.removeItem(id);
-        } else if (authVerified) {
-          await cloudSave.deleteSave(id);
-        }
+        await deleteSaveFromServer(id);
       } catch (error) {
         console.error(`Error deleting save ${id}:`, error);
       }
@@ -211,7 +131,7 @@ export default function ContinueModal({
   };
 
   const handleLoadSave = (save: SaveInfo) => {
-    if (save.type === 'cloud' && !authVerified) {
+    if (!authVerified) {
       console.warn('Cannot load cloud save: not authenticated');
       return;
     }
@@ -221,15 +141,8 @@ export default function ContinueModal({
     }
   };
 
-  const availableTabs = authVerified 
-    ? ['all', 'local', 'cloud'] 
-    : ['all', 'local'];
-    
-  const hasCloudSaves = allSaves.some(save => save.type === 'cloud');
-
-  const filteredSaves = activeTab === 'all' 
-    ? allSaves 
-    : allSaves.filter(save => save.type === activeTab);
+  const availableTabs = authVerified ? ['all', 'cloud'] : ['all'];
+  const filteredSaves = allSaves;
 
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm z-50 p-4">
@@ -263,15 +176,9 @@ export default function ContinueModal({
               )}
             </span>
             
-            <span className={`text-xs ${
-              typeof savedGame.saveName === 'string' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'
-            } px-2 py-1 rounded-full flex items-center`}>
-              {typeof savedGame.saveName === 'string' ? (
-                <Cloud size={12} className="inline mr-1" />
-              ) : (
-                <Download size={12} className="inline mr-1" />
-              )}
-              {typeof savedGame.saveName === 'string' ? 'Cloud save' : 'Local save'}
+            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full flex items-center">
+              <Cloud size={12} className="inline mr-1" />
+              Cloud save
             </span>
           </div>
           
@@ -342,13 +249,13 @@ export default function ContinueModal({
                       {availableTabs.map(tab => (
                         <button
                           key={tab}
-                          onClick={() => setActiveTab(tab as 'all' | 'local' | 'cloud')}
+                          onClick={() => setActiveTab(tab as 'all' | 'cloud')}
                           className={`flex-1 py-1.5 text-center text-xs rounded-md ${activeTab === tab ? 'bg-white shadow' : 'hover:bg-white/50'}`}
                         >
-                          {tab === 'all' ? 'All Saves' : tab === 'local' ? 'Local' : 'Cloud'}
+                          {tab === 'all' ? 'All Saves' : 'Cloud'}
                         </button>
                       ))}
-                      {!authVerified && isAuthenticated && activeTab === 'cloud' && (
+                      {!authVerified && isAuthenticated && (
                         <div className="text-xs text-amber-600 text-center mt-1">
                           Authentication required
                         </div>
@@ -366,12 +273,10 @@ export default function ContinueModal({
                               <div className="flex-1">
                                 <div className="flex items-center">
                                   <h3 className="font-medium text-gray-800">{save.name}</h3>
-                                  {save.type === 'cloud' && (
-                                    <span className="ml-2 bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full">
-                                      <Cloud size={10} className="inline mr-1" />
-                                      Cloud
-                                    </span>
-                                  )}
+                                  <span className="ml-2 bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full">
+                                    <Cloud size={10} className="inline mr-1" />
+                                    Cloud
+                                  </span>
                                 </div>
                                 <div className="text-xs text-gray-500">{save.date}</div>
                                 
@@ -392,21 +297,21 @@ export default function ContinueModal({
                                 <button
                                   onClick={() => handleLoadSave(save)}
                                   className={`p-1.5 ${
-                                    save.type === 'cloud' && !authVerified 
+                                    !authVerified 
                                     ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
                                     : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
                                   } rounded`}
-                                  disabled={save.type === 'cloud' && !authVerified}
+                                  disabled={!authVerified}
                                 >
                                   <Download size={14} />
                                 </button>
                                 <button
                                   onClick={() => handleToggleDelete(save.id)}
-                                  disabled={save.type === 'cloud' && !authVerified}
+                                  disabled={!authVerified}
                                   className={`p-1.5 rounded ${
                                     savesToDelete.includes(save.id)
                                       ? 'bg-red-500 text-white'
-                                      : save.type === 'cloud' && !authVerified
+                                      : !authVerified
                                         ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                                         : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                                   }`}
@@ -415,7 +320,7 @@ export default function ContinueModal({
                                 </button>
                               </div>
                             </div>
-                            {save.type === 'cloud' && !authVerified && (
+                            {!authVerified && (
                               <div className="mt-1 px-1 py-0.5 bg-amber-50 text-amber-700 text-xs rounded">
                                 Login required to access cloud save
                               </div>
@@ -424,7 +329,9 @@ export default function ContinueModal({
                         ))
                       ) : (
                         <div className="text-center py-6 text-gray-500">
-                          No {activeTab === 'all' ? '' : activeTab} saves found
+                          {authVerified 
+                            ? "No cloud saves found" 
+                            : "Login required to view cloud saves"}
                         </div>
                       )}
                     </div>
@@ -436,7 +343,7 @@ export default function ContinueModal({
                         </span>
                         <button
                           onClick={handleDeleteSaves}
-                          disabled={isDeleting || savesToDelete.some(id => !id.startsWith('neighborville_') && !authVerified)}
+                          disabled={isDeleting || !authVerified}
                           className="bg-red-500 text-white text-xs py-1 px-2 rounded hover:bg-red-600 disabled:opacity-50"
                         >
                           {isDeleting ? (

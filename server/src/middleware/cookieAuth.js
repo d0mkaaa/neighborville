@@ -33,8 +33,14 @@ export const setAuthCookie = (res, userId) => {
 
 export const auth = async (req, res, next) => {
   try {
-    const token = req.cookies.token || 
-                 (req.headers.authorization && req.headers.authorization.split(' ')[1]);
+    let token = req.cookies.token;
+    
+    if (!token && req.headers.authorization) {
+      const authHeader = req.headers.authorization;
+      if (authHeader.startsWith('Bearer ')) {
+        token = authHeader.substring(7);
+      }
+    }
     
     if (!token) {
       console.log('Auth middleware - No token found');
@@ -42,7 +48,7 @@ export const auth = async (req, res, next) => {
     }
     
     const decoded = verifyToken(token);
-    if (!decoded) {
+    if (!decoded || !decoded.userId) {
       console.log('Auth middleware - Token verification failed');
       return res.status(401).json({ success: false, message: 'Invalid or expired token' });
     }
@@ -55,12 +61,16 @@ export const auth = async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'User not found' });
     }
     
-    const session = await Session.findOne({ userId: decoded.userId });
+    let session = await Session.findOne({ 
+      userId: decoded.userId,
+      token: token
+    });
+    
     if (!session) {
       try {
         const userAgent = req.headers['user-agent'];
         const ip = req.ip;
-        const newSession = await Session.create({
+        session = await Session.create({
           userId: decoded.userId,
           token,
           expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
@@ -71,17 +81,17 @@ export const auth = async (req, res, next) => {
           }
         });
         console.log('Auth middleware - Created new session for user');
-        req.session = newSession;
       } catch (error) {
         console.error('Error creating session:', error);
-        return res.status(401).json({ success: false, message: 'Failed to create session' });
       }
     } else {
       session.lastActive = new Date();
-      await session.save();
-      req.session = session;
+      await session.save().catch(err => {
+        console.warn('Error updating session lastActive time:', err);
+      });
     }
     
+    req.session = session || { token };
     req.user = user;
     
     console.log('Auth middleware - Authentication successful for user:', user.username || user.email);
@@ -94,15 +104,21 @@ export const auth = async (req, res, next) => {
 
 export const optionalAuth = async (req, res, next) => {
   try {
-    const token = req.cookies.token || 
-                 (req.headers.authorization && req.headers.authorization.split(' ')[1]);
+    let token = req.cookies.token;
+    
+    if (!token && req.headers.authorization) {
+      const authHeader = req.headers.authorization;
+      if (authHeader.startsWith('Bearer ')) {
+        token = authHeader.substring(7);
+      }
+    }
     
     if (!token) {
       return next();
     }
     
     const decoded = verifyToken(token);
-    if (!decoded) {
+    if (!decoded || !decoded.userId) {
       return next();
     }
     
@@ -111,11 +127,17 @@ export const optionalAuth = async (req, res, next) => {
       return next();
     }
     
-    const session = await Session.findOne({ userId: decoded.userId });
+    const session = await Session.findOne({ 
+      userId: decoded.userId,
+      token: token
+    });
+    
     if (session) {
       session.lastActive = new Date();
-      await session.save();
+      await session.save().catch(() => {});
       req.session = session;
+    } else {
+      req.session = { token };
     }
     
     req.user = user;

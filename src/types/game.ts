@@ -237,6 +237,8 @@ export interface GameProgress {
   reputation?: number;
   saveName?: string;
   saveTimestamp?: number;
+  saveId?: string;
+  version?: string;
 }
 
 export interface PowerGridState {

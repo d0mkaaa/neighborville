@@ -10,124 +10,82 @@ import { useAuth } from './context/AuthContext';
 import AuthModal from './components/auth/AuthModal';
 import BackgroundBubbles from './components/game/BackgroundBubbles';
 import ProfileSettings from './components/profile/ProfileSettings';
-import ContinueModal from './components/game/ContinueModal';
-import { loadGameFromServer } from './services/gameService';
+import { loadGameFromServer, saveGameToServer } from './services/gameService';
 import Leaderboard from './components/profile/Leaderboard';
-import PublicProfile from './components/profile/PublicProfile';
-import SettingsModal from './components/game/SettingsModal';
-import SaveManager from './components/game/SaveManager';
-import { saveGameToServer } from './services/gameService';
-import SecuritySettings from './components/profile/SecuritySettings';
+import PublicProfileModal from './components/profile/PublicProfileModal';
+
+const AUTO_SAVE_INTERVAL = 5 * 60 * 1000;
 
 function App() {
-  const { user, isLoading: authLoading, isGuest, login, logout, refreshAuth, showLogin, setShowLogin } = useAuth();
-  const [gameStarted, setGameStarted] = useState(false);
-  const [gameState, setGameState] = useState<GameProgress | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [showContinueModal, setShowContinueModal] = useState(false);
-  const [savedGameFound, setSavedGameFound] = useState<GameProgress | null>(null);
-  const [showTutorial, setShowTutorial] = useState(false);
-  const [showProfileSettings, setShowProfileSettings] = useState(false);
-  const [showLeaderboard, setShowLeaderboard] = useState(false);
-  const [showPublicProfile, setShowPublicProfile] = useState(false);
-  const [selectedUsername, setSelectedUsername] = useState<string>('');
+  const [gameStarted, setGameStarted] = useState<boolean>(false);
+  const [gameProgress, setGameProgress] = useState<GameProgress | null>(null);
+  const [gameLoaded, setGameLoaded] = useState<boolean>(false);
+  const [gameLoading, setGameLoading] = useState<boolean>(false);
+  
+  const [showAuth, setShowAuth] = useState<boolean>(false);
+  const [showProfileSettings, setShowProfileSettings] = useState<boolean>(false);
+  const [showLeaderboard, setShowLeaderboard] = useState<boolean>(false);
+  const [showPublicProfileModal, setShowPublicProfileModal] = useState<boolean>(false);
+  const [profileToView, setProfileToView] = useState<string | null>(null);
+  
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>('day');
-  const [showSettings, setShowSettings] = useState(false);
-  const [showSecuritySettings, setShowSecuritySettings] = useState(false);
-  const [musicEnabled, setMusicEnabled] = useState(true);
-  const [audioRef, setAudioRef] = useState<React.RefObject<HTMLAudioElement> | null>(null);
-  const [showPlayerStats, setShowPlayerStats] = useState(false);
-  const [showSaveManager, setShowSaveManager] = useState(false);
-  const [lastSaveTime, setLastSaveTime] = useState<Date | null>(null);
-
-  useEffect(() => {
-    const handleUnauthorized = () => {
-      console.log('Unauthorized event detected, showing login modal');
-      setShowLogin(true);
-    };
-    
-    window.addEventListener('auth:unauthorized', handleUnauthorized);
-    
-    return () => {
-      window.removeEventListener('auth:unauthorized', handleUnauthorized);
-    };
-  }, [setShowLogin]);
-
-  useEffect(() => {
-    const checkLoginStatus = async () => {
-      if (authLoading) {
-        return;
-      }
-      
-      const storedName = localStorage.getItem('neighborville_playerName');
-      
-      if (user || storedName) {
-        if (storedName && !user) {
-          setTimeout(async () => {
-            await refreshAuth();
-          }, 300);
-        }
-      }
-    };
-    
-    checkLoginStatus();
-  }, [user, authLoading, refreshAuth]);
+  
+  const { user, isAuthenticated, login, isLoading } = useAuth();
   
   useEffect(() => {
-    const loadSavedGame = async () => {
-      setLoading(true);
-      
-      if (user) {
-        const { gameData: serverGameData } = await loadGameFromServer();
-        
-        if (serverGameData) {
-          setSavedGameFound(serverGameData);
-          setShowContinueModal(true);
-          setLoading(false);
-          return;
-        }
-        
-        const savedGame = localStorage.getItem('neighborville_save');
-        if (savedGame) {
-          try {
-            const parsed = JSON.parse(savedGame) as GameProgress;
-            setSavedGameFound(parsed);
-            setShowContinueModal(true);
-            setLoading(false);
-            return;
-          } catch (error) {
-          }
-        }
-        
-        const keys = Object.keys(localStorage);
-        const autosaveKey = keys.find(key => key.startsWith('neighborville_autosave'));
-        if (autosaveKey) {
-          try {
-            const autosaveData = localStorage.getItem(autosaveKey);
-            if (autosaveData) {
-              const parsed = JSON.parse(autosaveData) as GameProgress;
-              setSavedGameFound(parsed);
-              setShowContinueModal(true);
-            }
-          } catch (error) {
-          }
-        }
+    if (!isLoading) {
+      if (!isAuthenticated) {
+        setShowAuth(true);
+      } else if (user && (!user.username || user.username.includes('@'))) {
+        setShowAuth(true);
       }
-      
-      setLoading(false);
-    };
-    
-    if (!authLoading) {
-      loadSavedGame();
     }
-  }, [user, authLoading]);
+  }, [isAuthenticated, user, isLoading]);
 
-  const handleStartFreshGame = (playerName: string) => {
-    localStorage.removeItem('neighborville_save');
-    localStorage.removeItem('neighborville_autosave');
+  useEffect(() => {
+    if (gameStarted && !isAuthenticated) {
+      setGameStarted(false);
+      setShowAuth(true);
+    }
+  }, [gameStarted, isAuthenticated]);
+  
+  const handleLoginSuccess = (userData: { id: string; username: string; email?: string }) => {
+    console.log('Login successful:', userData.username);
     
-    const initialState: GameProgress = {
-      playerName: playerName,
+    if (!userData || !userData.id) {
+      console.error('Invalid user data in login callback');
+      return;
+    }
+    
+    login({
+      id: userData.id,
+      username: userData.username || '',
+      email: userData.email || '',
+      verified: true,
+    });
+    
+    setTimeout(() => {
+      if (userData.username) {
+        setShowAuth(false);
+      } else {
+        console.warn('No username in login data, keeping auth modal open');
+      }
+    }, 500);
+  };
+  
+  const handleStartGame = (playerName: string) => {
+    if (!isAuthenticated) {
+      setShowAuth(true);
+      return;
+    }
+    
+    if (!user?.username || user.username.includes('@')) {
+      setShowAuth(true);
+      return;
+    }
+    
+    const newGameProgress: GameProgress = {
+      playerName,
       coins: 2000,
       happiness: 70,
       day: 1,
@@ -154,300 +112,211 @@ function App() {
         description: 'Initial balance',
         timestamp: Date.now()
       }],
-      weather: 'sunny'
+      weather: 'sunny',
+      saveTimestamp: Date.now(),
+      saveName: `${playerName}'s City`
     };
     
-    setGameState(initialState);
+    setGameProgress(newGameProgress);
     setGameStarted(true);
-    setShowContinueModal(false);
-    setShowTutorial(true);
+    setGameLoaded(true);
+    
+    if (isAuthenticated) {
+      saveGameToServer(newGameProgress).catch(error => {
+        console.error('Error saving initial game state:', error);
+      });
+    }
   };
-
-  const handleContinueGame = () => {
-    if (savedGameFound) {
-      setGameState(savedGameFound);
+  
+  const handleLoadGame = (savedGameProgress: GameProgress) => {
+    if (!isAuthenticated) {
+      setShowAuth(true);
+      return;
+    }
+    
+    setGameLoading(true);
+    
+    setTimeout(() => {
+      setGameProgress(savedGameProgress);
       setGameStarted(true);
-      setShowContinueModal(false);
-      setShowTutorial(false);
-      
-      if (savedGameFound.timeOfDay) {
-        setTimeOfDay(savedGameFound.timeOfDay);
-      }
-    }
+      setGameLoaded(true);
+      setGameLoading(false);
+    }, 800);
   };
-
-  const handleShowLogin = () => {
-    setShowContinueModal(false);
-    
-    if (user) {
-      if (confirm("Do you want to start a NEW game? This won't affect your saved game.")) {
-        const playerName = user.username || localStorage.getItem('neighborville_playerName') || 'Mayor';
-        handleStartFreshGame(playerName);
-      } else {
-        setShowContinueModal(true);
-      }
-    } else {
-      setShowLogin(true);
-    }
-  };
-
-  const handleLoadGame = (gameData: GameProgress) => {
-    setGameState(gameData);
-    setGameStarted(true);
-    setShowContinueModal(false);
-    setShowTutorial(false);
-    
-    if (gameData.timeOfDay) {
-      setTimeOfDay(gameData.timeOfDay);
-    }
-  };
-
-  const handleSaveGame = (gameData: GameProgress) => {
-    localStorage.setItem('neighborville_save', JSON.stringify(gameData));
-  };
-
-  const handleExitGame = () => {
-    setGameStarted(false);
-    setGameState(null);
-  };
-
-  const handleViewProfile = (username: string) => {
-    setSelectedUsername(username);
-    setShowPublicProfile(true);
-    setShowLeaderboard(false);
-  };
-
-  const handleTimeChange = (newTimeOfDay: TimeOfDay) => {
-    setTimeOfDay(newTimeOfDay);
-  };
-
-  const toggleMusic = () => {
-    setMusicEnabled(!musicEnabled);
-  };
-
-  const saveGameCallback = (name: string) => {
-  };
-
-  const handleLoadFromServer = async () => {
-    if (isGuest) {
-      alert('Cloud saves are only available for registered users. Please create an account to access your saves from any device.');
-      return null;
-    }
-
-    try {
-      setLoading(true);
-      const { gameData, lastSave } = await loadGameFromServer();
-      
-      if (gameData) {
-        setGameState(gameData);
-        setLastSaveTime(lastSave);
-        return gameData;
-      } else {
-        return null;
-      }
-    } catch (error) {
-      return null;
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  
   useEffect(() => {
-    if (showLogin && !loading && !user) {
-      setGameStarted(false);
-    }
-  }, [showLogin, loading, user]);
-
-  if (loading) {
-    return (
-      <AppLayout 
-        showFooter={false}
-        showNavbar={false}
-      >
-        <div className="flex flex-col items-center justify-center h-screen">
-          <div className="text-6xl mb-4">🏙️</div>
-          <div className="text-xl text-gray-700 lowercase font-medium animate-pulse">
-            loading neighborville...
-          </div>
-          <div className="mt-4 flex space-x-2">
-            {[0, 1, 2].map((i) => (
-              <div 
-                key={i}
-                className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"
-                style={{ animationDelay: `${i * 200}ms` }}
-              />
-            ))}
-          </div>
-        </div>
-      </AppLayout>
-    );
-  }
-
-  if (showContinueModal && savedGameFound) {
-    return (
-      <AppLayout 
-        showFooter={false}
-        showNavbar={false}
-      >
-        <div className="flex items-center justify-center min-h-screen p-4">
-          <ContinueModal
-            savedGame={savedGameFound}
-            onContinue={handleContinueGame}
-            onNewGame={handleShowLogin}
-            onLoadGame={handleLoadGame}
-          />
-        </div>
-      </AppLayout>
-    );
-  }
-
-  return (
-    <AppLayout
-      timeOfDay={timeOfDay}
-      showNavbar={!gameStarted}
-      onShowLeaderboard={() => setShowLeaderboard(true)}
-      onShowProfileSettings={() => setShowProfileSettings(true)}
-      onShowLogin={() => setShowLogin(true)}
-      onLogout={handleExitGame}
-      isInGame={gameStarted}
-      onExitGame={handleExitGame}
-      onStartFreshGame={user ? () => {
-        if (confirm("Do you want to start a new city? Your current save won't be affected.")) {
-          handleStartFreshGame(user.username || 'Mayor');
+    let autoSaveInterval: ReturnType<typeof setInterval>;
+    
+    if (gameStarted && isAuthenticated && gameProgress) {
+      autoSaveInterval = setInterval(() => {
+        if (gameProgress) {
+          const updatedProgress = {
+            ...gameProgress,
+            saveTimestamp: Date.now(),
+            saveName: `${gameProgress.playerName}'s City (Auto Save)`
+          };
+          
+          saveGameToServer(updatedProgress)
+            .then(success => {
+              if (success) {
+                console.log('Game auto-saved successfully');
+              } else {
+                console.warn('Failed to auto-save game');
+              }
+            })
+            .catch(error => {
+              console.error('Error during auto-save:', error);
+            });
         }
-      } : undefined}
-    >
+      }, AUTO_SAVE_INTERVAL);
+    }
+    
+    return () => {
+      if (autoSaveInterval) clearInterval(autoSaveInterval);
+    };
+  }, [gameStarted, isAuthenticated, gameProgress]);
+  
+  useEffect(() => {
+    if (isAuthenticated && user?.id && !gameStarted) {
+      try {
+        loadGameFromServer()
+          .then(response => {
+            if (response && response.gameData) {
+              console.log('Found saved game for user:', user.id);
+            }
+          })
+          .catch(error => {
+            console.error('Error loading saved game:', error);
+          });
+      } catch (error) {
+        console.error('Error calling loadGameFromServer:', error);
+      }
+    }
+  }, [isAuthenticated, user?.id, gameStarted]);
+  
+  const handleViewProfile = (userId: string) => {
+    setProfileToView(userId);
+    setShowPublicProfileModal(true);
+  };
+  
+  const handleShowTutorial = () => {
+    console.log('Show tutorial');
+  };
+  
+  return (
+    <main className="h-screen w-full overflow-hidden relative bg-gradient-to-b from-sky-100 to-blue-200">
       <BackgroundBubbles />
+      
+      <AnimatePresence mode="wait">
+        {!gameStarted && (
+          <motion.div
+            key="login"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.5 }}
+            className="h-full w-full flex flex-col"
+          >
+            <Login 
+              onStartGame={handleStartGame} 
+              onLoadGame={handleLoadGame}
+              onShowTutorial={handleShowTutorial}
+            />
+          </motion.div>
+        )}
+        
+        {gameStarted && gameProgress && (
+          <motion.div
+            key="game"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.5 }}
+            className="h-full w-full flex flex-col"
+          >
+            <NeighborVille 
+              initialGameState={gameProgress}
+              onTimeChange={setTimeOfDay}
+              onLoadGame={handleLoadGame}
+              showTutorialProp={false}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+      
+      {/* Floating action buttons */}
+      {!gameStarted && (
+        <div className="fixed bottom-4 right-4 flex flex-col gap-2">
+          {isAuthenticated ? (
+            <>
+              <Button
+                onClick={() => setShowProfileSettings(true)}
+                variant="glass"
+                size="sm"
+                className="w-12 h-12 rounded-full shadow-md"
+              >
+                <Settings size={20} />
+              </Button>
+              
+              <Button
+                onClick={() => setShowLeaderboard(true)}
+                variant="glass"
+                size="sm"
+                className="w-12 h-12 rounded-full shadow-md"
+              >
+                <Trophy size={20} />
+              </Button>
+            </>
+          ) : (
+            <Button
+              onClick={() => setShowAuth(true)}
+              variant="glass"
+              size="sm"
+              className="w-12 h-12 rounded-full shadow-md"
+            >
+              <Users size={20} />
+            </Button>
+          )}
+        </div>
+      )}
+      
+      {/* Modals */}
       <AnimatePresence>
-        {showLogin && !loading && !user && (
-          <AuthModal onClose={() => {}} onLogin={login} />
-        )}
-
-        {showProfileSettings && (
-          <ProfileSettings 
-            onClose={() => setShowProfileSettings(false)}
-            onShowSecuritySettings={() => {
-              setShowProfileSettings(false);
-              setShowSecuritySettings(true);
+        {showAuth && (
+          <AuthModal
+            onClose={() => {
+              if (isAuthenticated && user?.username && !user.username.includes('@')) {
+                setShowAuth(false);
+              }
             }}
+            onLogin={handleLoginSuccess}
           />
         )}
-
-        {showSecuritySettings && (
-          <SecuritySettings 
-            onClose={() => setShowSecuritySettings(false)}
+        
+        {showProfileSettings && (
+          <ProfileSettings
+            onClose={() => setShowProfileSettings(false)}
           />
         )}
-
+        
         {showLeaderboard && (
           <Leaderboard
             onClose={() => setShowLeaderboard(false)}
             onViewProfile={handleViewProfile}
           />
         )}
-
-        {showPublicProfile && (
-          <PublicProfile
-            username={selectedUsername}
-            onClose={() => setShowPublicProfile(false)}
-          />
-        )}
-
-        {showSettings && (
-          <SettingsModal 
-            isOpen={showSettings}
-            onClose={() => setShowSettings(false)}
-            musicEnabled={musicEnabled}
-            onToggleMusic={toggleMusic}
-            audioRef={audioRef}
-            onShowTutorial={() => {
-              setShowSettings(false);
-              setShowTutorial(true);
-            }}
-            onShowStats={() => {
-              setShowSettings(false);
-              setShowPlayerStats(true);
-            }}
-            onShowLogin={() => {
-              setShowSettings(false);
-              setShowLogin(true);
+        
+        {showPublicProfileModal && profileToView && (
+          <PublicProfileModal
+            userId={profileToView}
+            onClose={() => {
+              setShowPublicProfileModal(false);
+              setProfileToView(null);
             }}
           />
         )}
       </AnimatePresence>
-
-      {loading ? (
-        <div className="flex items-center justify-center h-full">
-          <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-        </div>
-      ) : gameStarted ? (
-        <NeighborVille 
-          initialGameState={gameState} 
-          showTutorialProp={showTutorial}
-          onTimeChange={handleTimeChange}
-          onLoadGame={handleLoadGame}
-        />
-      ) : (
-        <Login 
-          onStartGame={handleStartFreshGame}
-          onLoadGame={handleLoadGame}
-          onShowTutorial={() => setShowTutorial(true)}
-        />
-      )}
-
-      <SaveManager 
-        isOpen={showSaveManager}
-        onClose={() => setShowSaveManager(false)}
-        onSave={(name) => saveGameCallback(name)}
-        onLoadGame={(gameData) => {
-          handleLoadGame(gameData);
-        }}
-        onSaveToServer={async () => {
-          if (!gameState) {
-            return false;
-          }
-          
-          try {
-            const result = await saveGameToServer(gameState);
-            if (result) {
-              setLastSaveTime(new Date());
-              alert('Game saved to server!');
-            } else {
-              alert('Failed to save to server');
-            }
-            return result;
-          } catch (error) {
-            alert('Error saving to server');
-            return false;
-          }
-        }}
-        gameData={gameState || {
-          playerName: '',
-          coins: 0,
-          happiness: 0,
-          day: 1,
-          level: 1,
-          experience: 0,
-          grid: [],
-          gridSize: 16,
-          neighbors: [],
-          achievements: [],
-          events: [],
-          gameTime: 12,
-          timeOfDay: 'day',
-          recentEvents: [],
-          bills: [],
-          energyRate: 0,
-          totalEnergyUsage: 0,
-          lastBillDay: 0,
-          coinHistory: [],
-          weather: 'sunny'
-        }}
-        isAuthenticated={!!user && !user.isGuest}
-        lastServerSaveTime={lastSaveTime}
-        onShowLogin={() => setShowLogin(true)}
-      />
-    </AppLayout>
+    </main>
   );
 }
 

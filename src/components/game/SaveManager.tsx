@@ -2,18 +2,14 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Save, Trash2, X, Calendar, Clock, CloudUpload, CheckCircle, AlertCircle, Download, UploadCloud, CloudOff, LogIn, Loader2, CloudLightning, Cloud, Zap, CheckSquare } from "lucide-react";
 import type { GameProgress } from "../../types/game";
-import { cloudSave } from "../../utils/cloudsave";
 import { useAuth } from "../../context/AuthContext";
-
-const SAVE_KEY = "neighborville_save";
-const AUTO_SAVE_KEY = "neighborville_autosave";
+import { getAllSavesFromServer, deleteSaveFromServer, saveGameToServer } from "../../services/gameService";
 
 interface SaveItem {
   key: string;
   name: string;
   date: string;
   timestamp: number;
-  isAutoSave?: boolean;
   data?: GameProgress;
 }
 
@@ -42,15 +38,12 @@ export default function SaveManager({
   onShowLogin,
   addNotification
 }: SaveManagerProps) {
-  const [localSaves, setLocalSaves] = useState<SaveItem[]>([]);
-  const [autoSaves, setAutoSaves] = useState<SaveItem[]>([]);
   const [cloudSaves, setCloudSaves] = useState<SaveItem[]>([]);
   const [saveName, setSaveName] = useState<string>("");
   const [showConfirmDelete, setShowConfirmDelete] = useState<boolean>(false);
   const [isSavingToServer, setIsSavingToServer] = useState<boolean>(false);
   const [isLoadingCloudSaves, setIsLoadingCloudSaves] = useState<boolean>(false);
   const [serverSaveSuccess, setServerSaveSuccess] = useState<boolean | null>(null);
-  const [activeTab, setActiveTab] = useState<'local' | 'cloud' | 'auto'>('local');
   const [loadingSave, setLoadingSave] = useState<string | null>(null);
   const [selectedSaves, setSelectedSaves] = useState<string[]>([]);
   const [isSelectMode, setIsSelectMode] = useState<boolean>(false);
@@ -60,7 +53,6 @@ export default function SaveManager({
   
   useEffect(() => {
     if (isOpen) {
-      loadLocalSaves();
       if (isAuthenticated && !isGuest) {
         loadCloudSaves();
       }
@@ -70,76 +62,12 @@ export default function SaveManager({
     }
   }, [isOpen, isAuthenticated, isGuest]);
   
-  const loadLocalSaves = () => {
-    try {
-      const keys = Object.keys(sessionStorage);
-      const manualSaves: SaveItem[] = [];
-      const autoSaves: SaveItem[] = [];
-      
-      const gameKeys = keys.filter(key => 
-        key.startsWith(SAVE_KEY) || key === AUTO_SAVE_KEY
-      );
-      
-      gameKeys.forEach(key => {
-        let data: GameProgress;
-        try {
-          data = JSON.parse(sessionStorage.getItem(key) || '{}');
-        } catch (e) {
-          console.error('Error parsing saved game data', e);
-          return;
-        }
-        
-        let timestamp = data.saveTimestamp || Date.now();
-        const nameParts = key.split('_');
-        
-        if (nameParts.length > 2) {
-          const possibleTimestamp = parseInt(nameParts[2]);
-          if (!isNaN(possibleTimestamp)) {
-            timestamp = possibleTimestamp;
-          }
-        }
-        
-        const date = new Date(timestamp).toLocaleDateString();
-        const time = new Date(timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-        const dateStr = `${date} ${time}`;
-        
-        const saveItem: SaveItem = { 
-          key,
-          name: data.saveName || data.playerName || 'Unnamed Save', 
-          date: dateStr,
-          timestamp,
-          data
-        };
-        
-        if (key === AUTO_SAVE_KEY || key.includes('autosave')) {
-          saveItem.isAutoSave = true;
-          autoSaves.push(saveItem);
-        } else {
-          manualSaves.push(saveItem);
-        }
-      });
-      
-      const sortedManualSaves = manualSaves
-        .sort((a, b) => b.timestamp - a.timestamp)
-        .slice(0, 20);
-      
-      const sortedAutoSaves = autoSaves
-        .sort((a, b) => b.timestamp - a.timestamp)
-        .slice(0, 10);
-      
-      setLocalSaves(sortedManualSaves);
-      setAutoSaves(sortedAutoSaves);
-    } catch (error) {
-      console.error('Error loading local saved games', error);
-    }
-  };
-  
   const loadCloudSaves = async () => {
     if (!isAuthenticated || isGuest) return;
     
     setIsLoadingCloudSaves(true);
     try {
-      const allSaves = await cloudSave.getAllSaves();
+      const allSaves = await getAllSavesFromServer();
       
       const formattedSaves = allSaves.map(save => {
         const timestamp = save.timestamp;
@@ -160,27 +88,34 @@ export default function SaveManager({
       setCloudSaves(formattedSaves);
     } catch (error) {
       console.error('Error loading cloud saves', error);
+      addNotification?.('Could not load saved games. Please try again.', 'error');
     } finally {
       setIsLoadingCloudSaves(false);
     }
   };
   
   const handleQuickSave = () => {
-    const timestamp = Date.now();
+    if (!isAuthenticated || isGuest) {
+      addNotification?.('Please log in to save your game', 'warning');
+      if (onShowLogin) onShowLogin();
+      return;
+    }
     
-    sessionStorage.setItem(SAVE_KEY, JSON.stringify({
-      ...gameData,
-      saveTimestamp: timestamp
-    }));
-    
-    onSave();
+    handleSaveToServer();
   };
   
   const handleNamedSave = () => {
+    if (!isAuthenticated || isGuest) {
+      addNotification?.('Please log in to save your game', 'warning');
+      if (onShowLogin) onShowLogin();
+      return;
+    }
+    
     const timestamp = Date.now();
     const name = saveName.trim() ? saveName : `${gameData.playerName}'s City`;
     
-    const key = `${SAVE_KEY}_${timestamp}_${name.replace(/\s/g, '_')}`;
+    setIsSavingToServer(true);
+    setServerSaveSuccess(null);
     
     const saveData = {
       ...gameData,
@@ -188,26 +123,35 @@ export default function SaveManager({
       saveName: name
     };
     
-    sessionStorage.setItem(key, JSON.stringify(saveData));
-    
-    if (isAuthenticated && !isGuest) {
-      cloudSave.saveToCloud({
-        ...saveData,
-        saveName: name
-      }, 'manual');
-    }
-    
-    loadLocalSaves();
-    if (isAuthenticated && !isGuest) {
-      loadCloudSaves();
-    }
-    
-    setSaveName('');
-    
-    onSave(name);
+    saveGameToServer(saveData)
+      .then(success => {
+        setServerSaveSuccess(success);
+        if (success) {
+          addNotification?.(`Game saved as "${name}"`, 'success');
+          loadCloudSaves();
+          setSaveName('');
+          onSave(name);
+        } else {
+          addNotification?.('Failed to save game. Please try again.', 'error');
+        }
+      })
+      .catch(error => {
+        console.error('Error saving game:', error);
+        setServerSaveSuccess(false);
+        addNotification?.('Error saving game: ' + error.message, 'error');
+      })
+      .finally(() => {
+        setIsSavingToServer(false);
+      });
   };
   
   const handleSaveToServer = async () => {
+    if (!isAuthenticated || isGuest) {
+      addNotification?.('Please log in to save your game', 'warning');
+      if (onShowLogin) onShowLogin();
+      return;
+    }
+    
     if (onSaveToServer) {
       setIsSavingToServer(true);
       setServerSaveSuccess(null);
@@ -217,34 +161,28 @@ export default function SaveManager({
         const success = await onSaveToServer();
         
         if (success) {
-          await cloudSave.saveToCloud({
+          await saveGameToServer({
             ...gameData,
             saveName: customName,
             saveTimestamp: Date.now()
-          }, 'manual');
+          });
         }
         
         setServerSaveSuccess(success);
         
         if (success) {
-          loadLocalSaves();
           loadCloudSaves();
+          addNotification?.('Game saved to cloud successfully', 'success');
+        } else {
+          addNotification?.('Failed to save game. Please try again.', 'error');
         }
       } catch (error) {
         console.error("Error saving to server:", error);
         setServerSaveSuccess(false);
+        addNotification?.('Error saving game: ' + (error as Error).message, 'error');
       } finally {
         setIsSavingToServer(false);
       }
-    }
-  };
-  
-  const handleDeleteLocalSave = (key: string) => {
-    try {
-      sessionStorage.removeItem(key);
-      loadLocalSaves();
-    } catch (error) {
-      console.error('Error deleting save', error);
     }
   };
   
@@ -257,7 +195,7 @@ export default function SaveManager({
       console.log(`Requesting deletion of cloud save: ${id}`);
       const startTime = performance.now();
       
-      const success = await cloudSave.deleteSave(id);
+      const success = await deleteSaveFromServer(id);
       
       const endTime = performance.now();
       console.log(`Cloud save deletion took ${Math.round(endTime - startTime)}ms`);
@@ -280,36 +218,28 @@ export default function SaveManager({
     }
   };
   
-  const handleLoadLocalSave = (key: string) => {
-    try {
-      const saveData = sessionStorage.getItem(key);
-      if (saveData) {
-        const gameData = JSON.parse(saveData);
-        onLoadGame(gameData);
-        onClose();
-      }
-    } catch (error) {
-      console.error('Error loading save', error);
-    }
-  };
-  
   const handleLoadCloudSave = async (id: string) => {
-    if (!isAuthenticated || isGuest) return;
+    if (!isAuthenticated || isGuest) {
+      addNotification?.('Please log in to load your saved games', 'warning');
+      if (onShowLogin) onShowLogin();
+      return;
+    }
     
     setLoadingSave(id);
     try {
-      const allSaves = await cloudSave.getAllSaves();
+      const allSaves = await getAllSavesFromServer();
       const save = allSaves.find(s => s.id === id);
       
       if (save) {
         onLoadGame(save.data);
         onClose();
+        addNotification?.('Game loaded successfully', 'success');
       } else {
-        alert('Failed to load save. Save not found.');
+        addNotification?.('Failed to load save. Save not found.', 'error');
       }
     } catch (error) {
       console.error('Error loading cloud save', error);
-      alert('Failed to load save from cloud.');
+      addNotification?.('Failed to load save from cloud.', 'error');
     } finally {
       setLoadingSave(null);
     }
@@ -328,23 +258,15 @@ export default function SaveManager({
   };
 
   const confirmBatchDelete = async () => {
+    if (!isAuthenticated || isGuest) {
+      addNotification?.('Please log in to manage your saved games', 'warning');
+      if (onShowLogin) onShowLogin();
+      return;
+    }
+    
     setIsSavingToServer(true);
     
     try {
-      const localToDelete = selectedSaves.filter(key => 
-        !key.includes('cloud-') && 
-        (localSaves.some(save => save.key === key) || autoSaves.some(save => save.key === key))
-      );
-      
-      for (const key of localToDelete) {
-        try {
-          sessionStorage.removeItem(key);
-          console.log(`Deleted local save: ${key}`);
-        } catch (error) {
-          console.error('Error deleting local save', error);
-        }
-      }
-      
       const cloudToDelete = selectedSaves.filter(key => 
         cloudSaves.some(save => save.key === key)
       );
@@ -352,7 +274,7 @@ export default function SaveManager({
       let successCount = 0;
       let failCount = 0;
       
-      if (cloudToDelete.length > 0 && isAuthenticated && !isGuest) {
+      if (cloudToDelete.length > 0) {
         addNotification?.(`Deleting ${cloudToDelete.length} cloud saves...`, 'info');
         
         const batchSize = 3;
@@ -360,7 +282,7 @@ export default function SaveManager({
           const batch = cloudToDelete.slice(i, i + batchSize);
           
           const results = await Promise.allSettled(
-            batch.map(id => cloudSave.deleteSave(id))
+            batch.map(id => deleteSaveFromServer(id))
           );
           
           results.forEach((result, index) => {
@@ -395,23 +317,7 @@ export default function SaveManager({
       setIsSelectMode(false);
       setShowConfirmDelete(false);
       
-      loadLocalSaves();
-      if (isAuthenticated && !isGuest) {
-        loadCloudSaves();
-      }
-    }
-  };
-
-  const getCurrentSaves = () => {
-    switch (activeTab) {
-      case 'local':
-        return localSaves;
-      case 'cloud':
-        return cloudSaves;
-      case 'auto':
-        return autoSaves;
-      default:
-        return [];
+      loadCloudSaves();
     }
   };
 
@@ -434,8 +340,8 @@ export default function SaveManager({
           >
             <div className="bg-blue-600 text-white px-6 py-4 flex justify-between items-center">
               <h2 className="text-xl font-medium flex items-center gap-2">
-                <Save size={20} />
-                Game Saves
+                <Cloud size={20} />
+                Cloud Saves
               </h2>
               <button 
                 onClick={onClose}
@@ -446,36 +352,66 @@ export default function SaveManager({
             </div>
             
             <div className="p-6">
-              <div className="flex flex-col gap-4">
-                <div className="flex">
-                  <div className="relative flex-1">
-                    <input
-                      type="text"
-                      value={saveName}
-                      onChange={e => setSaveName(e.target.value)}
-                      className="w-full py-2 px-4 border border-gray-300 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="d0mkaaa's City"
-                    />
+              {!isAuthenticated || isGuest ? (
+                <div className="bg-blue-50 text-blue-700 p-4 rounded-lg mb-4 flex items-start gap-3">
+                  <CloudOff className="mt-0.5 flex-shrink-0" size={20} />
+                  <div>
+                    <p className="font-medium">Sign in to use cloud saves</p>
+                    <p className="text-sm mt-1">Your game progress will be saved to the cloud and accessible across devices.</p>
+                    <button
+                      onClick={onShowLogin}
+                      className="mt-3 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-1 transition-colors"
+                    >
+                      <LogIn size={16} />
+                      Sign in
+                    </button>
                   </div>
-                  <button 
-                    onClick={handleNamedSave}
-                    className="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-r-lg transition-colors flex items-center gap-2"
-                  >
-                    <Save size={16} />
-                    Save
-                  </button>
                 </div>
-                
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleQuickSave}
-                    className="flex-1 bg-gray-100 hover:bg-gray-200 py-2 px-4 rounded-lg transition-colors text-gray-700 font-medium flex items-center justify-center gap-1"
-                  >
-                    <Save size={16} />
-                    Quick Save
-                  </button>
+              ) : (
+                <div className="flex flex-col gap-4">
+                  <div className="flex">
+                    <div className="relative flex-1">
+                      <input
+                        type="text"
+                        value={saveName}
+                        onChange={e => setSaveName(e.target.value)}
+                        className="w-full py-2 px-4 border border-gray-300 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder={`${gameData.playerName}'s City`}
+                      />
+                    </div>
+                    <button 
+                      onClick={handleNamedSave}
+                      disabled={isSavingToServer}
+                      className={`bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-r-lg transition-colors flex items-center gap-2 ${
+                        isSavingToServer ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
+                    >
+                      {isSavingToServer ? (
+                        <>
+                          <Loader2 size={16} className="animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <Save size={16} />
+                          Save
+                        </>
+                      )}
+                    </button>
+                  </div>
                   
-                  {isAuthenticated && !isGuest ? (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleQuickSave}
+                      disabled={isSavingToServer}
+                      className={`flex-1 bg-gray-100 hover:bg-gray-200 py-2 px-4 rounded-lg transition-colors text-gray-700 font-medium flex items-center justify-center gap-1 ${
+                        isSavingToServer ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
+                    >
+                      <CloudLightning size={16} />
+                      Quick Save
+                    </button>
+                    
                     <button
                       onClick={handleSaveToServer}
                       disabled={isSavingToServer}
@@ -495,17 +431,9 @@ export default function SaveManager({
                         </>
                       )}
                     </button>
-                  ) : (
-                    <button
-                      onClick={onShowLogin}
-                      className="flex-1 bg-blue-100 hover:bg-blue-200 py-2 px-4 rounded-lg transition-colors text-blue-700 font-medium flex items-center justify-center gap-1"
-                    >
-                      <LogIn size={16} />
-                      Sign in for Cloud Saves
-                    </button>
-                  )}
+                  </div>
                 </div>
-              </div>
+              )}
               
               {serverSaveSuccess !== null && (
                 <div className={`mt-4 p-3 rounded-lg flex items-center gap-2 ${
@@ -527,58 +455,15 @@ export default function SaveManager({
               
               <div className="border-b border-gray-200 mt-6">
                 <div className="flex">
-                  <button
-                    onClick={() => setActiveTab('local')}
-                    className={`px-4 py-2 border-b-2 font-medium text-sm ${
-                      activeTab === 'local' 
-                        ? 'border-blue-500 text-blue-600' 
-                        : 'border-transparent text-gray-500 hover:text-gray-700'
-                    }`}
-                  >
+                  <div className="px-4 py-2 border-b-2 border-blue-500 text-blue-600 font-medium text-sm">
                     <div className="flex items-center gap-1">
-                      <Save size={16} />
-                      <span>Local Saves</span>
+                      <Cloud size={16} />
+                      <span>Cloud Saves</span>
                       <span className="ml-1 bg-gray-100 text-gray-700 px-1.5 py-0.5 text-xs rounded-full">
-                        {localSaves.length}
+                        {cloudSaves.length}
                       </span>
                     </div>
-                  </button>
-                  
-                  <button
-                    onClick={() => setActiveTab('auto')}
-                    className={`px-4 py-2 border-b-2 font-medium text-sm ${
-                      activeTab === 'auto' 
-                        ? 'border-blue-500 text-blue-600' 
-                        : 'border-transparent text-gray-500 hover:text-gray-700'
-                    }`}
-                  >
-                    <div className="flex items-center gap-1">
-                      <Zap size={16} />
-                      <span>Auto Saves</span>
-                      <span className="ml-1 bg-gray-100 text-gray-700 px-1.5 py-0.5 text-xs rounded-full">
-                        {autoSaves.length}
-                      </span>
-                    </div>
-                  </button>
-                  
-                  {isAuthenticated && !isGuest && (
-                    <button
-                      onClick={() => setActiveTab('cloud')}
-                      className={`px-4 py-2 border-b-2 font-medium text-sm ${
-                        activeTab === 'cloud' 
-                          ? 'border-blue-500 text-blue-600' 
-                          : 'border-transparent text-gray-500 hover:text-gray-700'
-                      }`}
-                    >
-                      <div className="flex items-center gap-1">
-                        <Cloud size={16} />
-                        <span>Cloud Saves</span>
-                        <span className="ml-1 bg-gray-100 text-gray-700 px-1.5 py-0.5 text-xs rounded-full">
-                          {cloudSaves.length}
-                        </span>
-                      </div>
-                    </button>
-                  )}
+                  </div>
                 </div>
               </div>
 
@@ -616,35 +501,30 @@ export default function SaveManager({
               </div>
               
               <div className="mt-2 border border-gray-200 rounded-lg overflow-hidden max-h-[300px] overflow-y-auto scrollbar-thin">
-                {isLoadingCloudSaves && activeTab === 'cloud' ? (
+                {isLoadingCloudSaves ? (
                   <div className="p-8 flex flex-col items-center justify-center">
                     <Loader2 size={24} className="animate-spin text-blue-500 mb-2" />
                     <p className="text-gray-500">Loading cloud saves...</p>
                   </div>
                 ) : (
                   <div>
-                    {getCurrentSaves().length === 0 ? (
+                    {!isAuthenticated || isGuest ? (
                       <div className="p-8 text-center text-gray-500">
-                        {activeTab === 'cloud' ? (
-                          <div className="flex flex-col items-center">
-                            <Cloud size={32} className="text-gray-400 mb-2" />
-                            <p>No cloud saves found</p>
-                          </div>
-                        ) : activeTab === 'auto' ? (
-                          <div className="flex flex-col items-center">
-                            <Zap size={32} className="text-gray-400 mb-2" />
-                            <p>No auto-saves found</p>
-                          </div>
-                        ) : (
-                          <div className="flex flex-col items-center">
-                            <Save size={32} className="text-gray-400 mb-2" />
-                            <p>No saved games found</p>
-                          </div>
-                        )}
+                        <div className="flex flex-col items-center">
+                          <CloudOff size={32} className="text-gray-400 mb-2" />
+                          <p>Sign in to access your cloud saves</p>
+                        </div>
+                      </div>
+                    ) : cloudSaves.length === 0 ? (
+                      <div className="p-8 text-center text-gray-500">
+                        <div className="flex flex-col items-center">
+                          <Cloud size={32} className="text-gray-400 mb-2" />
+                          <p>No cloud saves found</p>
+                        </div>
                       </div>
                     ) : (
                       <div className="divide-y divide-gray-100">
-                        {getCurrentSaves().map((save) => (
+                        {cloudSaves.map((save) => (
                           <div 
                             key={save.key} 
                             className={`p-3 flex items-center hover:bg-gray-50 transition-colors ${
@@ -664,21 +544,11 @@ export default function SaveManager({
                               </div>
                             ) : (
                               <div className="mr-3 text-blue-500">
-                                {activeTab === 'cloud' ? (
-                                  <Cloud size={18} />
-                                ) : activeTab === 'auto' ? (
-                                  <Zap size={18} />
-                                ) : (
-                                  <Save size={18} />
-                                )}
+                                <Cloud size={18} />
                               </div>
                             )}
                             
-                            <div className="flex-1" onClick={() => !isSelectMode && loadingSave !== save.key && (
-                              activeTab === 'cloud' 
-                                ? handleLoadCloudSave(save.key) 
-                                : handleLoadLocalSave(save.key)
-                            )}>
+                            <div className="flex-1" onClick={() => !isSelectMode && loadingSave !== save.key && handleLoadCloudSave(save.key)}>
                               <div className="font-medium text-sm text-gray-800 flex items-center cursor-pointer">
                                 {save.name}
                               </div>
@@ -690,11 +560,7 @@ export default function SaveManager({
                             
                             <div className="flex gap-1">
                               <button
-                                onClick={() => !isSelectMode && loadingSave !== save.key && (
-                                  activeTab === 'cloud' 
-                                    ? handleLoadCloudSave(save.key) 
-                                    : handleLoadLocalSave(save.key)
-                                )}
+                                onClick={() => !isSelectMode && loadingSave !== save.key && handleLoadCloudSave(save.key)}
                                 disabled={loadingSave === save.key || isSelectMode}
                                 className={`p-2 text-blue-600 hover:bg-blue-50 rounded-full transition-colors ${
                                   (loadingSave === save.key || isSelectMode) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
@@ -710,13 +576,7 @@ export default function SaveManager({
                               
                               {!isSelectMode && (
                                 <button
-                                  onClick={() => {
-                                    if (activeTab === 'cloud') {
-                                      handleDeleteCloudSave(save.key);
-                                    } else {
-                                      handleDeleteLocalSave(save.key);
-                                    }
-                                  }}
+                                  onClick={() => handleDeleteCloudSave(save.key)}
                                   className="p-2 text-red-600 hover:bg-red-50 rounded-full transition-colors"
                                   title="Delete save"
                                 >

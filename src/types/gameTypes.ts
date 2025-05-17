@@ -1,0 +1,1 @@
+export type { GameProgress } from './game'; 

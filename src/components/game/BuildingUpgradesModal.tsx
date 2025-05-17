@@ -5,16 +5,18 @@ import type { Building } from '../../types/game';
 
 type BuildingUpgradesModalProps = {
   building: Building;
+  gridIndex: number;
   onClose: () => void;
-  onUpgrade: (building: Building, upgrades: string[]) => void;
-  playerCoins: number;
+  onUpgrade: (buildingId: string, gridIndex: number, upgradeId: string) => void;
+  playerCoins?: number;
 };
 
 export default function BuildingUpgradesModal({
   building,
+  gridIndex,
   onClose,
   onUpgrade,
-  playerCoins
+  playerCoins = 1000
 }: BuildingUpgradesModalProps) {
   const [selectedUpgrade, setSelectedUpgrade] = useState<string | null>(null);
   const [confirmingUpgrade, setConfirmingUpgrade] = useState(false);
@@ -89,16 +91,7 @@ export default function BuildingUpgradesModal({
     const upgrade = upgradeOptions.find(opt => opt.id === selectedUpgrade);
     if (!upgrade) return;
     
-    const upgradedBuilding = { 
-      ...building,
-      upgrades: [...(building.upgrades || []), upgrade.id],
-      happiness: building.happiness + (upgrade.effect.happiness || 0),
-      income: building.income + (upgrade.effect.income || 0),
-      energy: (building.energy || 0) + (upgrade.effect.energy || 0),
-      residents: (building.residents || 0) + (upgrade.effect.residents || 0)
-    };
-    
-    onUpgrade(upgradedBuilding, [...(building.upgrades || []), upgrade.id]);
+    onUpgrade(building.id, gridIndex, selectedUpgrade);
     setConfirmingUpgrade(false);
     onClose();
   };
@@ -198,61 +191,60 @@ export default function BuildingUpgradesModal({
                 )}
               </div>
 
-              <div className="mt-4 flex justify-end gap-2">
+              <div className="flex justify-end gap-2">
                 <button
                   onClick={onClose}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100"
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
                 >
                   Cancel
                 </button>
                 <button
-                  onClick={() => setConfirmingUpgrade(true)}
-                  disabled={!selectedUpgrade}
-                  className={`px-4 py-2 rounded-lg ${
-                    !selectedUpgrade
-                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                      : 'bg-blue-500 text-white hover:bg-blue-600'
+                  onClick={() => selectedUpgrade && setConfirmingUpgrade(true)}
+                  disabled={!selectedUpgrade || (selectedUpgrade && playerCoins < upgradeOptions.find(u => u.id === selectedUpgrade)?.cost!)}
+                  className={`px-4 py-2 bg-blue-500 text-white rounded-lg flex items-center gap-2 ${
+                    !selectedUpgrade || (selectedUpgrade && playerCoins < upgradeOptions.find(u => u.id === selectedUpgrade)?.cost!)
+                      ? 'opacity-50 cursor-not-allowed'
+                      : 'hover:bg-blue-600'
                   }`}
                 >
-                  Continue
+                  <ArrowUp size={16} />
+                  Upgrade
                 </button>
               </div>
             </>
           ) : (
-            <div className="text-center">
-              <div className="w-20 h-20 mx-auto mb-4 bg-blue-100 rounded-full flex items-center justify-center">
-                <ArrowUp size={40} className="text-blue-600" />
+            <div className="space-y-4">
+              <div className="mb-4">
+                <h3 className="text-lg font-medium text-gray-800 mb-2">Confirm upgrade</h3>
+                <p className="text-sm text-gray-600">
+                  Are you sure you want to upgrade {building.name} with {upgradeOptions.find(u => u.id === selectedUpgrade)?.name}?
+                </p>
               </div>
               
-              {selectedUpgrade && (
-                <>
-                  <h3 className="text-lg font-medium text-gray-800 mb-2">
-                    Upgrade to {upgradeOptions.find(u => u.id === selectedUpgrade)?.name}?
-                  </h3>
-                  <p className="text-gray-600 mb-3">
-                    This will cost {upgradeOptions.find(u => u.id === selectedUpgrade)?.cost} coins
-                  </p>
-                  <p className="text-sm text-gray-600 mb-6">
-                    {upgradeOptions.find(u => u.id === selectedUpgrade)?.description}
-                  </p>
-                </>
-              )}
+              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle size={20} className="text-yellow-600 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm text-yellow-700 mb-1">This will cost {upgradeOptions.find(u => u.id === selectedUpgrade)?.cost} coins</p>
+                    <p className="text-xs text-yellow-600">The upgrade cannot be undone</p>
+                  </div>
+                </div>
+              </div>
               
-              <div className="flex gap-2">
+              <div className="flex justify-end gap-2">
                 <button
                   onClick={() => setConfirmingUpgrade(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100"
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
                 >
-                  Go Back
+                  Cancel
                 </button>
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
+                <button
                   onClick={handleUpgrade}
-                  className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 font-medium"
+                  className="px-4 py-2 bg-blue-500 text-white rounded-lg flex items-center gap-2 hover:bg-blue-600"
                 >
-                  Confirm Upgrade
-                </motion.button>
+                  <ArrowUp size={16} />
+                  Confirm
+                </button>
               </div>
             </div>
           )}

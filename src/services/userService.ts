@@ -33,6 +33,71 @@ export interface AuthResponse {
   message?: string;
 }
 
+const saveAuthToken = (token: string): void => {
+  if (!token) return;
+  try {
+    const expiryDate = new Date();
+    expiryDate.setDate(expiryDate.getDate() + 7);
+    document.cookie = `neighborville_auth=${token}; expires=${expiryDate.toUTCString()}; path=/; SameSite=Lax`;
+    
+    sessionStorage.setItem('neighborville_auth_token', token);
+    
+    console.log('Auth token saved successfully');
+  } catch (error) {
+    console.error('Error saving auth token:', error);
+  }
+};
+
+const getAuthToken = (): string | null => {
+  try {
+    const cookies = document.cookie.split(';');
+    let token = null;
+    
+    for (const cookie of cookies) {
+      const [name, value] = cookie.trim().split('=');
+      if (name === 'neighborville_auth' && value) {
+        token = value;
+        break;
+      }
+    }
+    
+    if (!token) {
+      token = sessionStorage.getItem('neighborville_auth_token');
+    }
+    
+    if (!token || token === 'undefined' || token === 'null') {
+      return null;
+    }
+    
+    return token;
+  } catch (error) {
+    console.error('Error getting auth token:', error);
+    return null;
+  }
+};
+
+const clearAuthToken = (): void => {
+  try {
+    document.cookie = 'neighborville_auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax';
+    sessionStorage.removeItem('neighborville_auth_token');
+  } catch (error) {
+    console.error('Error clearing auth token:', error);
+  }
+};
+
+const getAuthHeaders = (): HeadersInit => {
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json'
+  };
+  
+  const token = getAuthToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  return headers;
+};
+
 export const register = async (
   email: string,
   password: string,
@@ -41,9 +106,7 @@ export const register = async (
   try {
     const response = await fetch(`${API_URL}/api/user/register`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers: getAuthHeaders(),
       body: JSON.stringify({
         email,
         password,
@@ -68,9 +131,7 @@ export const login = async (
   try {
     const checkUser = await fetch(`${API_URL}/api/user/check-registered`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ email })
     }).catch(() => null);
     
@@ -99,8 +160,8 @@ export const login = async (
 
     const data = await response.json();
     
-    if (data.success) {
-      localStorage.setItem('neighborville_last_login', new Date().toISOString());
+    if (data.success && data.token) {
+      saveAuthToken(data.token);
     }
     
     return data;
@@ -117,11 +178,11 @@ export const logout = async (): Promise<boolean> => {
   try {
     const response = await fetch(`${API_URL}/api/user/logout`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers: getAuthHeaders(),
       credentials: 'include'
     });
+    
+    clearAuthToken();
     
     const data = await response.json();
     return data.success;
@@ -133,17 +194,21 @@ export const logout = async (): Promise<boolean> => {
 
 export const getCurrentUser = async (): Promise<User | null> => {
   try {
+    const token = getAuthToken();
+    if (!token) {
+      console.warn('No auth token found, user must be logged in first');
+      return null;
+    }
+    
     const response = await fetch(`${API_URL}/api/user/me`, {
       method: 'GET',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers: getAuthHeaders(),
       credentials: 'include'
     });
     
     if (response.status === 401) {
+      clearAuthToken();
       sessionStorage.removeItem('neighborville_playerName');
-      sessionStorage.removeItem('neighborville_is_guest');
       window.dispatchEvent(new CustomEvent('auth:unauthorized', { 
         detail: { message: 'Authentication required' }
       }));
@@ -167,40 +232,74 @@ export const getCurrentUser = async (): Promise<User | null> => {
   }
 };
 
+export const checkRegisteredEmail = async (
+  email: string
+): Promise<{ exists: boolean; message?: string }> => {
+  try {
+    const response = await fetch(`${API_URL}/api/user/check-registered`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ email })
+    });
+
+    const data = await response.json();
+    return {
+      exists: data.exists || false,
+      message: data.message
+    };
+  } catch (error) {
+    console.error('Error checking if email is registered:', error);
+    return { exists: false, message: 'Error checking email registration status' };
+  }
+};
+
 export const verifyEmail = async (
   email: string,
-  code: string
-): Promise<{ success: boolean; user?: any; message?: string }> => {
+  code: string,
+  username?: string
+): Promise<{ success: boolean; user?: any; message?: string; isNewRegistration?: boolean }> => {
   try {
     const response = await fetch(`${API_URL}/api/user/verify`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/json'
       },
       credentials: 'include',
-      body: JSON.stringify({ email, code }),
+      body: JSON.stringify({ email, code, username })
     });
 
     const data = await response.json();
-    console.log('Verification response:', data);
-
-    if (data.success && data.user) {
-      return {
-        success: true,
-        user: data.user,
-      };
-    } else {
+    
+    if (!data.success) {
+      console.error('Verification failed:', data.message);
       return {
         success: false,
-        message: data.message || 'Verification failed',
+        message: data.message || 'Verification failed'
       };
     }
-  } catch (error) {
-    console.error('Error during email verification:', error);
+
+    if (data.token) {
+      saveAuthToken(data.token);
+      console.log('Auth token saved after verification');
+      
+      if (username || (data.user && data.user.username)) {
+        const usernameToBeSaved = username || data.user.username;
+        sessionStorage.setItem('neighborville_playerName', usernameToBeSaved);
+      }
+    } else {
+      console.warn('No token received from verification');
+    }
+    
     return {
-      success: false,
-      message: 'Network error during verification',
+      success: true,
+      user: data.user,
+      isNewRegistration: data.isNewRegistration
     };
+  } catch (error) {
+    console.error('Error verifying email:', error);
+    return { success: false, message: 'Server error during verification' };
   }
 };
 
@@ -210,9 +309,7 @@ export const resendVerification = async (
   try {
     const response = await fetch(`${API_URL}/api/user/resend-verification`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers: getAuthHeaders(),
       body: JSON.stringify({
         email
       })
@@ -231,18 +328,9 @@ export const updateUserSettings = async (
   settings: any
 ): Promise<boolean> => {
   try {
-    const token = localStorage.getItem('auth_token');
-    
-    if (!token) {
-      return false;
-    }
-    
     const response = await fetch(`${API_URL}/api/user/${userId}/settings`, {
       method: 'PUT',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
+      headers: getAuthHeaders(),
       body: JSON.stringify({
         settings
       })
@@ -261,20 +349,11 @@ export const updateUser = async (
   userData: Partial<User>
 ): Promise<boolean> => {
   try {
-    const token = localStorage.getItem('auth_token');
-    
-    if (!token) {
-      return false;
-    }
-    
     const { username, ...allowedUpdates } = userData;
     
     const response = await fetch(`${API_URL}/api/user/${userId}`, {
       method: 'PUT',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
+      headers: getAuthHeaders(),
       body: JSON.stringify(allowedUpdates)
     });
     
@@ -286,50 +365,11 @@ export const updateUser = async (
   }
 };
 
-export const createGuestUser = async (): Promise<User> => {
-  try {
-    const response = await fetch(`${API_URL}/api/user/guest`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    });
-    
-    const data = await response.json();
-    
-    if (data.success && data.token) {
-      sessionStorage.setItem('auth_token', data.token);
-    }
-    
-    return data.user;
-  } catch (error) {
-    console.error('Error creating guest user:', error);
-    return {
-      id: `guest-${Date.now()}`,
-      email: '',
-      username: `Guest-${Math.floor(Math.random() * 10000)}`,
-      verified: false,
-      isGuest: true,
-      createdAt: new Date().toISOString(),
-      lastLogin: new Date().toISOString(),
-      settings: {
-        soundEnabled: true,
-        musicEnabled: true,
-        notificationsEnabled: true,
-        theme: 'light',
-        language: 'en'
-      }
-    };
-  }
-};
-
 export const getUserProfile = async (): Promise<User | null> => {
   try {
     const response = await fetch(`${API_URL}/api/user/profile`, {
       method: 'GET',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers: getAuthHeaders(),
       credentials: 'include'
     });
     
@@ -354,9 +394,7 @@ export const getUserSessions = async () => {
   try {
     const response = await fetch(`${API_URL}/api/user/sessions`, {
       method: 'GET',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers: getAuthHeaders(),
       credentials: 'include'
     });
     

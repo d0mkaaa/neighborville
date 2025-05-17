@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 import { connectMongoDB, connectRedis } from './config/database.js';
 import emailRoutes from './routes/email.js';
 import userRoutes from './routes/user.js';
+import apiRoutes from './routes/api.js';
 
 dotenv.config();
 
@@ -64,7 +65,7 @@ app.use(cors({
 
 app.use('/api/email', emailRoutes);
 app.use('/api/user', userRoutes);
-
+app.use('/api', apiRoutes);
 
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });

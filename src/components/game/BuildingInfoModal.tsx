@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Home, User, Plus, Minus, DollarSign, Zap, TrendingUp, AlertTriangle, Move, Trash2, RotateCw, ArrowUp, Heart, Coins } from "lucide-react";
+import { X, Home, User, Plus, Minus, DollarSign, Zap, TrendingUp, AlertTriangle, Move, Trash2, ArrowUp, Heart, Coins, UserPlus, Users } from "lucide-react";
 import type { Building, Neighbor } from "../../types/game";
 import BuildingUpgradesModal from './BuildingUpgradesModal';
+import ResidentAssignment from "./ResidentAssignment";
 
 type BuildingInfoModalProps = {
   building: Building;
@@ -11,434 +12,335 @@ type BuildingInfoModalProps = {
   onClose: () => void;
   onAssignResident: (neighborId: number, gridIndex: number) => void;
   onRemoveResident: (neighborId: number) => void;
-  onCollectIncome: (gridIndex: number, amount: number) => void;
-  onMoveBuilding: (fromIndex: number) => void;
-  onUpgradeBuilding: (building: Building, upgrades: string[]) => void;
-  onDemolishBuilding: (gridIndex: number) => void;
+  onCollectIncome: () => void;
+  onUpgradeBuilding: (buildingId: string, gridIndex: number, upgradeId: string) => void;
+  onSellBuilding: (gridIndex: number) => void;
+  onMoveBuilding: (gridIndex: number) => void;
   grid: (Building | null)[];
-  coins: number;
 };
 
-export default function BuildingInfoModal({
-  building,
-  gridIndex,
+interface EnhancedBuilding extends Building {
+  value?: number;
+  lastIncomeCollection?: number;
+  maintenanceCost?: number;
+  unlockRequirement?: string;
+  description?: string;
+}
+
+export default function BuildingInfoModal({ 
+  building, 
+  gridIndex, 
   neighbors,
-  onClose,
+  onClose, 
   onAssignResident,
   onRemoveResident,
   onCollectIncome,
-  onMoveBuilding,
   onUpgradeBuilding,
-  onDemolishBuilding,
-  grid,
-  coins
+  onSellBuilding,
+  onMoveBuilding,
+  grid
 }: BuildingInfoModalProps) {
-  const [currentBuilding, setCurrentBuilding] = useState(building);
-  const [activeTab, setActiveTab] = useState('info');
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-  const [showResidentModal, setShowResidentModal] = useState(false);
-  const currentLevel = currentBuilding.level || 1;
-
+  const [selectedTab, setSelectedTab] = useState<'overview' | 'management' | 'residents'>('overview');
+  const [showUpgradesModal, setShowUpgradesModal] = useState(false);
+  const isHouse = building.id === 'house' || building.id === 'apartment';
+  const occupants = building.occupants || [];
+  const hasResidents = occupants.length > 0;
+  
+  const enhancedBuilding = building as EnhancedBuilding;
+  
+  const lastCollectionTime = enhancedBuilding.lastIncomeCollection || 0;
+  const timeSinceCollection = Date.now() - lastCollectionTime;
+  const hoursSinceCollection = timeSinceCollection / (1000 * 60 * 60);
+  const incomeReady = hoursSinceCollection >= 1;
+  
   useEffect(() => {
-    const latestBuilding = grid[gridIndex];
-    if (latestBuilding) {
-      setCurrentBuilding(latestBuilding);
+    if (isHouse && !hasResidents) {
+      setSelectedTab('residents');
     }
-  }, [grid, gridIndex]);
-
-  const availableNeighbors = neighbors.filter(n => n.unlocked && !n.hasHome);
-  const currentResidents = (currentBuilding.occupants || []).map(id => 
-    neighbors.find(n => n.id === id)
-  ).filter(Boolean) as Neighbor[];
-  
-  const dailyRent = currentResidents.reduce((total, resident) => total + (resident.dailyRent || 0), 0);
-  const totalIncome = currentBuilding.income + dailyRent;
-  const maxCapacity = currentBuilding.residentCapacity || 1;
-  
-  const compatibilityIssues = currentResidents.filter(resident => {
-    const otherResidents = currentResidents.filter(r => r.id !== resident.id);
-    return otherResidents.length >= (resident.maxNeighbors || 1);
-  });
-  
-  const getCompatibleNeighbors = () => {
-    return availableNeighbors.filter(neighbor => {
-      if (neighbor.housingPreference === 'house' && currentBuilding.id.includes('apartment')) return false;
-      if (neighbor.housingPreference === 'apartment' && currentBuilding.id.includes('house')) return false;
-      
-      if (currentResidents.some(r => r.id !== neighbor.id && currentResidents.length >= (neighbor.maxNeighbors || 1))) {
-        return false;
-      }
-      
-      return true;
-    });
-  };
-
-  const canCollectIncome = currentBuilding.id !== 'house' && currentBuilding.id !== 'apartment' && totalIncome > 0;
-  const demolishValue = Math.floor(currentBuilding.cost * 0.5);
-  const hasUpgrades = currentBuilding.upgrades && currentBuilding.upgrades.length > 0;
-  const upgradeAvailable = true;
-  
-  const handleAssignResident = (neighborId: number) => {
-    onAssignResident(neighborId, gridIndex);
-  };
-
-  const handleRemoveResident = (neighborId: number) => {
-    onRemoveResident(neighborId);
-  };
-
-  const upgradeOptions = [
-    {
-      id: "eco_friendly",
-      name: "Eco-Friendly Materials",
-      description: "Use sustainable materials to improve happiness bonus and reduce energy usage",
-      cost: Math.round(currentBuilding.cost * 0.3),
-      effect: {
-        happiness: 5,
-        energy: -2
-      },
-      icon: <Heart className="text-green-500" size={16} />
-    },
-    {
-      id: "modern_design",
-      name: "Modern Design",
-      description: "Update to a sleek modern design that increases income",
-      cost: Math.round(currentBuilding.cost * 0.4),
-      effect: {
-        income: Math.round(currentBuilding.income * 0.25)
-      },
-      icon: <Home className="text-blue-500" size={16} />
-    },
-    
-    ...(currentBuilding.type === 'residential' ? [
-      {
-        id: "extra_rooms",
-        name: "Extra Rooms",
-        description: "Add more living space to increase capacity",
-        cost: Math.round((currentBuilding.cost || 0) * 0.5),
-        effect: {
-          residents: Math.max(1, Math.floor(Array.isArray(currentBuilding.residents) ? 2 : (currentBuilding.residents || 0) * 0.5))
-        },
-        icon: <User className="text-purple-500" size={16} />
-      }
-    ] : []),
-    
-    ...(currentBuilding.type === 'entertainment' ? [
-      {
-        id: "special_events",
-        name: "Special Events",
-        description: "Regular events that boost happiness and income",
-        cost: Math.round(currentBuilding.cost * 0.6),
-        effect: {
-          happiness: 8,
-          income: Math.round(currentBuilding.income * 0.2)
-        },
-        icon: <Zap className="text-yellow-500" size={16} />
-      }
-    ] : []),
-    
-    ...(currentBuilding.type === 'commercial' ? [
-      {
-        id: "expanded_inventory",
-        name: "Expanded Inventory",
-        description: "Increase product offerings to boost income significantly",
-        cost: Math.round(currentBuilding.cost * 0.7),
-        effect: {
-          income: Math.round(currentBuilding.income * 0.35)
-        },
-        icon: <Coins className="text-amber-500" size={16} />
-      }
-    ] : [])
-  ].filter(upgrade => !currentBuilding.upgrades?.includes(upgrade.id));
-  
-  const [selectedUpgrade, setSelectedUpgrade] = useState<string | null>(null);
-  
-  const handleUpgrade = () => {
-    if (!selectedUpgrade) return;
-    
-    const upgrade = upgradeOptions.find(opt => opt.id === selectedUpgrade);
-    if (!upgrade) return;
-    
-    const upgradedBuilding = { 
-      ...currentBuilding,
-      upgrades: [...(currentBuilding.upgrades || []), upgrade.id],
-      happiness: currentBuilding.happiness + (upgrade.effect.happiness || 0),
-      income: currentBuilding.income + (upgrade.effect.income || 0),
-      energy: (currentBuilding.energy || 0) + (upgrade.effect.energy || 0),
-      residents: Array.isArray(currentBuilding.residents) ? currentBuilding.residents : ((currentBuilding.residents || 0) + (upgrade.effect.residents || 0))
-    };
-    
-    onUpgradeBuilding(upgradedBuilding, [...(currentBuilding.upgrades || []), upgrade.id]);
-    setSelectedUpgrade(null);
-  };
-  
-  const getEffectLabel = (effect: { [key: string]: number | string | undefined }) => {
-    const labels = [];
-    
-    if (effect.happiness) labels.push(`+${effect.happiness} happiness`);
-    if (effect.income) labels.push(`+${effect.income} coins/day`);
-    if (effect.energy && typeof effect.energy === 'number' && effect.energy < 0) labels.push(`${effect.energy} energy usage`);
-    if (effect.energy && typeof effect.energy === 'number' && effect.energy > 0) labels.push(`+${effect.energy} energy production`);
-    if (effect.residents) labels.push(`+${effect.residents} residents`);
-    if (effect.special) labels.push(effect.special as string);
-    
-    return labels.join(", ");
-  };
+  }, [isHouse, hasResidents]);
 
   return (
     <>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 flex items-center justify-center p-4"
-        style={{ backdropFilter: "blur(8px)", backgroundColor: "rgba(0,0,0,0.3)" }}
+      <div 
+        className="fixed inset-0 bg-black/50 backdrop-blur-sm z-30"
         onClick={onClose}
+      ></div>
+      
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl shadow-xl z-40 max-h-[80vh] overflow-auto w-full max-w-md"
       >
-        <motion.div
-          initial={{ scale: 0.9, opacity: 0, y: 20 }}
-          animate={{ scale: 1, opacity: 1, y: 0 }}
-          exit={{ scale: 0.9, opacity: 0, y: 20 }}
-          transition={{ type: "spring", damping: 20 }}
-          className="bg-white rounded-xl shadow-xl max-w-md w-full overflow-hidden"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="p-4 flex justify-between items-center" style={{ backgroundColor: currentBuilding.color }}>
-            <div className="flex items-center">
-              <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center mr-3">
-                <Home size={20} className="text-white" />
-              </div>
-              <div>
-                <h2 className="text-lg font-medium text-white lowercase">{currentBuilding.name} #{gridIndex}</h2>
-                <div className="text-sm text-white/80">
-                  {currentBuilding.id.includes('house') || currentBuilding.id.includes('apartment') ? 
-                    `Capacity: ${currentResidents.length}/${maxCapacity}` :
-                    `${currentBuilding.needsElectricity && !currentBuilding.isConnectedToPower ? 'No Power' :
-                      currentBuilding.needsWater && !currentBuilding.isConnectedToWater ? 'No Water' : 'Active'}`
-                  }
-                </div>
-              </div>
-            </div>
-            <button 
-              onClick={onClose}
-              className="text-white/80 hover:text-white transition-colors"
+        <div className="sticky top-0 bg-white z-10 px-4 pt-4 pb-2 border-b border-gray-100 flex justify-between items-center">
+          <div className="flex items-center">
+            <div 
+              className="w-10 h-10 rounded-lg flex items-center justify-center mr-3"
+              style={{ backgroundColor: building.color }}
             >
-              <X size={20} />
-            </button>
-          </div>
-
-          <div className="px-3 pt-3">
-            <div className="flex border-b border-gray-200">
-              <button
-                onClick={() => setActiveTab('info')}
-                className={`px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'info' ? 'text-emerald-600 border-b-2 border-emerald-500' : 'text-gray-500 hover:text-gray-700'}`}
-              >
-                Overview
-              </button>
-              <button
-                onClick={() => setActiveTab('management')}
-                className={`px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'management' ? 'text-blue-600 border-b-2 border-blue-500' : 'text-gray-500 hover:text-gray-700'}`}
-              >
-                Management
-              </button>
+              <Home size={18} className="text-white" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-gray-800 lowercase">{building.name}</h2>
+              <p className="text-sm text-gray-500 lowercase">#{gridIndex}</p>
             </div>
           </div>
           
-          <div className="p-5">
-            {activeTab === 'info' && (
-              <>
-                <div className="grid grid-cols-3 gap-3 mb-5">
-                  <div className="bg-gray-50 p-3 rounded-lg text-center">
-                    <div className="text-xs text-gray-500 uppercase">Value</div>
-                    <div className="text-sm font-medium">{demolishValue}c</div>
-                  </div>
-                  <div className="bg-emerald-50 p-3 rounded-lg text-center">
-                    <div className="text-xs text-emerald-700 uppercase">Income</div>
-                    <div className="text-sm font-medium text-emerald-600">{totalIncome}c/day</div>
-                  </div>
-                  <div className="bg-blue-50 p-3 rounded-lg text-center">
-                    <div className="text-xs text-blue-700 uppercase">Energy</div>
-                    <div className="text-sm font-medium text-blue-600">{currentBuilding.energyUsage || 0}u</div>
-                  </div>
-                </div>
-
-                {compatibilityIssues.length > 0 && (
-                  <div className="mb-4 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
-                    <div className="flex items-center text-yellow-700 text-sm">
-                      <AlertTriangle size={16} className="mr-2" />
-                      {compatibilityIssues.length > 1 ? 'Multiple residents' : 'A resident'} may be uncomfortable with the current housing situation
-                    </div>
-                  </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        
+        <div className="px-4 pt-2">
+          <div className="flex border-b border-gray-200">
+            <button
+              className={`px-4 py-2 text-sm ${
+                selectedTab === 'overview' 
+                  ? 'border-b-2 border-blue-500 text-blue-600 font-medium' 
+                  : 'text-gray-600'
+              }`}
+              onClick={() => setSelectedTab('overview')}
+            >
+              overview
+            </button>
+            <button
+              className={`px-4 py-2 text-sm ${
+                selectedTab === 'management' 
+                  ? 'border-b-2 border-blue-500 text-blue-600 font-medium' 
+                  : 'text-gray-600'
+              }`}
+              onClick={() => setSelectedTab('management')}
+            >
+              management
+            </button>
+            {isHouse && (
+              <button
+                className={`px-4 py-2 text-sm flex items-center ${
+                  selectedTab === 'residents' 
+                    ? 'border-b-2 border-blue-500 text-blue-600 font-medium' 
+                    : 'text-gray-600'
+                }`}
+                onClick={() => setSelectedTab('residents')}
+              >
+                residents
+                {hasResidents && (
+                  <span className="ml-1 bg-emerald-100 text-emerald-600 text-xs px-1.5 rounded-full">
+                    {occupants.length}
+                  </span>
                 )}
-
-                {currentBuilding.id.includes('house') || currentBuilding.id.includes('apartment') ? (
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center">
-                      <h3 className="text-lg font-medium text-gray-800">Residents</h3>
-                      {currentResidents.length < maxCapacity && (
-                        <button
-                          onClick={() => setShowResidentModal(true)}
-                          className="px-3 py-1.5 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 flex items-center gap-1"
-                        >
-                          <Plus size={14} />
-                          Add Resident
-                        </button>
-                      )}
-                    </div>
-
-                    {currentResidents.length > 0 ? (
-                      <div className="space-y-2">
-                        {currentResidents.map(resident => (
-                          <div
-                            key={resident.id}
-                            className="p-3 bg-gray-50 rounded-lg flex items-center justify-between"
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
-                                <User size={20} className="text-gray-500" />
-                              </div>
-                              <div>
-                                <div className="font-medium text-gray-800">{resident.name}</div>
-                                <div className="text-sm text-gray-600">
-                                  {resident.dailyRent} coins/day
-                                </div>
-                              </div>
-                            </div>
-                            <button
-                              onClick={() => handleRemoveResident(typeof resident.id === 'string' ? parseInt(resident.id, 10) : resident.id)}
-                              className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-gray-100"
-                            >
-                              <X size={16} />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-center py-6 bg-gray-50 rounded-lg">
-                        <User size={24} className="mx-auto text-gray-400 mb-2" />
-                        <h4 className="text-gray-700 mb-1">No residents yet</h4>
-                        <p className="text-sm text-gray-500">Add residents to start generating income</p>
-                      </div>
-                    )}
-
-                    {currentResidents.length < maxCapacity && (
-                      <div>
-                        <h4 className="text-sm font-medium text-gray-700 mb-2">Available Residents</h4>
-                        <div className="space-y-2">
-                          {getCompatibleNeighbors().length > 0 ? (
-                            getCompatibleNeighbors().map(neighbor => (
-                              <div
-                                key={neighbor.id}
-                                className="p-3 bg-gray-50 rounded-lg flex items-center justify-between cursor-pointer hover:bg-gray-100"
-                                onClick={() => handleAssignResident(typeof neighbor.id === 'string' ? parseInt(neighbor.id, 10) : neighbor.id)}
-                              >
-                                <div className="flex items-center gap-3">
-                                  <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
-                                    <User size={20} className="text-gray-500" />
-                                  </div>
-                                  <div>
-                                    <div className="font-medium text-gray-800">{neighbor.name}</div>
-                                    <div className="text-sm text-gray-600">
-                                      {neighbor.dailyRent} coins/day
-                                    </div>
-                                  </div>
-                                </div>
-                                <Plus size={16} className="text-gray-400" />
-                              </div>
-                            ))
-                          ) : (
-                            <div className="text-center text-gray-400 text-sm py-3 bg-gray-50 rounded-lg">
-                              No compatible residents available
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center">
-                      <h3 className="text-lg font-medium text-gray-800">Building Details</h3>
-                      <button
-                        onClick={() => setShowUpgradeModal(true)}
-                        className="px-3 py-1.5 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 flex items-center gap-1"
-                      >
-                        <ArrowUp size={14} />
-                        Upgrade
-                      </button>
-                    </div>
-
-                    {hasUpgrades && (
-                      <div className="bg-blue-50 p-3 rounded-lg">
-                        <h4 className="text-sm font-medium text-blue-700 mb-2">Current Upgrades:</h4>
-                        <ul className="space-y-1">
-                          {currentBuilding.upgrades?.map(upgradeId => (
-                            <li key={upgradeId} className="flex items-center p-2 bg-white rounded-lg">
-                              <span className="mr-2 text-blue-500">
-                                {upgradeId === 'eco_friendly' ? <Heart size={16} /> :
-                                 upgradeId === 'modern_design' ? <Home size={16} /> :
-                                 upgradeId === 'extra_rooms' ? <User size={16} /> :
-                                 upgradeId === 'special_events' ? <Zap size={16} /> :
-                                 upgradeId === 'expanded_inventory' ? <Coins size={16} /> :
-                                 <ArrowUp size={16} />}
-                              </span>
-                              <span className="text-sm text-gray-700">
-                                {upgradeId.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    {canCollectIncome && (
-                      <button
-                        onClick={() => onCollectIncome(gridIndex, totalIncome)}
-                        className="w-full py-2 px-4 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 flex items-center justify-center gap-2"
-                      >
-                        <Coins size={16} />
-                        Collect {totalIncome} coins
-                      </button>
-                    )}
-                  </div>
-                )}
-              </>
-            )}
-            
-            {activeTab === 'management' && (
-              <div>
-                <h3 className="text-lg font-medium text-gray-800 mb-4">Building Management</h3>
-                
-                <div className="space-y-4">
-                  <button
-                    onClick={() => onMoveBuilding(gridIndex)}
-                    className="w-full py-2 px-4 bg-blue-100 text-blue-700 rounded-lg flex items-center gap-2"
-                  >
-                    <Move size={16} />
-                    Move Building
-                  </button>
-                  
-                  <button
-                    onClick={() => onDemolishBuilding(gridIndex)}
-                    className="w-full py-2 px-4 bg-red-100 text-red-700 rounded-lg flex items-center gap-2"
-                  >
-                    <Trash2 size={16} />
-                    Demolish Building
-                  </button>
-                </div>
-              </div>
+              </button>
             )}
           </div>
-        </motion.div>
+        </div>
+        
+        <div className="p-4">
+          {selectedTab === 'overview' && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 bg-gray-50 rounded-lg border border-gray-100">
+                  <div className="text-xs text-gray-500 lowercase mb-1 flex items-center">
+                    <Coins size={12} className="mr-1" /> Value
+                  </div>
+                  <div className="font-medium text-gray-800">{enhancedBuilding.value || building.cost || 100}c</div>
+                </div>
+                
+                {building.income > 0 && (
+                  <div className="p-3 bg-gray-50 rounded-lg border border-gray-100">
+                    <div className="text-xs text-gray-500 lowercase mb-1 flex items-center">
+                      <DollarSign size={12} className="mr-1" /> Income
+                    </div>
+                    <div className="font-medium text-gray-800">{building.income}c/day</div>
+                  </div>
+                )}
+                
+                <div className="p-3 bg-gray-50 rounded-lg border border-gray-100">
+                  <div className="text-xs text-gray-500 lowercase mb-1 flex items-center">
+                    <Zap size={12} className="mr-1" /> Energy
+                  </div>
+                  <div className="font-medium text-gray-800">{building.energyUsage}u</div>
+                </div>
+                
+                {building.happiness && (
+                  <div className="p-3 bg-gray-50 rounded-lg border border-gray-100">
+                    <div className="text-xs text-gray-500 lowercase mb-1 flex items-center">
+                      <Heart size={12} className="mr-1" /> Happiness
+                    </div>
+                    <div className="font-medium text-gray-800">+{building.happiness}</div>
+                  </div>
+                )}
+              </div>
+              
+              <div className="p-3 rounded-lg border border-gray-200">
+                <h3 className="font-medium text-sm text-gray-700 mb-2 lowercase">Building Details</h3>
+                <div className="text-sm text-gray-600 space-y-2">
+                  <div className="flex items-center">
+                    <span className="text-gray-500">Energy usage:</span>
+                    <span className="ml-auto">{building.energyUsage} units/day</span>
+                  </div>
+                  
+                  {enhancedBuilding.maintenanceCost && enhancedBuilding.maintenanceCost > 0 && (
+                    <div className="flex items-center">
+                      <span className="text-gray-500">Maintenance:</span>
+                      <span className="ml-auto">{enhancedBuilding.maintenanceCost}c/day</span>
+                    </div>
+                  )}
+                  
+                  {enhancedBuilding.unlockRequirement && (
+                    <div className="flex items-center">
+                      <span className="text-gray-500">Requirement:</span>
+                      <span className="ml-auto">{enhancedBuilding.unlockRequirement}</span>
+                    </div>
+                  )}
+                  
+                  {isHouse && (
+                    <div className="flex items-center">
+                      <span className="text-gray-500">Capacity:</span>
+                      <span className="ml-auto">
+                        {occupants.length}/{building.residentCapacity || 1} residents
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              {enhancedBuilding.description && (
+                <div className="p-3 bg-blue-50 rounded-lg border border-blue-100 text-sm text-blue-800">
+                  {enhancedBuilding.description}
+                </div>
+              )}
+              
+              {building.income > 0 && incomeReady && (
+                <button
+                  onClick={onCollectIncome}
+                  className="w-full p-3 bg-green-500 text-white rounded-lg font-medium flex items-center justify-center gap-2"
+                >
+                  <DollarSign size={16} />
+                  Collect {building.income} coins
+                </button>
+              )}
+            </div>
+          )}
+          
+          {selectedTab === 'management' && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => setShowUpgradesModal(true)}
+                  className="p-3 bg-white border border-blue-200 rounded-lg text-blue-600 flex flex-col items-center justify-center gap-2"
+                >
+                  <ArrowUp size={18} />
+                  <span className="text-sm">Upgrade</span>
+                </button>
+                
+                <button
+                  onClick={() => onMoveBuilding(gridIndex)}
+                  className="p-3 bg-white border border-gray-200 rounded-lg text-gray-600 flex flex-col items-center justify-center gap-2"
+                >
+                  <Move size={18} />
+                  <span className="text-sm">Move</span>
+                </button>
+                
+                <button
+                  onClick={() => onSellBuilding(gridIndex)}
+                  className="p-3 bg-white border border-red-200 rounded-lg text-red-600 flex flex-col items-center justify-center gap-2 col-span-2"
+                >
+                  <Trash2 size={18} />
+                  <span className="text-sm">Sell</span>
+                </button>
+              </div>
+              
+              <div className="p-4 border border-gray-200 rounded-lg bg-yellow-50">
+                <div className="flex items-start">
+                  <AlertTriangle size={20} className="text-yellow-600 mr-3 mt-1 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm text-yellow-700 mb-1">Selling this building will return {Math.floor((enhancedBuilding.value || building.cost || 100) * 0.7)} coins (70% of value).</p>
+                    <p className="text-xs text-yellow-600">You'll lose any upgrades and improvements.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {selectedTab === 'residents' && isHouse && (
+            <div className="space-y-4">
+              {hasResidents ? (
+                <div>
+                  <h3 className="font-medium text-gray-700 mb-2 text-sm flex items-center gap-1 lowercase">
+                    <Users size={16} />
+                    Current Residents
+                  </h3>
+                  
+                  <div className="space-y-2">
+                    {occupants.map((residentId) => {
+                      const resident = neighbors.find(n => n.id === residentId);
+                      if (!resident) return null;
+                      
+                      return (
+                        <div 
+                          key={residentId} 
+                          className="p-3 bg-white border border-gray-200 rounded-lg flex justify-between items-center"
+                        >
+                          <div className="flex items-center">
+                            <div className="text-2xl mr-3">{resident.avatar}</div>
+                            <div>
+                              <div className="text-sm font-medium text-gray-700">{resident.name}</div>
+                              <div className="text-xs text-gray-500 flex items-center gap-2">
+                                <span>rent: {resident.dailyRent} coins/day</span>
+                                <span className="flex items-center gap-1">
+                                  <Heart size={10} />
+                                  happiness: {resident.happiness}%
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <button
+                            onClick={() => onRemoveResident(Number(residentId))}
+                            className="p-1.5 bg-red-50 text-red-500 rounded-full hover:bg-red-100"
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-lg flex items-start">
+                  <UserPlus size={20} className="text-emerald-600 mr-3 mt-1 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm text-emerald-700 mb-1">This building has no residents yet.</p>
+                    <p className="text-xs text-emerald-600">Assign residents to earn daily rent income.</p>
+                  </div>
+                </div>
+              )}
+              
+              <div className="mt-4">
+                <ResidentAssignment 
+                  neighbors={neighbors}
+                  grid={grid}
+                  onAssignResident={onAssignResident}
+                  onRemoveResident={onRemoveResident}
+                />
+              </div>
+            </div>
+          )}
+        </div>
       </motion.div>
-
-      {showUpgradeModal && (
-        <BuildingUpgradesModal
-          building={currentBuilding}
-          onClose={() => setShowUpgradeModal(false)}
-          onUpgrade={onUpgradeBuilding}
-          playerCoins={coins}
-        />
-      )}
+      
+      <AnimatePresence>
+        {showUpgradesModal && (
+          <BuildingUpgradesModal
+            building={building}
+            gridIndex={gridIndex}
+            onClose={() => setShowUpgradesModal(false)}
+            onUpgrade={onUpgradeBuilding}
+          />
+        )}
+      </AnimatePresence>
     </>
   );
 }
