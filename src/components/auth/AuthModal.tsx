@@ -136,8 +136,8 @@ export default function AuthModal({ onClose, onLogin }: AuthModalProps) {
         loginTimeoutRef.current = window.setTimeout(() => {
           onLogin({
             id: data.user?.id || email,
-            username: username,
-            email: email
+            username: data.user?.username || username,
+            email: data.user?.email || email
           });
           
           setIsVerifying(false);
@@ -191,7 +191,6 @@ export default function AuthModal({ onClose, onLogin }: AuthModalProps) {
           <h2 className="text-lg font-medium">
             Welcome to NeighborVille
           </h2>
-          {/* Only show close button if not in the mandatory username step */}
           {!isUsernameStep && (
             <button 
               onClick={onClose}

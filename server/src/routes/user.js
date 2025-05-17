@@ -827,18 +827,22 @@ router.post('/update-username', [
     
     const { email, username } = req.body;
     
-    const user = await findUserByEmail(email);
-    
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-    
-    const existingUser = await findUserByUsername(username);
-    if (existingUser && existingUser._id.toString() !== user._id.toString()) {
+    const existingUsername = await findUserByUsername(username);
+    if (existingUsername) {
       return res.status(409).json({ success: false, message: 'Username already taken' });
     }
     
-    await updateUser(user._id, { username });
+    let user = await findUserByEmail(email);
+    let isNewUser = false;
+    
+    if (!user) {
+      isNewUser = true;
+      user = await createUser(email, username);
+      console.log(`Created new user with email ${email} and username ${username}`);
+    } else {
+      await updateUser(user._id, { username });
+      console.log(`Updated username for ${email} to ${username}`);
+    }
     
     const session = await createSession(user, req.headers['user-agent'] || 'Unknown', req.ip);
     const token = createToken(user._id);
@@ -849,9 +853,10 @@ router.post('/update-username', [
     
     res.status(200).json({
       success: true,
-      message: 'Username updated successfully',
+      message: isNewUser ? 'User created successfully' : 'Username updated successfully',
       token,
-      user: updatedUser.toProfile()
+      user: updatedUser.toProfile(),
+      isNewUser
     });
   } catch (error) {
     console.error('Error in /update-username route:', error);
