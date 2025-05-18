@@ -242,3 +242,18 @@ export const updateUser = async (userId, userData) => {
     return false;
   }
 };
+
+export const getStoredVerificationCode = async (email) => {
+  try {
+    const key = `verification:${email}`;
+    console.log(`Checking for existing verification code for ${email}`);
+    
+    const storedCode = await redisClient.get(key);
+    console.log(`Found verification code for ${email}: ${storedCode ? 'Yes' : 'No'}`);
+    
+    return storedCode;
+  } catch (error) {
+    console.error('Error retrieving verification code:', error);
+    return null;
+  }
+};

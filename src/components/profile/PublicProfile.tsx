@@ -1,33 +1,12 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { User, Calendar, Home, Star, Clock, Lock, AlertCircle, Loader2, Building, Users, DollarSign } from 'lucide-react';
-import { API_URL } from "../../config/apiConfig";
+import { getPublicProfile } from "../../services/userService";
+import type { PublicProfileData } from "../../services/userService";
 
 interface PublicProfileProps {
   username: string;
   onClose: () => void;
-}
-
-interface PublicProfileData {
-  username: string;
-  createdAt: string;
-  lastActive: string;
-  gameData: {
-    playerName: string;
-    day: number;
-    level: number;
-    happiness: number;
-    stats: {
-      buildingCount: number;
-      neighborCount: number;
-      totalIncome: number;
-      happiness: number;
-    };
-    grid?: any[];
-  } | null;
-  showBio: boolean;
-  showStats: boolean;
-  showActivity: boolean;
 }
 
 export default function PublicProfile({ username, onClose }: PublicProfileProps) {
@@ -43,22 +22,15 @@ export default function PublicProfile({ username, onClose }: PublicProfileProps)
       setIsPrivate(false);
       
       try {
-        const response = await fetch(`${API_URL}/api/user/profile/${username}`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
+        const result = await getPublicProfile(username);
         
-        const data = await response.json();
-        
-        if (data.success) {
-          setProfile(data.profile);
+        if (result.success && result.profile) {
+          setProfile(result.profile);
         } else {
-          if (data.isPrivate) {
+          if (result.isPrivate) {
             setIsPrivate(true);
           } else {
-            throw new Error(data.message || 'Failed to fetch profile');
+            throw new Error(result.message || 'Failed to fetch profile');
           }
         }
       } catch (error) {

@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Calendar, X, ChevronRight, Award, Coins } from 'lucide-react';
-import type { Season, SeasonalEvent } from '../../types/game';
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { X, ArrowRight, Award, Coins, Calendar, CheckCircle, Clock, AlertTriangle } from "lucide-react";
+import type { SeasonalEvent, Season } from "../../types/game";
+import { SEASONS } from "../../data/seasons";
 
 type SeasonalEventsPanelProps = {
   currentSeason: Season;
@@ -28,167 +29,301 @@ export default function SeasonalEventsPanel({
   const nextSeasonIndex = (SEASONS.findIndex(s => s.id === currentSeason.id) + 1) % SEASONS.length;
   const nextSeason = SEASONS[nextSeasonIndex];
   
+  const getEventStatus = (event: SeasonalEvent) => {
+    if (event.dayStarted && day >= event.dayStarted && day < event.dayStarted + event.duration) {
+      return 'active';
+    }
+    
+    const triggerDay = currentSeason.startDay + event.triggerDayInSeason - 1;
+    if (day < triggerDay) {
+      return 'upcoming';
+    }
+    
+    if (day >= triggerDay && day < triggerDay + event.duration) {
+      return 'active';
+    }
+    
+    return 'ended';
+  };
+  
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 20 }}
-      className="bg-white rounded-xl shadow-xl overflow-hidden max-w-md w-full max-h-[80vh] flex flex-col"
+      className="bg-white rounded-xl shadow-xl overflow-hidden max-w-5xl w-full max-h-[80vh] flex flex-col"
     >
       <div 
         className="p-4 flex justify-between items-center" 
-        style={{ backgroundColor: currentSeason.colorTheme }}
+        style={{ 
+          background: `linear-gradient(to right, ${currentSeason.colorTheme}, ${currentSeason.colorTheme}99)`,
+          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+        }}
       >
         <div className="flex items-center gap-2">
-          <span className="text-2xl">{currentSeason.icon}</span>
-          <h2 className="text-white font-medium text-lg">{currentSeason.name} Season</h2>
+          <span className="text-3xl">{currentSeason.icon}</span>
+          <div>
+            <h2 className="text-white font-medium text-lg">{currentSeason.name} Season</h2>
+            <p className="text-white/80 text-sm">Day {dayInSeason} of {currentSeason.durationDays}</p>
+          </div>
         </div>
-        <button onClick={onClose} className="text-white/80 hover:text-white">
+        <button onClick={onClose} className="text-white/80 hover:text-white transition-all p-2 hover:bg-white/10 rounded-full">
           <X size={20} />
         </button>
       </div>
       
-      <div className="flex-1 overflow-y-auto p-4">
-        <div className="mb-4">
-          <p className="text-gray-600">{currentSeason.description}</p>
-          <div className="mt-2 flex items-center justify-between">
-            <div className="flex items-center gap-1 text-sm text-gray-500">
-              <Calendar size={14} />
-              <span>Day {dayInSeason} of {currentSeason.durationDays}</span>
-            </div>
-            <div className="text-sm text-gray-500">
-              {daysRemaining} {daysRemaining === 1 ? 'day' : 'days'} until {nextSeason.name}
-            </div>
-          </div>
+      <div className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 border-b flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Clock size={18} className="text-purple-500" />
+          <span className="text-purple-700">
+            {daysRemaining > 0 ? (
+              <>{daysRemaining} days until {nextSeason.name} Season</>
+            ) : (
+              <>Last day of {currentSeason.name} Season</>
+            )}
+          </span>
         </div>
         
-        <div className="mb-4">
-          <h3 className="font-medium text-gray-800 mb-2">Season Bonuses</h3>
-          <div className="space-y-2">
-            {currentSeason.bonuses.map((bonus, idx) => (
-              <div key={idx} className="p-2 bg-gray-50 rounded-lg text-sm">
-                <div className="font-medium text-gray-700">
-                  {bonus.amount > 0 ? '+' : ''}{bonus.amount}% {formatBonusType(bonus.type)}
-                </div>
-                <div className="text-gray-500">{bonus.description}</div>
-              </div>
-            ))}
-          </div>
+        <div className="flex items-center gap-2 bg-white/50 backdrop-blur-sm px-3 py-1.5 rounded-full border border-purple-100">
+          <Coins size={16} className="text-amber-500" />
+          <span className="font-medium text-gray-700">{coins} coins</span>
         </div>
-        
-        {activeEvents.length > 0 && (
-          <div>
-            <h3 className="font-medium text-gray-800 mb-2">Active Events</h3>
-            <div className="space-y-3">
-              <AnimatePresence>
-                {activeEvents.map(event => (
+      </div>
+      
+      <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <div className="flex items-center gap-2 mb-4">
+            <Calendar size={20} className="text-blue-500" />
+            <h3 className="text-lg font-medium text-gray-800">Seasonal Events</h3>
+          </div>
+          
+          {activeEvents.length === 0 ? (
+            <div className="p-5 bg-gray-50 rounded-lg text-center text-gray-500 flex flex-col items-center">
+              <Calendar size={32} className="text-gray-300 mb-2" />
+              <p>No active events at this time</p>
+              <p className="text-sm mt-1">Check back later in the season!</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {activeEvents.map(event => {
+                const eventStatus = getEventStatus(event);
+                const isExpanded = expandedEventId === event.id;
+                const triggerDay = currentSeason.startDay + event.triggerDayInSeason - 1;
+                const daysUntil = triggerDay - day;
+                const daysLeft = eventStatus === 'active' 
+                  ? (event.dayStarted ? event.dayStarted + event.duration - day : triggerDay + event.duration - day) 
+                  : 0;
+                const isActive = eventStatus === 'active';
+                
+                return (
                   <motion.div
                     key={event.id}
-                    layout
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, height: 0 }}
-                    className="border border-gray-200 rounded-lg overflow-hidden"
+                    whileHover={{ scale: 1.01 }}
+                    onClick={() => setExpandedEventId(isExpanded ? null : event.id)}
+                    className={`p-4 rounded-lg border cursor-pointer transition-all ${
+                      isExpanded
+                        ? 'border-emerald-500 shadow-md bg-emerald-50'
+                        : isActive
+                        ? 'border-blue-500 bg-blue-50'
+                        : daysUntil <= 7 && daysUntil > 0
+                        ? 'border-yellow-500 bg-yellow-50'
+                        : 'border-gray-300 bg-gray-50'
+                    }`}
                   >
-                    <div 
-                      className="p-3 flex justify-between items-center cursor-pointer"
-                      onClick={() => setExpandedEventId(expandedEventId === event.id ? null : event.id)}
-                      style={{ 
-                        backgroundColor: expandedEventId === event.id 
-                          ? `${currentSeason.colorTheme}20`
-                          : 'white'
-                      }}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="text-2xl">{event.icon}</span>
-                        <div>
-                          <h4 className="font-medium">{event.name}</h4>
-                          <p className="text-xs text-gray-500">
-                            {event.dayStarted ? `Started on day ${event.dayStarted}` : 'Just started'}
-                          </p>
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className="text-2xl">{event.icon}</span>
+                      <div className="flex-1">
+                        <h3 className="font-medium text-gray-800">{event.name}</h3>
+                        <div className="flex items-center gap-1 text-sm">
+                          {eventStatus === 'active' ? (
+                            <span className="flex items-center gap-1 text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full">
+                              <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse inline-block"></span>
+                              Active • {daysLeft} day{daysLeft !== 1 ? 's' : ''} left
+                            </span>
+                          ) : daysUntil > 0 ? (
+                            <span className="flex items-center gap-1 text-orange-600 bg-orange-100 px-2 py-0.5 rounded-full">
+                              <Clock size={12} />
+                              Starts in {daysUntil} day{daysUntil !== 1 ? 's' : ''}
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1 text-gray-600 bg-gray-100 px-2 py-0.5 rounded-full">
+                              <CheckCircle size={12} />
+                              Ended
+                            </span>
+                          )}
                         </div>
                       </div>
-                      <ChevronRight 
-                        size={16} 
-                        className={`transition-transform ${expandedEventId === event.id ? 'rotate-90' : ''}`} 
-                      />
+                      <span className="text-gray-400">
+                        {isExpanded ? '▼' : '▶'}
+                      </span>
                     </div>
                     
-                    {expandedEventId === event.id && (
-                      <div className="p-3 border-t border-gray-100 bg-gray-50">
-                        <p className="text-sm text-gray-600 mb-3">{event.description}</p>
-                        
-                        <div className="mb-3">
-                          <h5 className="text-xs font-medium text-gray-700 mb-1">Event Bonuses:</h5>
-                          <div className="flex flex-wrap gap-2">
-                            {event.bonuses.map((bonus, idx) => (
-                              <span 
-                                key={idx}
-                                className={`text-xs px-2 py-1 rounded-full ${
-                                  bonus.amount > 0 
-                                    ? 'bg-green-100 text-green-700' 
-                                    : 'bg-red-100 text-red-700'
-                                }`}
-                              >
-                                {bonus.amount > 0 ? '+' : ''}{bonus.amount}% {formatBonusType(bonus.type)}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                        
-                        {!event.selectedOption && event.options.length > 0 && (
-                          <div>
-                            <h5 className="text-xs font-medium text-gray-700 mb-1">Available Actions:</h5>
-                            <div className="space-y-2">
-                              {event.options.map(option => (
-                                <button
-                                  key={option.id}
-                                  onClick={() => onSelectEventOption(event.id, option.id)}
-                                  disabled={coins < option.cost}
-                                  className={`w-full p-2 text-sm rounded-lg text-left flex justify-between items-center ${
-                                    coins < option.cost
-                                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                      : 'bg-white border border-gray-200 hover:border-gray-300'
-                                  }`}
-                                >
-                                  <div>
-                                    <div className="font-medium">{option.name}</div>
-                                    <div className="text-xs flex items-center gap-1">
-                                      <Coins size={12} className="text-amber-500" />
-                                      <span>Cost: {option.cost}</span>
-                                    </div>
-                                  </div>
-                                  <div className="bg-blue-50 px-2 py-1 rounded text-xs text-blue-600 flex items-center gap-1">
+                    <AnimatePresence>
+                      {isExpanded && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="mt-3 pt-3 border-t"
+                        >
+                          <p className="text-gray-700 mb-3">{event.description}</p>
+                          
+                          {event.bonuses.length > 0 && (
+                            <div className="mb-3">
+                              <h4 className="text-sm font-medium text-gray-700 mb-1">Event Bonuses:</h4>
+                              <div className="grid grid-cols-2 gap-2">
+                                {event.bonuses.map((bonus, i) => (
+                                  <div 
+                                    key={i} 
+                                    className={`px-3 py-2 rounded text-xs flex items-center gap-1.5 ${
+                                      bonus.amount > 0 
+                                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                                        : 'bg-amber-50 text-amber-700 border border-amber-200'
+                                    }`}
+                                  >
                                     <Award size={12} />
-                                    <span>+{option.reward.amount} {formatBonusType(option.reward.type)}</span>
+                                    <span>
+                                      {bonus.amount > 0 ? '+' : ''}{bonus.amount}% {formatBonusType(bonus.type)}
+                                    </span>
                                   </div>
-                                </button>
-                              ))}
+                                ))}
+                              </div>
                             </div>
-                          </div>
-                        )}
-                        
-                        {event.selectedOption && (
-                          <div className="bg-blue-50 p-2 rounded-lg text-sm text-blue-700">
-                            You selected: {event.options.find(o => o.id === event.selectedOption)?.name}
-                          </div>
-                        )}
-                      </div>
-                    )}
+                          )}
+                          
+                          {!event.selectedOption && event.options.length > 0 && isActive && (
+                            <div>
+                              <h5 className="text-sm font-medium text-gray-700 mb-2">Available Activities:</h5>
+                              <div className="space-y-2">
+                                {event.options.map(option => (
+                                  <button
+                                    key={option.id}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onSelectEventOption(event.id, option.id);
+                                    }}
+                                    disabled={coins < option.cost}
+                                    className={`w-full p-3 text-sm rounded-lg text-left flex justify-between items-center transition-colors ${
+                                      coins < option.cost
+                                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                        : 'bg-white border border-gray-200 hover:border-blue-300 hover:bg-blue-50'
+                                    }`}
+                                  >
+                                    <div>
+                                      <div className="font-medium">{option.name}</div>
+                                      <div className="text-xs flex items-center gap-1 mt-1">
+                                        <Coins size={12} className="text-amber-500" />
+                                        <span className={coins < option.cost ? 'text-red-500 font-medium' : 'text-gray-600'}>
+                                          Cost: {option.cost} coins
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <div className="bg-blue-50 px-2 py-1 rounded text-xs text-blue-600 flex items-center gap-1">
+                                      <Award size={12} />
+                                      <span>+{option.reward.amount} {formatBonusType(option.reward.type)}</span>
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {event.selectedOption && (
+                            <div className="mt-2 p-3 bg-emerald-50 text-emerald-700 rounded-lg border border-emerald-200 text-sm flex items-center gap-2">
+                              <CheckCircle size={14} />
+                              <span>You've already participated in this event</span>
+                            </div>
+                          )}
+                          
+                          {!isActive && daysUntil <= 0 && (
+                            <div className="mt-2 p-3 bg-gray-50 text-gray-500 rounded-lg border border-gray-200 text-sm flex items-center gap-2">
+                              <AlertTriangle size={14} />
+                              <span>This event has ended</span>
+                            </div>
+                          )}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </motion.div>
-                ))}
-              </AnimatePresence>
+                );
+              })}
+            </div>
+          )}
+        </div>
+        
+        <div>
+          <div className="flex items-center gap-2 mb-4">
+            <Award size={20} className="text-purple-500" />
+            <h3 className="text-lg font-medium text-gray-800">Season Bonuses</h3>
+          </div>
+          
+          <div className="bg-gradient-to-r from-indigo-50 to-purple-50 p-5 rounded-lg border border-purple-100">
+            <div className="flex items-center gap-3 mb-4">
+              <span className="text-3xl">{currentSeason.icon}</span>
+              <div>
+                <h4 className="font-medium text-gray-800">{currentSeason.name} Season Effects</h4>
+                <p className="text-sm text-gray-600">{currentSeason.description}</p>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 gap-3">
+              {currentSeason.bonuses.map((bonus, index) => (
+                <div 
+                  key={index}
+                  className={`flex items-center p-3 rounded-lg border ${
+                    bonus.amount > 0 
+                      ? 'bg-white/70 text-emerald-700 border-emerald-200' 
+                      : 'bg-white/70 text-amber-700 border-amber-200'
+                  }`}
+                >
+                  <div className="mr-3">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                      bonus.amount > 0 ? 'bg-emerald-100' : 'bg-amber-100'
+                    }`}>
+                      {bonus.type === 'happiness' && <span className="text-xl">😊</span>}
+                      {bonus.type === 'income' && <Coins size={20} />}
+                      {bonus.type === 'energy' && <span className="text-xl">⚡</span>}
+                      {bonus.type === 'garden' && <span className="text-xl">🌱</span>}
+                      {bonus.type === 'reputation' && <span className="text-xl">⭐</span>}
+                      {bonus.type === 'experience' && <span className="text-xl">📈</span>}
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium">{formatBonusType(bonus.type)}</span>
+                      <span className={`font-bold ${bonus.amount > 0 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                        {bonus.amount > 0 ? '+' : ''}{bonus.amount}%
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-600 mt-0.5">{bonus.description}</p>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
-        )}
-        
-        {activeEvents.length === 0 && (
-          <div className="text-center py-6">
-            <div className="text-5xl mb-2">{currentSeason.icon}</div>
-            <h3 className="text-gray-600 mb-1">No active events</h3>
-            <p className="text-sm text-gray-500">Check back as the season progresses</p>
+          
+          <div className="mt-6">
+            <div className="flex items-center gap-2 mb-3">
+              <Calendar size={18} className="text-blue-500" />
+              <h4 className="font-medium text-gray-800">Coming Next</h4>
+            </div>
+            
+            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-3xl">{nextSeason.icon}</span>
+                <div>
+                  <div className="font-medium text-gray-800">{nextSeason.name} Season</div>
+                  <div className="text-sm text-gray-600">{nextSeason.description}</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-1 text-sm text-blue-600">
+                <span>In {daysRemaining} days</span>
+                <ArrowRight size={14} />
+              </div>
+            </div>
           </div>
-        )}
+        </div>
       </div>
     </motion.div>
   );
@@ -198,101 +333,18 @@ function formatBonusType(type: string): string {
   switch (type) {
     case 'happiness': return 'Happiness';
     case 'income': return 'Income';
-    case 'energy': return 'Energy';
-    case 'garden': return 'Garden Production';
-    case 'tourism': return 'Tourism Income';
-    case 'commercial': return 'Commercial Income';
-    case 'residential': return 'Residential Happiness';
-    case 'education': return 'Education Effect';
+    case 'energy': return 'Energy Efficiency';
+    case 'garden': return 'Garden Output';
+    case 'commercial': return 'Commercial Revenue';
+    case 'residential': return 'Residential Value';
+    case 'tourism': return 'Tourism';
+    case 'education': return 'Education';
     case 'reputation': return 'Reputation';
-    case 'experience': return 'Experience';
+    case 'experience': return 'Experience Gain';
+    case 'landValue': return 'Land Value';
+    case 'health': return 'Health';
+    case 'pollution': return 'Pollution Reduction';
+    case 'traffic': return 'Traffic Flow';
     default: return type.charAt(0).toUpperCase() + type.slice(1);
   }
 }
-
-const SEASONS = [
-  {
-    id: "spring",
-    name: "Spring",
-    icon: "🌸",
-    colorTheme: "#a5d6a7",
-    durationDays: 30,
-    startDay: 1,
-    description: "Flowers bloom and the town comes alive. Gardens thrive during this season.",
-    bonuses: [
-      {
-        type: "happiness",
-        amount: 5,
-        description: "The pleasant weather improves everyone's mood"
-      },
-      {
-        type: "garden",
-        amount: 20,
-        description: "Gardens and parks produce 20% more income"
-      }
-    ]
-  },
-  {
-    id: "summer",
-    name: "Summer",
-    icon: "☀️",
-    colorTheme: "#ffca28",
-    durationDays: 30,
-    startDay: 31,
-    description: "The hot season brings tourists and beach activities. Entertainment venues flourish.",
-    bonuses: [
-      {
-        type: "tourism",
-        amount: 15,
-        description: "Entertainment buildings earn 15% more"
-      },
-      {
-        type: "energy",
-        amount: -10,
-        description: "Energy usage increases by 10% due to cooling needs"
-      }
-    ]
-  },
-  {
-    id: "autumn",
-    name: "Autumn",
-    icon: "🍂",
-    colorTheme: "#e65100",
-    durationDays: 30,
-    startDay: 61,
-    description: "Colorful leaves and harvest festivals. Commercial buildings see increased activity.",
-    bonuses: [
-      {
-        type: "commercial",
-        amount: 10,
-        description: "Commercial buildings earn 10% more income"
-      },
-      {
-        type: "education",
-        amount: 15,
-        description: "Educational buildings provide 15% more happiness"
-      }
-    ]
-  },
-  {
-    id: "winter",
-    name: "Winter",
-    icon: "❄️",
-    colorTheme: "#90caf9",
-    durationDays: 30,
-    startDay: 91,
-    description: "Snowy days and holiday celebrations. Residential buildings gain bonuses.",
-    bonuses: [
-      {
-        type: "residential",
-        amount: 10,
-        description: "Residential buildings provide 10% more happiness"
-      },
-      {
-        type: "energy",
-        amount: 15,
-        description: "Energy usage increases by 15% due to heating needs"
-      }
-    ]
-  }
-];

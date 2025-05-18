@@ -399,18 +399,131 @@ export const getUserSessions = async () => {
     });
     
     if (!response.ok) {
-      return { success: false, sessions: [] };
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    return data.success ? data.sessions : [];
+  } catch (error) {
+    console.error('Error getting user sessions:', error);
+    return [];
+  }
+};
+
+export interface LeaderboardEntry {
+  username: string;
+  playerName: string;
+  level: number;
+  day: number;
+  buildingCount: number;
+  lastActive: string;
+  happiness?: number;
+}
+
+export interface LeaderboardResponse {
+  success: boolean;
+  leaderboard: LeaderboardEntry[];
+  pagination: {
+    total: number;
+    page: number;
+    limit: number;
+    pages: number;
+  };
+  message?: string;
+}
+
+export const getLeaderboard = async (
+  sort: 'level' | 'buildingCount' | 'day' = 'level',
+  page: number = 1,
+  limit: number = 10
+): Promise<LeaderboardResponse> => {
+  try {
+    const response = await fetch(
+      `${API_URL}/api/user/leaderboard?sort=${sort}&page=${page}&limit=${limit}`,
+      {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch leaderboard: ${response.status} ${response.statusText}`);
     }
     
     const data = await response.json();
     
-    if (data.success && data.sessions) {
-      return { success: true, sessions: data.sessions };
+    return data;
+  } catch (error) {
+    console.error('Error fetching leaderboard:', error);
+    return {
+      success: false,
+      leaderboard: [],
+      pagination: {
+        total: 0,
+        page: page,
+        limit: limit,
+        pages: 0
+      },
+      message: typeof error === 'string' ? error : error instanceof Error ? error.message : 'Failed to load leaderboard'
+    };
+  }
+};
+
+export interface PublicProfileData {
+  username: string;
+  createdAt: string;
+  lastActive: string;
+  gameData: {
+    playerName: string;
+    day: number;
+    level: number;
+    happiness: number;
+    stats: {
+      buildingCount: number;
+      neighborCount: number;
+      totalIncome: number;
+      happiness: number;
+    };
+    grid?: any[];
+  } | null;
+  showBio: boolean;
+  showStats: boolean;
+  showActivity: boolean;
+}
+
+export const getPublicProfile = async (username: string): Promise<{
+  success: boolean;
+  profile?: PublicProfileData;
+  isPrivate?: boolean;
+  message?: string;
+}> => {
+  try {
+    const response = await fetch(`${API_URL}/api/user/profile/${username}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      return {
+        success: false,
+        isPrivate: error.isPrivate || false,
+        message: error.message || `Failed to fetch profile: ${response.status}`
+      };
     }
     
-    return { success: false, sessions: [] };
+    const data = await response.json();
+    return data;
   } catch (error) {
-    console.error('Error getting user sessions:', error);
-    return { success: false, sessions: [] };
+    console.error('Error fetching public profile:', error);
+    return {
+      success: false,
+      message: typeof error === 'string' ? error : error instanceof Error ? error.message : 'Failed to load profile'
+    };
   }
 };

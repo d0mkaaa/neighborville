@@ -55,11 +55,27 @@ export default function Marketplace({
     leavesOnDay: number;
     items: MarketItem[];
   } | null>(null);
+  const [itemPrices, setItemPrices] = useState<Record<string, number>>({});
 
   useEffect(() => {
     generateMarketItems();
     loadInventory();
     checkTravelingMerchant();
+    
+    const sellableItems = [
+      { id: 'extra_materials', name: 'Extra Materials', icon: '📦', basePrice: 50 },
+      { id: 'old_furniture', name: 'Old Furniture', icon: '🪑', basePrice: 80 },
+      { id: 'vintage_decor', name: 'Vintage Decor', icon: '🏺', basePrice: 120 },
+      { id: 'rare_artifact', name: 'Rare Artifact', icon: '💎', basePrice: 200 },
+      { id: 'building_plans', name: 'Extra Building Plans', icon: '📋', basePrice: 300 },
+      { id: 'neighborhood_photos', name: 'Neighborhood Photos', icon: '📸', basePrice: 150 }
+    ];
+    
+    const initialPrices: Record<string, number> = {};
+    sellableItems.forEach(item => {
+      initialPrices[item.id] = item.basePrice;
+    });
+    setItemPrices(initialPrices);
   }, [day]);
 
   const loadInventory = () => {
@@ -72,6 +88,13 @@ export default function Marketplace({
   const saveInventory = (newInventory: MarketItem[]) => {
     setInventory(newInventory);
     localStorage.setItem(`neighborville_inventory_${gameProgress.playerName}`, JSON.stringify(newInventory));
+  };
+
+  const updateItemPrice = (itemId: string, price: number) => {
+    setItemPrices(prev => ({
+      ...prev,
+      [itemId]: Math.max(0, price)
+    }));
   };
 
   const checkTravelingMerchant = () => {
@@ -115,19 +138,6 @@ export default function Marketplace({
         rarity: 'rare'
       },
       {
-        id: 'happiness_potion',
-        name: 'Happiness Elixir',
-        description: 'Instantly boost neighborhood happiness',
-        price: 600,
-        sellerType: 'traveling_merchant',
-        itemType: 'boost',
-        quantity: 1,
-        icon: '🍶',
-        effect: '+30% happiness for 7 days',
-        duration: 7,
-        rarity: 'uncommon'
-      },
-      {
         id: 'golden_shovel',
         name: 'Golden Shovel',
         description: 'Building costs reduced for 14 days',
@@ -149,18 +159,6 @@ export default function Marketplace({
     const items: MarketItem[] = [];
     
     const systemItems: MarketItem[] = [
-      {
-        id: 'premium_paint',
-        name: 'Premium Paint',
-        description: 'Increase building happiness bonus by 5%',
-        price: 150,
-        sellerType: 'system',
-        itemType: 'building_upgrade',
-        quantity: 5,
-        icon: '🎨',
-        effect: 'Permanent +5% happiness bonus',
-        rarity: 'common'
-      },
       {
         id: 'energy_booster',
         name: 'Energy Booster',
@@ -185,19 +183,6 @@ export default function Marketplace({
         icon: '🔨',
         effect: '-10% cost for next 5 buildings',
         rarity: 'common'
-      },
-      {
-        id: 'happiness_charm',
-        name: 'Happiness Charm',
-        description: 'Increase overall neighborhood happiness',
-        price: 400,
-        sellerType: 'system',
-        itemType: 'boost',
-        quantity: 1,
-        icon: '✨',
-        effect: '+15% happiness for 5 days',
-        duration: 5,
-        rarity: 'uncommon'
       },
       {
         id: 'xp_multiplier',
@@ -232,7 +217,7 @@ export default function Marketplace({
             quantity: 1,
             icon: '🎁',
             availableUntil: day + 3,
-            effect: '+3% happiness to adjacent buildings',
+            effect: 'Beautiful decoration for your neighborhood',
             rarity: 'common'
           },
           {
@@ -356,11 +341,6 @@ export default function Marketplace({
     const updates: Partial<GameProgress> = {};
     
     switch (item.id) {
-      case 'happiness_charm':
-      case 'happiness_potion':
-        updates.happiness = Math.min(100, gameProgress.happiness + 15);
-        break;
-        
       case 'time_crystal':
         updates.day = gameProgress.day + 1;
         updates.gameTime = 8;
@@ -507,23 +487,14 @@ export default function Marketplace({
   };
   
   const renderSellTab = () => {
-    const sellableItems = [
-      { id: 'extra_materials', name: 'Extra Materials', icon: '📦', basePrice: 50 },
-      { id: 'old_furniture', name: 'Old Furniture', icon: '🪑', basePrice: 80 },
-      { id: 'vintage_decor', name: 'Vintage Decor', icon: '🏺', basePrice: 120 },
-      { id: 'rare_artifact', name: 'Rare Artifact', icon: '💎', basePrice: 200 },
-      { id: 'building_plans', name: 'Extra Building Plans', icon: '📋', basePrice: 300 },
-      { id: 'neighborhood_photos', name: 'Neighborhood Photos', icon: '📸', basePrice: 150 }
-    ];
-    
     const inventoryItems = inventory.filter(item => item.quantity > 0);
     
     return (
-      <div className="space-y-6">
+      <div className="space-y-8">
         <div>
-          <h3 className="text-lg font-medium text-gray-800 mb-4">Your Inventory</h3>
+          <h3 className="text-lg font-medium text-gray-800 mb-4">Sell Items from Inventory</h3>
           {inventoryItems.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {inventoryItems.map(item => (
                 <div key={item.id} className="p-3 border border-gray-300 rounded-lg bg-white">
                   <div className="flex items-center gap-3 mb-2">
@@ -546,50 +517,10 @@ export default function Marketplace({
               ))}
             </div>
           ) : (
-            <div className="p-4 bg-gray-50 rounded-lg text-center text-gray-500 mb-6">
+            <div className="p-4 bg-gray-50 rounded-lg text-center text-gray-500">
               Your inventory is empty
             </div>
           )}
-        </div>
-
-        <div>
-          <h3 className="text-lg font-medium text-gray-800 mb-4">Sell Other Items</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {sellableItems.map(item => {
-              const [customPrice, setCustomPrice] = useState(item.basePrice);
-              
-              return (
-                <div key={item.id} className="p-4 border border-gray-300 rounded-lg bg-white">
-                  <div className="flex items-center gap-3 mb-3">
-                    <span className="text-2xl">{item.icon}</span>
-                    <div>
-                      <h4 className="font-medium text-gray-800">{item.name}</h4>
-                      <p className="text-sm text-gray-500">Base price: {item.basePrice}c</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-2 mb-3">
-                    <label className="text-sm text-gray-600">Your price:</label>
-                    <input
-                      type="number"
-                      value={customPrice}
-                      onChange={(e) => setCustomPrice(Math.max(0, parseInt(e.target.value) || 0))}
-                      className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
-                      min="0"
-                    />
-                    <span className="text-sm text-gray-600">coins</span>
-                  </div>
-                  
-                  <button
-                    onClick={() => handleSellCustomItem(item.id, customPrice)}
-                    className="w-full py-2 px-4 bg-blue-500 text-white rounded hover:bg-blue-600"
-                  >
-                    List for Sale
-                  </button>
-                </div>
-              );
-            })}
-          </div>
         </div>
       </div>
     );

@@ -163,14 +163,7 @@ export default function BuildingInfoModal({
                   <div className="font-medium text-gray-800">{building.energyUsage}u</div>
                 </div>
                 
-                {building.happiness && (
-                  <div className="p-3 bg-gray-50 rounded-lg border border-gray-100">
-                    <div className="text-xs text-gray-500 lowercase mb-1 flex items-center">
-                      <Heart size={12} className="mr-1" /> Happiness
-                    </div>
-                    <div className="font-medium text-gray-800">+{building.happiness}</div>
-                  </div>
-                )}
+
               </div>
               
               <div className="p-3 rounded-lg border border-gray-200">

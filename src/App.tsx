@@ -87,7 +87,6 @@ function App() {
     const newGameProgress: GameProgress = {
       playerName,
       coins: 2000,
-      happiness: 70,
       day: 1,
       level: 1,
       experience: 0,
@@ -184,12 +183,15 @@ function App() {
             if (response && response.gameData) {
               console.log('Found saved game for user:', user.id);
             }
+            setGameLoading(false);
           })
           .catch(error => {
             console.error('Error loading saved game:', error);
+            setGameLoading(false);
           });
       } catch (error) {
         console.error('Error calling loadGameFromServer:', error);
+        setGameLoading(false);
       }
     }
   }, [isAuthenticated, user?.id, gameStarted]);

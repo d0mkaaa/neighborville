@@ -1,17 +1,8 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Medal, Trophy, Calendar, Home, User, Star, ArrowUpDown, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
-import { API_URL } from "../../config/apiConfig";
-
-interface LeaderboardEntry {
-  username: string;
-  playerName: string;
-  level: number;
-  happiness: number;
-  day: number;
-  buildingCount: number;
-  lastActive: string;
-}
+import { getLeaderboard } from '../../services/userService';
+import type { LeaderboardEntry } from '../../services/userService';
 
 interface LeaderboardProps {
   onClose: () => void;
@@ -22,47 +13,11 @@ export default function Leaderboard({ onClose, onViewProfile }: LeaderboardProps
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<'level' | 'happiness' | 'buildingCount' | 'day'>('level');
+  const [sortBy, setSortBy] = useState<'level' | 'buildingCount' | 'day'>('level');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   
-  useEffect(() => {
-    const fetchLeaderboard = async () => {
-      setLoading(true);
-      setError(null);
-      
-      try {
-        const response = await fetch(`${API_URL}/api/user/leaderboard?sort=${sortBy}&page=${page}&limit=10`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        if (!response.ok) {
-          throw new Error('Failed to fetch leaderboard');
-        }
-        
-        const data = await response.json();
-        
-        if (data.success) {
-          setLeaderboard(data.leaderboard);
-          setTotalPages(data.pagination.pages);
-        } else {
-          throw new Error(data.message || 'Failed to fetch leaderboard');
-        }
-      } catch (error) {
-        console.error('Error fetching leaderboard:', error);
-        setError('Failed to load leaderboard. Please try again later.');
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    fetchLeaderboard();
-  }, [sortBy, page]);
-  
-  const handleSortChange = (newSort: 'level' | 'happiness' | 'buildingCount' | 'day') => {
+  const handleSortChange = (newSort: 'level' | 'buildingCount' | 'day') => {
     setSortBy(newSort);
     setPage(1);
   };
@@ -96,6 +51,31 @@ export default function Leaderboard({ onClose, onViewProfile }: LeaderboardProps
       return date.toLocaleDateString();
     }
   };
+
+  const fetchLeaderboard = async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const data = await getLeaderboard(sortBy, page, 10);
+      
+      if (data.success) {
+        setLeaderboard(data.leaderboard);
+        setTotalPages(data.pagination.pages);
+      } else {
+        throw new Error(data.message || 'Failed to fetch leaderboard data');
+      }
+    } catch (err) {
+      console.error('Error fetching leaderboard:', err);
+      setError(typeof err === 'string' ? err : err instanceof Error ? err.message : 'Failed to load leaderboard');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  useEffect(() => {
+    fetchLeaderboard();
+  }, [sortBy, page]);
   
   return (
     <motion.div
@@ -136,17 +116,6 @@ export default function Leaderboard({ onClose, onViewProfile }: LeaderboardProps
             >
               <Star size={14} />
               Level
-            </button>
-            <button
-              onClick={() => handleSortChange('happiness')}
-              className={`px-3 py-1 rounded-full text-sm flex items-center gap-1 ${
-                sortBy === 'happiness' 
-                  ? 'bg-amber-500 text-white' 
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              <Medal size={14} />
-              Happiness
             </button>
             <button
               onClick={() => handleSortChange('buildingCount')}
@@ -192,7 +161,6 @@ export default function Leaderboard({ onClose, onViewProfile }: LeaderboardProps
                     <th className="py-2 px-4 text-left text-gray-600 font-medium">Rank</th>
                     <th className="py-2 px-4 text-left text-gray-600 font-medium">Player</th>
                     <th className="py-2 px-4 text-left text-gray-600 font-medium">Level</th>
-                    <th className="py-2 px-4 text-left text-gray-600 font-medium">Happiness</th>
                     <th className="py-2 px-4 text-left text-gray-600 font-medium">Buildings</th>
                     <th className="py-2 px-4 text-left text-gray-600 font-medium">Days</th>
                     <th className="py-2 px-4 text-left text-gray-600 font-medium">Last Active</th>
@@ -239,17 +207,7 @@ export default function Leaderboard({ onClose, onViewProfile }: LeaderboardProps
                           {entry.level}
                         </div>
                       </td>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center">
-                          <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
-                            <div 
-                              className="h-full bg-green-500" 
-                              style={{ width: `${entry.happiness}%` }}
-                            />
-                          </div>
-                          <span className="ml-2 text-sm">{entry.happiness}%</span>
-                        </div>
-                      </td>
+                      
                       <td className="py-3 px-4">{entry.buildingCount}</td>
                       <td className="py-3 px-4">{entry.day}</td>
                       <td className="py-3 px-4 text-gray-500 text-sm">{formatDate(entry.lastActive)}</td>

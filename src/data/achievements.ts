@@ -18,27 +18,6 @@ export const ACHIEVEMENTS: Achievement[] = [
     xpReward: 15
   },
   { 
-    id: 'happiness_50', 
-    title: 'happy place', 
-    description: 'reach 50% happiness', 
-    completed: false,
-    xpReward: 20
-  },
-  { 
-    id: 'happiness_75', 
-    title: 'very happy place', 
-    description: 'reach 75% happiness', 
-    completed: false,
-    xpReward: 35
-  },
-  { 
-    id: 'happiness_100', 
-    title: 'utopia', 
-    description: 'reach 100% happiness', 
-    completed: false,
-    xpReward: 50
-  },
-  { 
     id: 'day_5', 
     title: 'first week', 
     description: 'reach day 5', 
@@ -304,9 +283,9 @@ export const ACHIEVEMENTS: Achievement[] = [
     xpReward: 40
   },
   {
-    id: 'weather_master',
+    id: 'storm_survivor',
     title: 'storm survivor',
-    description: 'maintain 80% happiness during a storm',
+    description: 'survive a severe storm',
     completed: false,
     xpReward: 45
   }

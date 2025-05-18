@@ -1,51 +1,77 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Home, Zap, User, Calendar, Settings, Award, AlertCircle, X, CheckCircle, Volume2, VolumeX, TrendingUp, Save } from "lucide-react";
-import { getAvailableUpgrades, calculateUpgradedStats } from "../../data/upgrades";
-import AppLayout from "../ui/AppLayout";
-import GameHeader from "./GameHeader";
-import BuildingOption from "./BuildingOption";
 import GameGrid from "./GameGrid";
+import BuildingSelector from "../ui/BuildingSelector";
+import GameHeader from "./GameHeader";
+import NeighborList from "../ui/NeighborList";
 import NeighborCard from "./NeighborCard";
-import NotificationSystem from "./NotificationSystem";
-import SaveManager from "./SaveManager";
-import HappinessAnalytics from "./HappinessAnalytics";
-import PlotExpansion from "./PlotExpansion";
-import EnergyUsagePanel from "./EnergyUsagePanel";
-import BillsPanel from "./BillsPanel";
-import TutorialGuide from "./TutorialGuide";
+import BuildingModal from "./BuildingModal";
+import BuildingInfoModal from "./BuildingInfoModal";
 import EventModal from "./EventModal";
 import NeighborUnlockModal from "./NeighborUnlockModal";
+import SidebarPanel from "../ui/SidebarPanel";
+import { Home, Users, Calendar, FileText, Zap, User, Save, Volume2, VolumeX } from "lucide-react";
 import NeighborListModal from "./NeighborListModal";
+import GameFloatingButtons from "./GameFloatingButtons";
+import SeasonalEventsPanel from "./SeasonalEventsPanel";
 import AchievementsModal from "./AchievementsModal";
 import AchievementUnlockModal from "./AchievementUnlockModal";
-import BuildingInfoModal from "./BuildingInfoModal";
-import CalendarView from "./CalendarView";
+import EnergyUsagePanel from "./EnergyUsagePanel";
+import BillsPanel from "./BillsPanel";
+import NotificationSystem from "./NotificationSystem";
+import type { ExtendedNotification } from "./NotificationSystem";
+import PlotExpansion from "./PlotExpansion";
+import ProgressBar from "./ProgressBar";
+import ResidentAssignment from "./ResidentAssignment";
+import TimeBonus from "./TimeBonus";
+import { getRandomEvent } from "../../data/events";
 import CoinHistory from "./CoinHistory";
-import UtilityGrid from "./UtilityGrid";
-import PlayerStatsModal from "./PlayerStatsModal";
-import MusicControls from "./MusicControls";
+import CalendarView from "./CalendarView";
+import ModalWrapper from "../ui/ModalWrapper";
 import SettingsModal from "./SettingsModal";
-import NeighborSocialFeed from "./NeighborSocialFeed";
+import WeatherForecast from "./WeatherForecast";
+import { calculateSeasonalBonuses, getCurrentSeason, checkForSeasonalEvent } from "../../data/seasons";
+import { getAvailableUpgrades, calculateUpgradedStats } from "../../data/upgrades";
+import SaveManager from "./SaveManager";
+import TutorialGuide from "./TutorialGuide";
 import Marketplace from "./Marketplace";
-import SpecialEvents from "./SpecialEvents";
-import BuildingModal from "./BuildingModal";
+import type { MarketItem } from "./Marketplace";
+import SpecialEventsManager from "./SpecialEvents";
+import UtilityGrid from "./UtilityGrid";
+import NeighborSocialFeed from "./NeighborSocialFeed";
+import BackgroundBubbles from "./BackgroundBubbles";
+import PlayerStatsModal from "./PlayerStatsModal";
+import PublicProfileModal from "../profile/PublicProfileModal";
+import MusicControls from "./MusicControls";
+import { saveGameToServer, loadGameFromServer, shouldSaveGame } from "../../services/gameService";
+import ContinueModal from "./ContinueModal";
+import GameLayout from "../ui/GameLayout";
+import GlassCard from "../ui/GlassCard";
+import BuildingUpgradesModal from "./BuildingUpgradesModal";
+import AuthModal from "../auth/AuthModal";
+import Leaderboard from "../profile/Leaderboard";
 import Dropdown from "../ui/Dropdown";
+import BuildingOption from "./BuildingOption";
+import type { 
+  Building, 
+  GameProgress, 
+  TimeOfDay, 
+  WeatherType,
+  PowerGridState,
+  WaterGridState,
+  Neighbor,
+  Bill,
+  GameEvent,
+  RecentEvent,
+  Achievement,
+  CoinHistoryEntry,
+  EventOption
+} from "../../types/game";
 import { buildings as initialBuildings } from "../../data/buildings";
 import { neighborProfiles } from "../../data/neighbors";
 import { ACHIEVEMENTS } from "../../data/achievements";
-import { possibleEvents, getRandomEvent } from "../../data/events";
-import { saveGameToServer, shouldSaveGame } from "../../services/gameService";
-import type { 
-  Building, GameEvent, Neighbor, ScheduledEvent,
-  GameProgress, Achievement, RecentEvent, Bill, TimeOfDay, EventOption,
-  CoinHistoryEntry, WeatherType, PowerGridState, WaterGridState
-} from "../../types/game";
-import type { ExtendedNotification } from "./NotificationSystem";
-import AuthModal from '../auth/AuthModal';
-import PublicProfileModal from '../profile/PublicProfileModal';
-import { useAuth } from '../../context/AuthContext';
-import Leaderboard from '../profile/Leaderboard';
+import { useAuth } from "../../context/AuthContext";
+import AppLayout from "../ui/AppLayout";
 
 interface NeighborVilleProps {
   initialGameState?: GameProgress | null;
@@ -53,6 +79,17 @@ interface NeighborVilleProps {
   onTimeChange?: (newTimeOfDay: TimeOfDay) => void;
   onLoadGame?: (gameData: GameProgress) => void;
 }
+
+const getWeatherHappinessEffect = () => 0;
+
+const timeBonuses: any[] = [];
+
+type Notification = {
+  id: string;
+  message: string;
+  type: 'success' | 'error' | 'warning' | 'info';
+  autoRemove: boolean;
+};
 
 export default function NeighborVille({ 
   initialGameState, 
@@ -62,7 +99,6 @@ export default function NeighborVille({
 }: NeighborVilleProps) {
   const [playerName, setPlayerName] = useState("");
   const [coins, setCoins] = useState(2000);
-  const [happiness, setHappiness] = useState(70); 
   const [day, setDay] = useState(1);
   const [level, setLevel] = useState(1);
   const [experience, setExperience] = useState(0);
@@ -74,13 +110,12 @@ export default function NeighborVille({
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>('morning');
   const [timePaused, setTimePaused] = useState(false);
   const [weather, setWeather] = useState<WeatherType>('sunny');
+  const [timeSpeed, setTimeSpeed] = useState<1|2|3>(1);
   
-  const [notifications, setNotifications] = useState<ExtendedNotification[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [selectedBuilding, setSelectedBuilding] = useState<Building | null>(null);
   const [selectedTile, setSelectedTile] = useState<number | null>(null);
   const [showSaveManager, setShowSaveManager] = useState(false);
-  const [showHappinessAnalytics, setShowHappinessAnalytics] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
   const [showTutorial, setShowTutorial] = useState(showTutorialProp);
   const [tutorialStep, setTutorialStep] = useState(1);
   const [activeTab, setActiveTab] = useState('buildings');
@@ -95,7 +130,6 @@ export default function NeighborVille({
   const [lastBillDay, setLastBillDay] = useState<number>(0);
   const [daysUntilBill, setDaysUntilBill] = useState<number>(5);
   const [hourlyCoinBonus, setHourlyCoinBonus] = useState<number>(0);
-  const [happinessDecay, setHappinessDecay] = useState<number>(1.2);
   
   const [powerGrid, setPowerGrid] = useState<PowerGridState>({
     totalPowerProduction: 0,
@@ -166,6 +200,8 @@ export default function NeighborVille({
   const [showMarketplace, setShowMarketplace] = useState(false);
   const [showSpecialEvents, setShowSpecialEvents] = useState(false);
   const [showBuildingModal, setShowBuildingModal] = useState(false);
+  const [activeSeasonalEvents, setActiveSeasonalEvents] = useState<any[]>([]);
+  const [showProfileModal, setShowProfileModal] = useState(false);
 
   const initFlags = useRef({
     gameInitialized: false,
@@ -174,7 +210,7 @@ export default function NeighborVille({
   });
 
   const addNotification = (message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info', autoRemove: boolean = true) => {
-    const newNotification: ExtendedNotification = {
+    const newNotification: Notification = {
       id: Math.random().toString(36).substring(2, 9),
       message,
       type,
@@ -203,7 +239,6 @@ export default function NeighborVille({
     const gameState: GameProgress = {
       playerName,
       coins,
-      happiness,
       day,
       level,
       experience,
@@ -256,7 +291,7 @@ export default function NeighborVille({
     } finally {
       setAutoSaving(false);
     }
-  }, [playerName, coins, happiness, day, level, experience, grid, gridSize, neighbors, 
+  }, [playerName, coins, day, level, experience, grid, gridSize, neighbors, 
       achievements, gameTime, timeOfDay, recentEvents, bills, 
       energyRate, totalEnergyUsage, lastBillDay, coinHistory, weather, powerGrid, waterGrid, user]);
 
@@ -265,7 +300,6 @@ export default function NeighborVille({
     setPlayerName(name);
     const startingCoins = 2000;
     setCoins(startingCoins);
-    setHappiness(70);
     setDay(1);
     setLevel(1);
     setExperience(0);
@@ -291,12 +325,10 @@ export default function NeighborVille({
     }
     
     console.log('Loading game state once:', state.playerName);
-    initFlags.current.gameStateLoaded = true;
     
     const batchedUpdates = {
       playerName: state.playerName || "",
       coins: state.coins || 2000,
-      happiness: state.happiness !== undefined && state.happiness > 0 ? state.happiness : 70,
       day: state.day || 1,
       level: state.level || 1,
       experience: state.experience || 0,
@@ -326,15 +358,18 @@ export default function NeighborVille({
       }
     };
     
+    console.log(`Loading time from save: ${batchedUpdates.gameTime}:00`);
+    
+    const savedGameTime = batchedUpdates.gameTime;
+    
     setPlayerName(batchedUpdates.playerName);
     setCoins(batchedUpdates.coins);
-    setHappiness(batchedUpdates.happiness);
     setDay(batchedUpdates.day);
     setLevel(batchedUpdates.level);
     setExperience(batchedUpdates.experience);
     setGrid(batchedUpdates.grid);
     setGridSize(batchedUpdates.gridSize);
-    setGameTime(batchedUpdates.gameTime);
+    setGameTime(savedGameTime);
     setGameMinutes(batchedUpdates.gameMinutes);
     setTimeOfDay(batchedUpdates.timeOfDay);
     setBills(batchedUpdates.bills);
@@ -361,8 +396,16 @@ export default function NeighborVille({
     });
     
     setNeighbors(loadedNeighbors);
+    
+    gameTimeRef.current = savedGameTime;
+    
+    initFlags.current.gameStateLoaded = true;
+    
+    console.log(`Game loaded with time ${savedGameTime}:00, ready for weather generation`);
   });
 
+  const gameTimeRef = useRef<number>(8);
+  
   const loadGameState = (state: GameProgress) => {
     if (!state) return;
     loadGameStateRef.current(state);
@@ -492,6 +535,13 @@ export default function NeighborVille({
   }, [initialGameState, saveGameCallback]);
 
   useEffect(() => {
+    if (initFlags.current.gameStateLoaded) {
+      console.log(`Weather useEffect: Generating forecast for day ${day} with time ${gameTime}:00`);
+      generateWeatherForecast();
+    }
+  }, [day, initFlags.current.gameStateLoaded, gameTime]);
+
+  useEffect(() => {
     if (!timePaused) {
       const timer = setInterval(() => {
         setGameMinutes(prevMinutes => {
@@ -516,7 +566,7 @@ export default function NeighborVille({
               onTimeChange(newTimeOfDay);
             }
             
-            updateWeather(newTime);
+            updateCurrentWeather(newTime);
             handleHourlyEffects(newTime);
             
             if (newTime === 6) {
@@ -526,21 +576,19 @@ export default function NeighborVille({
               }, 0);
             }
             
+            if (newTime === 0) {
+              generateWeatherForecast();
+            }
+            
             return 0;
           }
-          return prevMinutes + 1;
+          return prevMinutes + timeSpeed;
         });
-      }, 1000);
+      }, 1000 / timeSpeed);
       
       return () => clearInterval(timer);
     }
-  }, [timePaused, gameTime, onTimeChange]);
-
-  useEffect(() => {
-    if (gameTime % 4 === 0) {
-      generateWeatherForecast();
-    }
-  }, [gameTime]);
+  }, [timePaused, gameTime, onTimeChange, timeSpeed]);
 
   const calculateUtilityGrids = useCallback(() => {
     let powerProduction = 0;
@@ -622,54 +670,45 @@ export default function NeighborVille({
     setTimeOfDay(newTimeOfDay);
   };
 
-  const updateWeather = (time: number) => {
-    let currentTimeOfDay: TimeOfDay;
-    
-    if (time >= 5 && time < 10) {
-      currentTimeOfDay = 'morning';
-    } else if (time >= 10 && time < 17) {
-      currentTimeOfDay = 'day';
-    } else if (time >= 17 && time < 21) {
-      currentTimeOfDay = 'evening';
-    } else {
-      currentTimeOfDay = 'night';
-    }
-
-    const weights: Record<TimeOfDay, Record<WeatherType, number>> = {
-      morning: { sunny: 0.6, cloudy: 0.25, rainy: 0.12, stormy: 0.03, snowy: 0 },
-      day: { sunny: 0.7, cloudy: 0.2, rainy: 0.08, stormy: 0.02, snowy: 0 },
-      evening: { sunny: 0.5, cloudy: 0.3, rainy: 0.15, stormy: 0.05, snowy: 0 },
-      night: { sunny: 0.1, cloudy: 0.6, rainy: 0.2, stormy: 0.05, snowy: 0.05 }
-    };
-    
-    const weatherWeights = weights[currentTimeOfDay];
-    const rand = Math.random();
-    let cumulative = 0;
-    
-    for (const [weatherType, weight] of Object.entries(weatherWeights)) {
-      cumulative += weight;
-      if (rand < cumulative) {
-        setWeather(weatherType as WeatherType);
-        break;
+  const updateCurrentWeather = (time: number) => {
+    if (weatherForecast.length > 0) {
+      const hourIndex = time % 24;
+      if (hourIndex < weatherForecast.length) {
+        const newWeather = weatherForecast[hourIndex];
+        console.log(`Updating weather at ${time}:00 to ${newWeather} (from forecast)`);
+        setWeather(newWeather);
       }
     }
   };
 
   const generateWeatherForecast = () => {
-    const forecast: WeatherType[] = [...weatherForecast];
+    console.log(`Generating weather forecast for day ${day}`);
     
-    if (forecast.length === 0) {
-      for (let i = 0; i < 6; i++) {
-        const hour = (gameTime + i * 4) % 24;
-        forecast.push(getWeatherForTime(hour));
-      }
-    } else {
-      forecast.shift();
-      const lastTime = (gameTime + 5 * 4) % 24;
-      forecast.push(getWeatherForTime(lastTime));
+    if (!initFlags.current.gameStateLoaded) {
+      console.log('Weather forecast generation skipped - game not fully loaded yet');
+      return;
     }
     
-    setWeatherForecast(forecast);
+    const currentTime = gameTime;
+    
+    const newForecast: WeatherType[] = [];
+    const seed = day * 100;
+    
+    for (let i = 0; i < 24; i++) {
+      const weatherIndex = Math.floor(((seed + i * 13) % 100) / 20);
+      const weatherTypes: WeatherType[] = ['sunny', 'cloudy', 'rainy', 'stormy', 'snowy'];
+      newForecast.push(weatherTypes[weatherIndex]);
+    }
+    
+    console.log(`New 24-hour forecast generated: ${newForecast.join(', ')}`);
+    setWeatherForecast(newForecast);
+    
+    const currentHour = currentTime % 24;
+    if (newForecast.length > currentHour) {
+      const newWeather = newForecast[currentHour];
+      console.log(`Setting current weather to ${newWeather} based on forecast hour ${currentHour}`);
+      setWeather(newWeather);
+    }
   };
 
   const getWeatherForTime = (hour: number): WeatherType => {
@@ -702,46 +741,6 @@ export default function NeighborVille({
     }
     
     return 'cloudy';
-  };
-
-  const calculateTotalHappiness = useCallback(() => {
-    let calculatedHappiness = 70;
-    
-    grid.forEach(building => {
-      if (building && building.happiness) {
-        calculatedHappiness += building.happiness;
-      }
-    });
-    
-    calculatedHappiness += getWeatherHappinessEffect();
-    
-    const buildingsWithoutPower = grid.filter(b => b && b.needsElectricity && !b.isConnectedToPower).length;
-    if (buildingsWithoutPower > 0) {
-      calculatedHappiness -= buildingsWithoutPower * 2;
-    }
-    
-    const buildingsWithoutWater = grid.filter(b => b && b.needsWater && !b.isConnectedToWater).length;
-    if (buildingsWithoutWater > 0) {
-      calculatedHappiness -= buildingsWithoutWater * 3;
-    }
-    
-    return Math.min(100, Math.max(0, calculatedHappiness));
-  }, [grid, weather]);
-  
-  useEffect(() => {
-    const newHappiness = calculateTotalHappiness();
-    setHappiness(newHappiness);
-  }, [calculateTotalHappiness]);
-
-  const getWeatherHappinessEffect = () => {
-    const effects: Record<WeatherType, number> = {
-      sunny: 2,
-      cloudy: -0.5,
-      rainy: -2,
-      stormy: -4,
-      snowy: -1
-    };
-    return effects[weather] || 0;
   };
 
   const handleConnectUtility = (fromIndex: number, toIndex: number, utilityType: 'power' | 'water') => {
@@ -842,8 +841,7 @@ export default function NeighborVille({
     const weatherEffect = getWeatherHappinessEffect();
     const utilityPenalty = calculateUtilityHappinessPenalty();
     
-    const happinessLoss = happinessDecay + (totalResidents * 0.2) - weatherEffect + utilityPenalty;
-    setHappiness(prev => Math.max(0, prev - happinessLoss));
+    const happinessLoss = 1.2 + (totalResidents * 0.2) - weatherEffect + utilityPenalty;
     
     if (Math.random() < 0.08) { 
       const event = getRandomEvent(day);
@@ -879,17 +877,18 @@ export default function NeighborVille({
   };
 
   const addToCoinHistory = useCallback((amount: number, description: string, type: 'income' | 'expense') => {
-    const newEntry: CoinHistoryEntry = {
-      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      day: day,
-      balance: type === 'income' ? coins + amount : coins - amount,
-      amount: amount,
-      type: type,
-      description: description,
-      timestamp: Date.now()
-    };
-    
-    setCoinHistory(prev => [...prev, newEntry].slice(-100));
+    setCoinHistory(prev => {
+      const newEntry: CoinHistoryEntry = {
+        id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        day: day,
+        balance: type === 'income' ? coins + amount : coins - amount,
+        amount: amount,
+        type: type,
+        description: description,
+        timestamp: Date.now()
+      };
+      return [...prev, newEntry].slice(-100);
+    });
   }, [day, coins]);
 
   const handleBuildingSelect = useCallback((building: Building) => {
@@ -935,17 +934,15 @@ export default function NeighborVille({
       newGrid[index] = building;
       
       const newCoins = coins - building.cost;
-      const newHappiness = Math.min(100, happiness + building.happiness);
       
       setGrid(newGrid);
       setCoins(newCoins);
-      setHappiness(newHappiness);
       
       setSelectedBuilding(null);
       
       setTimeout(() => {
         setShowBuildingModal(false);
-        addNotification(`Built a ${building.name} (+${building.happiness}% happiness)`, 'success');
+        addNotification(`Built a ${building.name}`, 'success');
         setTimeout(() => {
           calculateEnergyUsage(newGrid);
         }, 10);
@@ -959,60 +956,37 @@ export default function NeighborVille({
   }, [
     coins, 
     grid, 
-    happiness, 
-    playerName,
-    day,
-    level,
-    experience,
-    gridSize,
-    neighbors,
-    achievements,
-    gameTime,
-    timeOfDay,
-    recentEvents,
-    bills,
-    energyRate,
-    totalEnergyUsage,
-    lastBillDay,
-    coinHistory,
-    weather,
-    powerGrid,
-    waterGrid,
     addNotification,
     addToCoinHistory,
     calculateEnergyUsage
   ]);
 
   const handleBuildingManage = (building: Building, index: number) => {
-    setShowBuildingInfo({building, index});
+    setShowBuildingInfo({ building, index });
   };
 
   const handleDeleteBuilding = (index: number) => {
-    if (index >= gridSize) return;
-    
     const buildingToDelete = grid[index];
-    if (!buildingToDelete) return;
+    const updatedGrid = [...grid];
+    updatedGrid[index] = null;
     
-    if (buildingToDelete.occupants) {
-      if (buildingToDelete.occupants && Array.isArray(buildingToDelete.occupants)) {
-        buildingToDelete.occupants.forEach(occupantId => {
-          const numericId = typeof occupantId === 'string' ? parseInt(occupantId, 10) : occupantId;
-          handleRemoveResident(numericId);
-        });
+    setGrid(updatedGrid);
+    
+    setRecentEvents(prev => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        name: `Removed ${buildingToDelete.name}`,
+        vitalityImpact: 0,
+        coinImpact: Math.floor(buildingToDelete.cost! * 0.5),
+        day: day
       }
-    }
+    ]);
     
-    const newGrid = [...grid];
-    newGrid[index] = null;
+    setCoins(coins + Math.floor(buildingToDelete.cost! * 0.5));
     
-    setGrid(newGrid);
-    setCoins(coins + Math.floor(buildingToDelete.cost * 0.5));
-    setHappiness(Math.max(0, happiness - Math.floor(buildingToDelete.happiness * 0.7)));
-    
-    addNotification(`Demolished a ${buildingToDelete.name}`, 'info');
-    setSelectedTile(null);
-    calculateEnergyUsage(newGrid);
-    addToCoinHistory(Math.floor(buildingToDelete.cost * 0.5), `Demolished ${buildingToDelete.name}`, 'income');
+    addNotification(`Demolished ${buildingToDelete.name} for ${Math.floor(buildingToDelete.cost! * 0.5)} coins`, 'info');
+    saveGame();
   };
 
   const handleMoveBuilding = (fromIndex: number) => {
@@ -1074,82 +1048,52 @@ export default function NeighborVille({
   };
 
   const handleEndDay = async () => {
-    const baseIncome = grid.slice(0, gridSize).reduce((total, building) => {
-      if (building) {
-        let income = building.income;
-        
-        if (building.id === 'cafe' || building.id === 'fancy_restaurant') {
-          if (!building.needsElectricity || building.isConnectedToPower) {
-            if (!building.needsWater || building.isConnectedToWater) {
-              if (building.occupants && building.occupants.length > 0) {
-                building.occupants.forEach(occupantId => {
-                  const numericId = typeof occupantId === 'string' ? parseInt(occupantId, 10) : occupantId;
-                  const occupantIdStr = typeof numericId === 'string' ? numericId : numericId.toString();
-                  const occupant = neighbors.find(n => {
-                    const nId = typeof n.id === 'string' ? n.id : n.id.toString();
-                    return nId === occupantIdStr;
-                  });
-                  if (occupant) {
-                    income += occupant.dailyRent || 0;
-                  }
-                });
-              }
-            }
-          } else {
-            income = 0;
-            addNotification(`${building.name} not generating income - no power/water!`, 'warning');
-          }
-        }
-        
-        return total + income;
-      }
-      return total;
+    let hourlyIncome = buildings.reduce((sum, building) => {
+      return sum + (building?.income || 0);
     }, 0);
     
-    const energyCost = totalEnergyUsage > 0 ? Math.round(totalEnergyUsage * energyRate) : 0;
-    const netIncome = baseIncome - energyCost;
+    hourlyIncome = Math.floor(hourlyIncome * (1 + (level * 0.05)));
     
-    const newRecord = {
-      day: day,
-      coins: coins,
-      happiness: happiness,
-      residents: neighbors.filter(n => n.hasHome).length,
-      buildings: grid.filter(b => b !== null).length,
-      income: baseIncome,
-      expenses: energyCost,
-      events: recentEvents.filter(e => e.day === day).map(e => ({
-        name: e.name,
-        type: (e.happinessImpact > 0 ? 'good' : e.happinessImpact < 0 ? 'bad' : 'neutral') as 'good' | 'bad' | 'neutral'
-      }))
-    };
+    setCoins(prev => prev + hourlyIncome + hourlyCoinBonus);
     
-    setDayRecords([...dayRecords, newRecord]);
-    setCoins(coins + netIncome);
-    setDay(day + 1);
+    const timestamp = Date.now();
     
-    const newDaysUntilBill = daysUntilBill - 1;
-    setDaysUntilBill(newDaysUntilBill);
+    setCoinHistory(prev => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        day,
+        balance: coins + hourlyIncome + hourlyCoinBonus,
+        amount: hourlyIncome + hourlyCoinBonus,
+        type: 'income',
+        description: 'Daily income',
+        timestamp
+      }
+    ]);
     
-    if (newDaysUntilBill <= 0) {
+    setDay(prevDay => prevDay + 1);
+    setRecentEvents([]);
+    setShowWeatherForecast(false);
+    
+    if ((day + 1) % 5 === 0) {
       generateEnergyBill();
-      setDaysUntilBill(5);
-      setLastBillDay(day + 1);
     }
+    
+    setDaysUntilBill(prev => {
+      const days = ((day + 1) % 5);
+      return days === 0 ? 5 : days;
+    });
     
     checkForRandomEvent();
-    updateNeighborHappiness();
+    
     checkAchievements();
     
-    addNotification(`Day ${day} complete! Earned ${netIncome} coins (${baseIncome} income - ${energyCost} energy cost)`, 'success');
-    if (baseIncome > 0) {
-      addToCoinHistory(baseIncome, 'Daily income from buildings', 'income');
-    }
+    checkForNewUnlocks();
     
-    if (energyCost > 0) {
-      addToCoinHistory(energyCost, 'Daily energy costs', 'expense');
-    }
+    saveGame();
     
-    await saveGameCallback(undefined, true);
+    setSelectedBuilding(null);
+    setSelectedTile(null);
   };
 
   const checkForRandomEvent = () => {
@@ -1162,48 +1106,38 @@ export default function NeighborVille({
   };
 
   const handleEventOption = (option: EventOption) => {
-    if (!currentEvent) return;
+    setCoins(prevCoins => prevCoins + option.coins);
     
-    setCoins(coins + option.coins);
-    setHappiness(Math.min(100, Math.max(0, happiness + option.happiness)));
+    setRecentEvents(prevEvents => [
+      ...prevEvents,
+      {
+        id: crypto.randomUUID(),
+        name: option.outcome,
+        vitalityImpact: 0,
+        coinImpact: option.coins,
+        day
+      }
+    ]);
     
-    const newEvent: RecentEvent = {
-      id: currentEvent.id,
-      name: currentEvent.title,
-      happinessImpact: option.happiness,
-      coinImpact: option.coins,
-      day: day
-    };
-    
-    setRecentEvents([...recentEvents, newEvent].slice(-5));
-    
-    if (option.neighborEffects) {
-      const updatedNeighbors = neighbors.map(neighbor => {
-        const effect = option.neighborEffects?.find(e => 
-          e.neighborId === undefined || e.neighborId === neighbor.id
-        );
+    if (option.neighborEffects && option.neighborEffects.length > 0) {
+      const updatedNeighbors = [...neighbors];
+      
+      option.neighborEffects.forEach(effect => {
+        const neighborIndex = updatedNeighbors.findIndex(n => 
+          effect.neighborId !== undefined && n.id === effect.neighborId);
         
-        if (effect) {
-          const newHappiness = Math.min(100, Math.max(0, (neighbor.happiness || 70) + effect.happinessChange));
-          return {
-            ...neighbor,
-            happiness: newHappiness
+        if (neighborIndex !== -1) {
+          updatedNeighbors[neighborIndex] = {
+            ...updatedNeighbors[neighborIndex],
           };
         }
-        
-        return neighbor;
       });
       
       setNeighbors(updatedNeighbors);
     }
     
+    addNotification(option.outcome, option.coins > 0 ? 'success' : 'warning');
     setCurrentEvent(null);
-    addNotification(option.outcome, option.happiness > 0 ? 'success' : 'warning');
-    if (option.coins > 0) {
-      addToCoinHistory(option.coins, `Event: ${currentEvent?.title}`, 'income');
-    } else if (option.coins < 0) {
-      addToCoinHistory(Math.abs(option.coins), `Event: ${currentEvent?.title}`, 'expense');
-    }
   };
 
   const updateNeighborHappiness = () => {
@@ -1351,6 +1285,10 @@ export default function NeighborVille({
   const toggleTimePause = () => {
     setTimePaused(!timePaused);
   };
+  
+  const handleChangeTimeSpeed = (speed: 1 | 2 | 3) => {
+    setTimeSpeed(speed);
+  };
 
   const handleTimeChange = (newTime: number, newTimeOfDay: TimeOfDay) => {
     setGameTime(newTime);
@@ -1359,10 +1297,6 @@ export default function NeighborVille({
     if (onTimeChange) {
       onTimeChange(newTimeOfDay);
     }
-  };
-
-  const handleShowHappinessAnalytics = () => {
-    setShowHappinessAnalytics(true);
   };
 
   const handleAssignResident = (neighborId: string | number, houseIndex: string | number) => {
@@ -1398,8 +1332,7 @@ export default function NeighborVille({
     
     const neighbor = neighbors.find(n => n.id === numericNeighborId);
     if (neighbor) {
-      setHappiness(Math.min(100, happiness + 15));
-      addNotification(`${neighbor.name} moved into house #${numericHouseIndex} (+15% happiness)`, 'success');
+      addNotification(`${neighbor.name} moved into house #${numericHouseIndex}`, 'success');
     }
     
     calculateEnergyUsage(updatedGrid);
@@ -1442,14 +1375,7 @@ export default function NeighborVille({
     setGrid(updatedGrid);
     
     addNotification(`${neighbor.name} moved out`, 'info');
-    setHappiness(Math.max(0, happiness - 10));
-    
-    if (showBuildingInfo && showBuildingInfo.index === neighbor.houseIndex) {
-      const updatedBuilding = updatedGrid[neighbor.houseIndex];
-      if (updatedBuilding) {
-        setShowBuildingInfo({building: updatedBuilding, index: neighbor.houseIndex});
-      }
-    }
+    saveGame();
   };
 
   const handleCollectIncome = (gridIndex: number, amount: number) => {
@@ -1501,12 +1427,6 @@ export default function NeighborVille({
         case 'three_buildings':
           const buildingTypes = new Set(grid.filter(b => b !== null).map(b => b!.id));
           shouldComplete = buildingTypes.size >= 3;
-          break;
-        case 'happiness_50':
-          shouldComplete = happiness >= 50;
-          break;
-        case 'happiness_100':
-          shouldComplete = happiness >= 100;
           break;
         case 'day_10':
           shouldComplete = day >= 10;
@@ -1594,7 +1514,7 @@ export default function NeighborVille({
             shouldUnlock = level >= (current.unlockCondition?.level || 1);
             break;
           case 'happiness':
-            shouldUnlock = happiness >= (current.unlockCondition?.level || 0);
+            shouldUnlock = true;
             break;
           case 'day':
             shouldUnlock = day >= (current.unlockCondition?.day || 0);
@@ -1711,8 +1631,7 @@ export default function NeighborVille({
           break;
         case 'rare':
           if (item.id === 'happiness_charm') {
-            setHappiness(Math.min(100, happiness + 10));
-            addNotification('Neighborhood happiness increased by 10%!', 'success');
+            addNotification('Neighborhood bonus applied!', 'success');
           }
           break;
       }
@@ -1771,377 +1690,288 @@ export default function NeighborVille({
     }
   };
 
+  const saveGame = () => {
+  };
+
+  const getSeasonalBonus = (building: Building) => {
+    return { incomeBonus: 0, energyBonus: 0 };
+  };
+
+  const [showSettings, setShowSettings] = useState(false);
+
   return (
     <AppLayout 
       header={
         <div>
-          <GameHeader
-            playerName={playerName}
-            coins={coins}
-            happiness={happiness}
-            energy={totalEnergyUsage || 0}
-            day={day}
-            level={level}
-            experience={experience}
-            gameTime={gameTime}
-            gameMinutes={gameMinutes}
-            timePaused={timePaused}
-            timeOfDay={timeOfDay}
-            weather={weather}
-            hasUnpaidBills={bills.some(bill => !bill.isPaid && bill.dayDue <= day)}
-            achievements={achievements}
-            weatherForecast={weatherForecast}
-            showWeatherForecast={showWeatherForecast}
-            onEndDay={handleEndDay}
-            onOpenSaveManager={() => setShowSaveManager(true)}
-            onShowSettings={handleShowSettings}
-            onShowTutorial={() => setShowTutorial(true)}
-            onShowAchievements={() => setShowAchievements(true)}
-            onToggleTimePause={toggleTimePause}
+                      <GameHeader
+              playerName={playerName}
+              coins={coins}
+              energy={totalEnergyUsage || 0}
+              day={day}
+              level={level}
+              experience={experience}
+              gameTime={gameTime}
+              gameMinutes={gameMinutes}
+              timePaused={timePaused}
+              timeOfDay={timeOfDay}
+              weather={weather}
+              hasUnpaidBills={bills.some(bill => !bill.isPaid && bill.dayDue <= day)}
+              achievements={achievements}
+              weatherForecast={weatherForecast}
+              showWeatherForecast={showWeatherForecast}
+              onEndDay={handleEndDay}
+              onOpenSaveManager={() => setShowSaveManager(true)}
+              onShowSettings={() => setShowSettings(true)}
+              onShowTutorial={() => setShowTutorial(true)}
+              onShowAchievements={() => setShowAchievements(true)}
+                          onToggleTimePause={toggleTimePause}
             onTimeChange={handleTimeChange}
-            onShowHappinessAnalytics={handleShowHappinessAnalytics}
-            onShowCalendar={() => setShowCalendar(true)}
-            onToggleWeatherForecast={() => setShowWeatherForecast(!showWeatherForecast)}
-            onShowCoinHistory={() => setShowCoinHistory(true)}
-            onPlayerNameClick={handlePlayerNameClick}
-            autoSaving={autoSaving}
-            lastSaveTime={lastSaveTime}
-            onProfileClick={() => setShowAuthModal(true)}
-            isMusicPlaying={musicEnabled}
-            onToggleMusic={toggleMusic}
-            onLogout={handleLogout}
-            onSaveGame={handleSaveGame}
-          />
-          
-          <AnimatePresence>
-            {hourlyCoinBonus > 0 && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.5, y: 50 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.5, y: -50 }}
-                className="absolute top-1/4 left-1/2 transform -translate-x-1/2 bg-yellow-500 text-white px-4 py-2 rounded-full text-lg font-bold shadow-lg"
-              >
-                +{hourlyCoinBonus} coins
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      }
-      timeOfDay={timeOfDay}
-      showFooter={false}
-    >
-      
-      <NotificationSystem 
-        notifications={notifications}
-        removeNotification={(id) => setNotifications(prev => prev.filter(n => n.id !== id))}
-      />
-      
-      <NeighborSocialFeed
-        neighbors={neighbors}
-        grid={grid}
-        onClose={() => setShowSocialFeed(false)}
-        currentDay={day}
-        timeOfDay={timeOfDay}
-      />
-      
-      <div className="container mx-auto px-4 py-4">
-        <div className="grid grid-cols-12 gap-4">
-          <div className="col-span-3 space-y-4">
-            <div className="bg-white/80 backdrop-blur-sm rounded-xl overflow-hidden shadow-sm">
-              <div className="grid grid-cols-3 gap-1 p-1">
-                {['buildings', 'utilities', 'residents'].map((tab) => (
-                  <button 
-                    key={tab}
-                    onClick={() => {
-                      if (tab === 'residents' && activeTab !== 'residents') {
-                        setShowNeighborList(true);
-                      } else {
-                        setActiveTab(tab);
-                      }
-                    }}
-                    className={`py-2 px-3 rounded-lg text-sm font-medium lowercase flex items-center justify-center gap-1 transition-colors ${
-                      activeTab === tab ? 'bg-emerald-100 text-emerald-700' : 'text-gray-600 hover:bg-gray-100'
-                    }`}
-                  >
-                    {tab === 'buildings' && <Home size={16} />}
-                    {tab === 'utilities' && <Zap size={16} />}
-                    {tab === 'residents' && <User size={16} />}
-                    <span className="capitalize">{tab}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
+            timeSpeed={timeSpeed}
+            onChangeTimeSpeed={handleChangeTimeSpeed}
+              onShowCalendar={() => setShowCalendar(true)}
+              onToggleWeatherForecast={() => setShowWeatherForecast(!showWeatherForecast)}
+              onShowCoinHistory={() => setShowCoinHistory(true)}
+              onPlayerNameClick={handlePlayerNameClick}
+              autoSaving={autoSaving}
+              lastSaveTime={lastSaveTime}
+              onProfileClick={() => setShowProfileModal(true)}
+              isMusicPlaying={musicEnabled}
+              onToggleMusic={toggleMusic}
+              onSaveGame={handleSaveGame}
+            />
             
-            {activeTab === 'buildings' && (
-              <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-sm p-4">
-                <div className="flex justify-between items-center mb-3">
-                  <h2 className="font-medium lowercase text-emerald-800">available buildings</h2>
-                  <Dropdown
-                    options={[
-                      { value: 'all', label: 'All' },
-                      { value: 'residential', label: 'Residential' },
-                      { value: 'commercial', label: 'Commercial' },
-                      { value: 'utility', label: 'Utility' },
-                      { value: 'entertainment', label: 'Entertainment' }
-                    ]}
-                    value={buildingCategory}
-                    onChange={(value) => setBuildingCategory(value as typeof buildingCategory)}
-                    className="w-32"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {getCategorizedBuildings().map((building) => (
-                    <BuildingOption 
-                      key={building.id}
-                      building={building}
-                      isSelected={selectedBuilding?.id === building.id}
-                      onSelect={handleBuildingSelect}
-                      playerLevel={level}
-                    />
+            <AnimatePresence>
+              {hourlyCoinBonus > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.5, y: 50 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.5, y: -50 }}
+                  className="absolute top-1/4 left-1/2 transform -translate-x-1/2 bg-yellow-500 text-white px-4 py-2 rounded-full text-lg font-bold shadow-lg"
+                >
+                  +{hourlyCoinBonus} coins
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        }
+        timeOfDay={timeOfDay}
+        showFooter={false}
+      >
+        
+        <NotificationSystem 
+          notifications={notifications}
+          removeNotification={(id) => setNotifications(prev => prev.filter(n => n.id !== id))}
+        />
+        
+        <NeighborSocialFeed
+          neighbors={neighbors}
+          grid={grid}
+          onClose={() => setShowSocialFeed(false)}
+          currentDay={day}
+          timeOfDay={timeOfDay}
+        />
+        
+        <div className="container mx-auto px-4 py-4">
+          <div className="grid grid-cols-12 gap-4">
+            <div className="col-span-3 space-y-4">
+              <div className="bg-white/80 backdrop-blur-sm rounded-xl overflow-hidden shadow-sm">
+                <div className="grid grid-cols-3 gap-1 p-1">
+                  {['buildings', 'utilities', 'residents'].map((tab) => (
+                    <button 
+                      key={tab}
+                      onClick={() => {
+                        if (tab === 'residents' && activeTab !== 'residents') {
+                          setShowNeighborList(true);
+                        } else {
+                          setActiveTab(tab);
+                        }
+                      }}
+                      className={`py-2 px-3 rounded-lg text-sm font-medium lowercase flex items-center justify-center gap-1 transition-colors ${
+                        activeTab === tab ? 'bg-emerald-100 text-emerald-700' : 'text-gray-600 hover:bg-gray-100'
+                      }`}
+                    >
+                      {tab === 'buildings' && <Home size={16} />}
+                      {tab === 'utilities' && <Zap size={16} />}
+                      {tab === 'residents' && <User size={16} />}
+                      <span className="capitalize">{tab}</span>
+                    </button>
                   ))}
                 </div>
               </div>
-            )}
+              
+              {activeTab === 'buildings' && (
+                <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-sm p-4">
+                  <div className="flex justify-between items-center mb-3">
+                    <h2 className="font-medium lowercase text-emerald-800">available buildings</h2>
+                    <Dropdown
+                      options={[
+                        { value: 'all', label: 'All' },
+                        { value: 'residential', label: 'Residential' },
+                        { value: 'commercial', label: 'Commercial' },
+                        { value: 'utility', label: 'Utility' },
+                        { value: 'entertainment', label: 'Entertainment' }
+                      ]}
+                      value={buildingCategory}
+                      onChange={(value) => setBuildingCategory(value as typeof buildingCategory)}
+                      className="w-32"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {getCategorizedBuildings().map((building) => (
+                      <BuildingOption 
+                        key={building.id}
+                        building={building}
+                        isSelected={selectedBuilding?.id === building.id}
+                        onSelect={handleBuildingSelect}
+                        playerLevel={level}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {activeTab === 'utilities' && (
+                <div className="space-y-4">
+                  <EnergyUsagePanel
+                    grid={grid}
+                    energyRate={energyRate}
+                    totalEnergyUsage={totalEnergyUsage}
+                    daysUntilBill={daysUntilBill}
+                  />
+                  
+                  <BillsPanel
+                    bills={bills}
+                    onPayBill={handlePayBill}
+                    coins={coins}
+                    currentDay={day}
+                  />
+                  
+                  <PlotExpansion
+                    currentSize={gridSize}
+                    maxSize={64}
+                    coins={coins}
+                    playerLevel={level}
+                    onExpand={(newSize, cost) => {
+                      if (coins >= cost) {
+                        setCoins(coins - cost);
+                        setGridSize(newSize);
+                        addNotification(`Plot expanded to ${Math.sqrt(newSize)}×${Math.sqrt(newSize)}!`, 'success');
+                        addToCoinHistory(cost, `Plot expansion to ${Math.sqrt(newSize)}×${Math.sqrt(newSize)}`, 'expense');
+                      }
+                    }}
+                  />
+                </div>
+              )}
+            </div>
             
-            {activeTab === 'utilities' && (
-              <div className="space-y-4">
-                <EnergyUsagePanel
+            <div className="col-span-9">
+              <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-sm p-4">
+                <GameGrid 
                   grid={grid}
-                  energyRate={energyRate}
-                  totalEnergyUsage={totalEnergyUsage}
-                  daysUntilBill={daysUntilBill}
-                />
-                
-                <BillsPanel
-                  bills={bills}
-                  onPayBill={handlePayBill}
-                  coins={coins}
-                  currentDay={day}
-                />
-                
-                <PlotExpansion
-                  currentSize={gridSize}
+                  gridSize={gridSize}
                   maxSize={64}
-                  coins={coins}
-                  playerLevel={level}
-                  onExpand={(newSize, cost) => {
-                    if (coins >= cost) {
-                      setCoins(coins - cost);
-                      setGridSize(newSize);
-                      addNotification(`Plot expanded to ${Math.sqrt(newSize)}×${Math.sqrt(newSize)}!`, 'success');
-                      addToCoinHistory(cost, `Plot expansion to ${Math.sqrt(newSize)}×${Math.sqrt(newSize)}`, 'expense');
-                    }
-                  }}
+                  selectedBuilding={selectedBuilding}
+                  selectedTile={selectedTile}
+                  onTileClick={handleTileClick}
+                  onDeleteBuilding={handleDeleteBuilding}
+                  onBuildingManage={handleBuildingManage}
+                  powerGrid={powerGrid}
+                  waterGrid={waterGrid}
+                  onConnectUtility={handleConnectUtility}
+                  showUtilityMode={activeTab === 'utilities'}
                 />
               </div>
-            )}
-          </div>
-          
-          <div className="col-span-9">
-            <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-sm p-4">
-              <GameGrid 
-                grid={grid}
-                gridSize={gridSize}
-                maxSize={64}
-                selectedBuilding={selectedBuilding}
-                selectedTile={selectedTile}
-                onTileClick={handleTileClick}
-                onDeleteBuilding={handleDeleteBuilding}
-                onBuildingManage={handleBuildingManage}
-                powerGrid={powerGrid}
-                waterGrid={waterGrid}
-                onConnectUtility={handleConnectUtility}
-                showUtilityMode={activeTab === 'utilities'}
-              />
             </div>
           </div>
         </div>
-      </div>
-      
-      <div className="fixed bottom-24 right-4 space-y-2 flex flex-col">
-        <motion.button
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.9 }}
-          onClick={() => setShowLeaderboard(true)}
-          className="w-12 h-12 bg-gradient-to-br from-amber-400 to-amber-500 text-white rounded-full shadow-lg transition-all flex items-center justify-center"
-          title="Leaderboard"
-        >
-          🏆
-        </motion.button>
         
-        <motion.button
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.9 }}
-          onClick={() => setShowMarketplace(true)}
-          className="w-12 h-12 bg-gradient-to-br from-amber-500 to-orange-600 text-white rounded-full shadow-lg transition-all flex items-center justify-center"
-        >
-          🛍️
-        </motion.button>
-        
-        <motion.button
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.9 }}
-          onClick={() => setShowSpecialEvents(true)}
-          className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 text-white rounded-full shadow-lg transition-all flex items-center justify-center"
-        >
-          🎉
-        </motion.button>
-      </div>
-      
-      <AnimatePresence>
-        {(autoSaving || lastSaveTime) && (
-          <motion.div 
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 20 }}
-            className="fixed top-24 right-4 z-30 group"
+        <div className="fixed bottom-24 right-4 space-y-2 flex flex-col">
+          <motion.button
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={() => setShowLeaderboard(true)}
+            className="w-12 h-12 bg-gradient-to-br from-amber-400 to-amber-500 text-white rounded-full shadow-lg transition-all flex items-center justify-center"
+            title="Leaderboard"
           >
-            <div className="relative">
-              <motion.div
-                whileHover={{ scale: 1.1 }}
-                className={`rounded-full shadow-md w-10 h-10 flex items-center justify-center cursor-help ${
-                  autoSaving ? 'bg-emerald-500' : 'bg-white/80 backdrop-blur-sm'
-                }`}
-              >
-                {autoSaving ? (
-                  <div className="relative">
-                    <Save size={18} className="text-white z-10 relative" />
-                    <motion.div 
-                      animate={{ scale: [1, 1.5, 1] }}
-                      transition={{ repeat: Infinity, duration: 2 }}
-                      className="absolute inset-0 rounded-full bg-emerald-300/50"
-                    />
-                  </div>
-                ) : (
-                  <Save size={18} className="text-emerald-500" />
-                )}
-              </motion.div>
-              
-              <div className="absolute top-full right-0 mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-black/80 text-white text-xs p-2 rounded whitespace-nowrap pointer-events-none">
-                {autoSaving 
-                  ? 'Auto-saving game...' 
-                  : lastSaveTime 
-                    ? `Last saved: ${lastSaveTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}` 
-                    : ''}
+            🏆
+          </motion.button>
+          
+          <motion.button
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={() => setShowMarketplace(true)}
+            className="w-12 h-12 bg-gradient-to-br from-amber-500 to-orange-600 text-white rounded-full shadow-lg transition-all flex items-center justify-center"
+          >
+            🛍️
+          </motion.button>
+          
+          <motion.button
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={() => setShowSpecialEvents(true)}
+            className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 text-white rounded-full shadow-lg transition-all flex items-center justify-center"
+          >
+            🎉
+          </motion.button>
+        </div>
+        
+        <AnimatePresence>
+          {(autoSaving || lastSaveTime) && (
+            <motion.div 
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              className="fixed top-24 right-4 z-30 group"
+            >
+              <div className="relative">
+                <motion.div
+                  whileHover={{ scale: 1.1 }}
+                  className={`rounded-full shadow-md w-10 h-10 flex items-center justify-center cursor-help ${
+                    autoSaving ? 'bg-emerald-500' : 'bg-white/80 backdrop-blur-sm'
+                  }`}
+                >
+                  {autoSaving ? (
+                    <div className="relative">
+                      <Save size={18} className="text-white z-10 relative" />
+                      <motion.div 
+                        animate={{ scale: [1, 1.5, 1] }}
+                        transition={{ repeat: Infinity, duration: 2 }}
+                        className="absolute inset-0 rounded-full bg-emerald-300/50"
+                      />
+                    </div>
+                  ) : (
+                    <Save size={18} className="text-emerald-500" />
+                  )}
+                </motion.div>
+                
+                <div className="absolute top-full right-0 mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-black/80 text-white text-xs p-2 rounded whitespace-nowrap pointer-events-none">
+                  {autoSaving 
+                    ? 'Auto-saving game...' 
+                    : lastSaveTime 
+                      ? `Last saved: ${lastSaveTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}` 
+                      : ''}
+                </div>
               </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-      
-      <SaveManager 
-        isOpen={showSaveManager}
-        onClose={() => setShowSaveManager(false)}
-        onSave={(name) => saveGameCallback(name)}
-        onLoadGame={(gameData) => {
-          loadGameState(gameData);
-          if (onLoadGame) {
-            onLoadGame(gameData);
-          }
-        }}
-        onSaveToServer={async () => {
-          console.log('Manual server save triggered from SaveManager');
-          
-          const currentGameState: GameProgress = {
-            playerName,
-            coins,
-            happiness,
-            day,
-            level,
-            experience,
-            grid,
-            gridSize,
-            neighbors,
-            achievements,
-            events: [],
-            gameTime,
-            timeOfDay,
-            recentEvents,
-            bills,
-            energyRate,
-            totalEnergyUsage,
-            lastBillDay,
-            coinHistory,
-            weather,
-            powerGrid,
-            waterGrid
-          };
-          
-          try {
-            const result = await saveGameToServer(currentGameState);
-            if (result) {
-              setLastSaveTime(new Date());
-              addNotification('Game saved to server!', 'success');
-            } else {
-              addNotification('Failed to save to server', 'error');
+            </motion.div>
+          )}
+        </AnimatePresence>
+        
+        <SaveManager 
+          isOpen={showSaveManager}
+          onClose={() => setShowSaveManager(false)}
+          onSave={(name) => saveGameCallback(name)}
+          onLoadGame={(gameData) => {
+            loadGameState(gameData);
+            if (onLoadGame) {
+              onLoadGame(gameData);
             }
-            return result;
-          } catch (error) {
-            console.error('Error saving to server:', error);
-            addNotification('Error saving to server', 'error');
-            return false;
-          }
-        }}
-        gameData={{
-          playerName,
-          coins,
-          happiness,
-          day,
-          level,
-          experience,
-          grid,
-          gridSize,
-          neighbors,
-          achievements,
-          events: [],
-          gameTime,
-          gameMinutes,
-          timeOfDay,
-          recentEvents,
-          bills,
-          energyRate,
-          totalEnergyUsage,
-          lastBillDay,
-          coinHistory,
-          weather,
-          powerGrid,
-          waterGrid
-        }}
-        isAuthenticated={isAuthenticated}
-        lastServerSaveTime={lastSaveTime}
-        onShowLogin={() => setShowAuthModal(true)}
-        addNotification={addNotification}
-      />
-
-      <MusicControls
-        audioRef={audioRef}
-        musicEnabled={musicEnabled}
-        onToggleMusic={toggleMusic}
-      />
-
-      <AnimatePresence>
-        {showMarketplace && (
-          <Marketplace
-            neighbors={neighbors}
-            coins={coins}
-            day={day}
-            onClose={() => setShowMarketplace(false)}
-            onPurchase={handlePurchaseMarketItem}
-            onSellItem={handleSellMarketItem}
-            grid={grid}
-            onUpdateGameState={(updates) => {
-              if (updates.coins !== undefined) setCoins(updates.coins);
-              if (updates.happiness !== undefined) setHappiness(updates.happiness);
-              if (updates.experience !== undefined) setExperience(updates.experience);
-              if (updates.day !== undefined) setDay(updates.day);
-              if (updates.gameTime !== undefined) setGameTime(updates.gameTime);
-              if (updates.totalEnergyUsage !== undefined) setTotalEnergyUsage(updates.totalEnergyUsage);
-            }}
-            playerLevel={level}
-            gameProgress={{
+          }}
+          onSaveToServer={async () => {
+            console.log('Manual server save triggered from SaveManager');
+            
+            const currentGameState: GameProgress = {
               playerName,
               coins,
-              happiness,
               day,
               level,
               experience,
@@ -2151,7 +1981,6 @@ export default function NeighborVille({
               achievements,
               events: [],
               gameTime,
-              gameMinutes,
               timeOfDay,
               recentEvents,
               bills,
@@ -2162,18 +1991,80 @@ export default function NeighborVille({
               weather,
               powerGrid,
               waterGrid
-            }}
-          />
-        )}
-      </AnimatePresence>
+            };
+            
+            try {
+              const result = await saveGameToServer(currentGameState);
+              if (result) {
+                setLastSaveTime(new Date());
+                addNotification('Game saved to server!', 'success');
+              } else {
+                addNotification('Failed to save to server', 'error');
+              }
+              return result;
+            } catch (error) {
+              console.error('Error saving to server:', error);
+              addNotification('Error saving to server', 'error');
+              return false;
+            }
+          }}
+          gameData={{
+            playerName,
+            coins,
+            day,
+            level,
+            experience,
+            grid,
+            gridSize,
+            neighbors,
+            achievements,
+            events: [],
+            gameTime,
+            gameMinutes,
+            timeOfDay,
+            recentEvents,
+            bills,
+            energyRate,
+            totalEnergyUsage,
+            lastBillDay,
+            coinHistory,
+            weather,
+            powerGrid,
+            waterGrid
+          }}
+          isAuthenticated={isAuthenticated}
+          lastServerSaveTime={lastSaveTime}
+          onShowLogin={() => setShowAuthModal(true)}
+          addNotification={addNotification}
+        />
 
-      <AnimatePresence>
-        {showSpecialEvents && (
-            <SpecialEvents
-              gameData={{
+        <MusicControls
+          audioRef={audioRef}
+          musicEnabled={musicEnabled}
+          onToggleMusic={toggleMusic}
+        />
+
+        <AnimatePresence>
+          {showMarketplace && (
+            <Marketplace
+              neighbors={neighbors}
+              coins={coins}
+              day={day}
+              onClose={() => setShowMarketplace(false)}
+              onPurchase={handlePurchaseMarketItem}
+              onSellItem={handleSellMarketItem}
+              grid={grid}
+              onUpdateGameState={(updates) => {
+                if (updates.coins !== undefined) setCoins(updates.coins);
+                if (updates.experience !== undefined) setExperience(updates.experience);
+                if (updates.day !== undefined) setDay(updates.day);
+                if (updates.gameTime !== undefined) setGameTime(updates.gameTime);
+                if (updates.totalEnergyUsage !== undefined) setTotalEnergyUsage(updates.totalEnergyUsage);
+              }}
+              playerLevel={level}
+              gameProgress={{
                 playerName,
                 coins,
-                happiness,
                 day,
                 level,
                 experience,
@@ -2195,308 +2086,289 @@ export default function NeighborVille({
                 powerGrid,
                 waterGrid
               }}
-              neighbors={neighbors}
-              grid={grid}
-              onClose={() => setShowSpecialEvents(false)}
-              onParticipate={handleParticipateSpecialEvent}
-              onClaimReward={handleClaimSpecialEventReward}
-              onUpdateGameState={(updates) => {
-                if (updates.coins !== undefined) setCoins(updates.coins);
-                if (updates.happiness !== undefined) setHappiness(updates.happiness);
-                if (updates.experience !== undefined) setExperience(updates.experience);
-              }}
             />
-        )}
-      </AnimatePresence>
+          )}
+        </AnimatePresence>
 
-      <AnimatePresence>
-        {showBuildingModal && selectedBuilding && selectedTile !== null && (
-          <BuildingModal
-            building={selectedBuilding}
-            onClose={() => {
-              setShowBuildingModal(false);
-              setSelectedBuilding(null);
-              setSelectedTile(null);
-            }}
-            onComplete={handleBuildingComplete}
-            onSaveGame={async () => saveGameCallback(undefined, false)}
-            selectedIndex={selectedTile}
-            playerCoins={coins}
-          />
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {showSettings && (
-          <SettingsModal 
-            isOpen={showSettings}
-            onClose={() => setShowSettings(false)}
-            musicEnabled={musicEnabled}
-            onToggleMusic={toggleMusic}
-            audioRef={audioRef}
-            onShowTutorial={() => {
-              setShowSettings(false);
-              setShowTutorial(true);
-            }}
-            onShowStats={() => {
-              setShowSettings(false);
-              setShowPlayerStats(true);
-            }}
-            isAuthenticated={isAuthenticated}
-            user={user}
-            onLogin={handleLogin}
-            onLogout={handleLogout}
-            onShowAuthModal={() => {
-              setShowSettings(false);
-              setShowAuthModal(true);
-            }}
-          />
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {showPlayerStats && (
-          <PlayerStatsModal 
-            gameData={{
-              playerName,
-              coins,
-              happiness,
-              day,
-              level,
-              experience,
-              grid,
-              gridSize,
-              neighbors,
-              achievements,
-              events: [],
-              gameTime,
-              gameMinutes,
-              timeOfDay,
-              recentEvents,
-              bills,
-              energyRate,
-              totalEnergyUsage,
-              lastBillDay,
-              coinHistory,
-              weather,
-              powerGrid,
-              waterGrid
-            }}
-            achievements={achievements}
-            neighbors={neighbors}
-            grid={grid}
-            onClose={() => setShowPlayerStats(false)}
-            onShowLogin={() => {
-              setShowPlayerStats(false);
-              setShowAuthModal(true);
-            }}
-          />
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {showHappinessAnalytics && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
-            style={{ backdropFilter: "blur(8px)", backgroundColor: "rgba(0,0,0,0.3)" }}
-            onClick={() => setShowHappinessAnalytics(false)}
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              transition={{ type: "spring", damping: 20 }}
-              className="bg-white rounded-xl shadow-xl max-w-md w-full"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <HappinessAnalytics
-                happiness={happiness}
-                buildings={buildings}
+        <AnimatePresence>
+          {showSpecialEvents && (
+              <SpecialEventsManager
+                gameData={{
+                  playerName,
+                  coins,
+                  day,
+                  level,
+                  experience,
+                  grid,
+                  gridSize,
+                  neighbors,
+                  achievements,
+                  events: [],
+                  gameTime,
+                  gameMinutes,
+                  timeOfDay,
+                  recentEvents,
+                  bills,
+                  energyRate,
+                  totalEnergyUsage,
+                  lastBillDay,
+                  coinHistory,
+                  weather,
+                  powerGrid,
+                  waterGrid
+                }}
                 neighbors={neighbors}
                 grid={grid}
-                recentEvents={recentEvents}
-                weather={weather}
+                onClose={() => setShowSpecialEvents(false)}
+                onParticipate={handleParticipateSpecialEvent}
+                onClaimReward={handleClaimSpecialEventReward}
+                onUpdateGameState={(updates) => {
+                  if (updates.coins !== undefined) setCoins(updates.coins);
+                  if (updates.experience !== undefined) setExperience(updates.experience);
+                }}
               />
-              <div className="p-4 border-t border-gray-100">
-                <button
-                  onClick={() => setShowHappinessAnalytics(false)}
-                  className="w-full py-2 bg-emerald-500 text-white rounded-lg font-medium hover:bg-emerald-600 transition-colors lowercase"
-                >
-                  close
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          )}
+        </AnimatePresence>
 
-      <AnimatePresence>
-        {currentEvent && (
-          <EventModal 
-            event={currentEvent}
-            onOptionSelect={handleEventOption}
-          />
-        )}
-      </AnimatePresence>
+        <AnimatePresence>
+          {showBuildingModal && selectedBuilding && selectedTile !== null && (
+            <BuildingModal
+              building={selectedBuilding}
+              onClose={() => {
+                setShowBuildingModal(false);
+                setSelectedBuilding(null);
+                setSelectedTile(null);
+              }}
+              onComplete={handleBuildingComplete}
+              onSaveGame={async () => saveGameCallback(undefined, false)}
+              selectedIndex={selectedTile}
+              playerCoins={coins}
+            />
+          )}
+        </AnimatePresence>
 
-      <AnimatePresence>
-        {showNeighborUnlock && (
-          <NeighborUnlockModal 
-            neighbor={showNeighborUnlock}
-            onClose={() => setShowNeighborUnlock(null)}
-          />
-        )}
-      </AnimatePresence>
+        <AnimatePresence>
+          {showSettings && (
+            <SettingsModal 
+              isOpen={showSettings}
+              onClose={() => setShowSettings(false)}
+              musicEnabled={musicEnabled}
+              onToggleMusic={toggleMusic}
+              audioRef={audioRef}
+              onShowTutorial={() => {
+                setShowSettings(false);
+                setShowTutorial(true);
+              }}
+              onShowStats={() => {
+                setShowSettings(false);
+                setShowPlayerStats(true);
+              }}
+              isAuthenticated={isAuthenticated}
+              user={user}
+              onLogin={handleLogin}
+              onLogout={handleLogout}
+              onShowAuthModal={() => {
+                setShowSettings(false);
+                setShowAuthModal(true);
+              }}
+            />
+          )}
+        </AnimatePresence>
 
-      <AnimatePresence>
-        {showNeighborList && (
-          <NeighborListModal 
-            neighbors={neighbors}
-            onClose={() => setShowNeighborList(false)}
-          />
-        )}
-      </AnimatePresence>
+        <AnimatePresence>
+          {showPlayerStats && (
+            <PlayerStatsModal 
+              gameData={{
+                playerName,
+                coins,
+                day,
+                level,
+                experience,
+                grid,
+                gridSize,
+                neighbors,
+                achievements,
+                events: [],
+                gameTime,
+                gameMinutes,
+                timeOfDay,
+                recentEvents,
+                bills,
+                energyRate,
+                totalEnergyUsage,
+                lastBillDay,
+                coinHistory,
+                weather,
+                powerGrid,
+                waterGrid
+              }}
+              achievements={achievements}
+              neighbors={neighbors}
+              grid={grid}
+              onClose={() => setShowPlayerStats(false)}
+              onShowLogin={() => {
+                setShowPlayerStats(false);
+                setShowAuthModal(true);
+              }}
+            />
+          )}
+        </AnimatePresence>
 
-      <AnimatePresence>
-        {showAchievements && (
-          <AchievementsModal 
-            achievements={achievements}
-            onClose={() => setShowAchievements(false)}
-          />
-        )}
-      </AnimatePresence>
+        <AnimatePresence>
+          {showAchievementUnlock && (
+            <AchievementUnlockModal 
+              achievement={showAchievementUnlock}
+              onClose={() => setShowAchievementUnlock(null)}
+            />
+          )}
+        </AnimatePresence>
 
-      <AnimatePresence>
-        {showAchievementUnlock && (
-          <AchievementUnlockModal 
-            achievement={showAchievementUnlock}
-            onClose={() => setShowAchievementUnlock(null)}
-          />
-        )}
-      </AnimatePresence>
+        <AnimatePresence>
+          {showAchievements && (
+            <AchievementsModal 
+              achievements={achievements}
+              onClose={() => setShowAchievements(false)}
+            />
+          )}
+        </AnimatePresence>
 
-      <AnimatePresence>
-        {showBuildingInfo && (
-          <BuildingInfoModal 
-            building={showBuildingInfo.building}
-            gridIndex={showBuildingInfo.index}
-            neighbors={neighbors}
-            onClose={() => setShowBuildingInfo(null)}
-            onAssignResident={handleAssignResident}
-            onRemoveResident={handleRemoveResident}
-            onCollectIncome={handleCollectIncomeWrapper}
-            onMoveBuilding={handleMoveBuilding}
-            onUpgradeBuilding={handleUpgradeBuildingWrapper}
-            onSellBuilding={handleDemolishBuilding}
-            grid={grid}
-          />
-        )}
-      </AnimatePresence>
+        <AnimatePresence>
+          {showBuildingInfo && (
+            <BuildingInfoModal 
+              building={showBuildingInfo.building}
+              gridIndex={showBuildingInfo.index}
+              neighbors={neighbors}
+              onClose={() => setShowBuildingInfo(null)}
+              onAssignResident={handleAssignResident}
+              onRemoveResident={handleRemoveResident}
+              onCollectIncome={handleCollectIncomeWrapper}
+              onMoveBuilding={handleMoveBuilding}
+              onUpgradeBuilding={handleUpgradeBuildingWrapper}
+              onSellBuilding={handleDemolishBuilding}
+              grid={grid}
+            />
+          )}
+        </AnimatePresence>
 
-      <AnimatePresence>
-        {showCalendar && (
-          <CalendarView 
-            dayRecords={dayRecords}
-            currentDay={day}
-            onClose={() => setShowCalendar(false)}
-          />
-        )}
-      </AnimatePresence>
+        <AnimatePresence>
+          {showCalendar && (
+            <CalendarView 
+              dayRecords={dayRecords}
+              currentDay={day}
+              onClose={() => setShowCalendar(false)}
+            />
+          )}
+        </AnimatePresence>
 
-      <AnimatePresence>
-        {showCoinHistory && (
-          <CoinHistory 
-            history={coinHistory}
-            onClose={() => setShowCoinHistory(false)}
-          />
-        )}
-      </AnimatePresence>
+        <AnimatePresence>
+          {showCoinHistory && (
+            <CoinHistory 
+              history={coinHistory}
+              onClose={() => setShowCoinHistory(false)}
+            />
+          )}
+        </AnimatePresence>
 
-      <AnimatePresence>
-        {showTutorial && (
-          <TutorialGuide 
-            step={tutorialStep}
-            onNextStep={() => {
-              if (tutorialStep < 4) {
-                setTutorialStep(tutorialStep + 1);
-              } else {
+        <AnimatePresence>
+          {showTutorial && (
+            <TutorialGuide 
+              step={tutorialStep}
+              onNextStep={() => {
+                if (tutorialStep < 4) {
+                  setTutorialStep(tutorialStep + 1);
+                } else {
+                  setShowTutorial(false);
+                  addNotification('Tutorial completed! Happy building!', 'success');
+                }
+              }}
+              onClose={() => {
                 setShowTutorial(false);
-                addNotification('Tutorial completed! Happy building!', 'success');
+                addNotification('You can access the tutorial anytime from the help button', 'info');
+              }}
+            />
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {showMusicModal && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4"
+              style={{ backdropFilter: "blur(8px)", backgroundColor: "rgba(0,0,0,0.3)" }}
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="bg-white rounded-xl p-6 max-w-md w-full shadow-xl"
+              >
+                <h3 className="text-lg font-medium text-emerald-800 mb-4 lowercase">would you like music?</h3>
+                <p className="text-gray-600 mb-6 lowercase">enjoy some background music while you build your neighborhood?</p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => handleEnableMusic(true)}
+                    className="flex-1 bg-emerald-500 text-white py-2 px-4 rounded-lg font-medium hover:bg-emerald-600 transition-colors lowercase flex items-center justify-center gap-2"
+                  >
+                    <Volume2 size={16} />
+                    yes please
+                  </button>
+                  <button
+                    onClick={() => handleEnableMusic(false)}
+                    className="flex-1 bg-gray-200 text-gray-800 py-2 px-4 rounded-lg font-medium hover:bg-gray-300 transition-colors lowercase flex items-center justify-center gap-2"
+                  >
+                    <VolumeX size={16} />
+                    no thanks
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {showAuthModal && (
+          <AuthModal
+            onClose={() => {
+              if (isAuthenticated && user?.username && !user.username.includes('@')) {
+                setShowAuthModal(false);
               }
             }}
-            onClose={() => {
-              setShowTutorial(false);
-              addNotification('You can access the tutorial anytime from the help button', 'info');
-            }}
+            onLogin={handleLogin}
           />
         )}
-      </AnimatePresence>
 
-      <AnimatePresence>
-        {showMusicModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
-            style={{ backdropFilter: "blur(8px)", backgroundColor: "rgba(0,0,0,0.3)" }}
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-xl p-6 max-w-md w-full shadow-xl"
-            >
-              <h3 className="text-lg font-medium text-emerald-800 mb-4 lowercase">would you like music?</h3>
-              <p className="text-gray-600 mb-6 lowercase">enjoy some background music while you build your neighborhood?</p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => handleEnableMusic(true)}
-                  className="flex-1 bg-emerald-500 text-white py-2 px-4 rounded-lg font-medium hover:bg-emerald-600 transition-colors lowercase flex items-center justify-center gap-2"
-                >
-                  <Volume2 size={16} />
-                  yes please
-                </button>
-                <button
-                  onClick={() => handleEnableMusic(false)}
-                  className="flex-1 bg-gray-200 text-gray-800 py-2 px-4 rounded-lg font-medium hover:bg-gray-300 transition-colors lowercase flex items-center justify-center gap-2"
-                >
-                  <VolumeX size={16} />
-                  no thanks
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
+        {showPublicProfile && selectedProfile && (
+          <PublicProfileModal
+            onClose={() => setShowPublicProfile(false)}
+            profile={selectedProfile}
+          />
         )}
-      </AnimatePresence>
+        
+        <AnimatePresence>
+          {showNeighborList && (
+            <NeighborListModal
+              neighbors={neighbors}
+              onClose={() => setShowNeighborList(false)}
+            />
+          )}
+        </AnimatePresence>
+        
+        {showLeaderboard && (
+          <Leaderboard
+            onClose={() => setShowLeaderboard(false)}
+            onViewProfile={handleViewProfile}
+          />
+        )}
 
-      {showAuthModal && (
-        <AuthModal
-          onClose={() => {
-            if (isAuthenticated && user?.username && !user.username.includes('@')) {
-              setShowAuthModal(false);
-            }
-          }}
-          onLogin={handleLogin}
-        />
-      )}
-
-      {showPublicProfile && selectedProfile && (
-        <PublicProfileModal
-          onClose={() => setShowPublicProfile(false)}
-          profile={selectedProfile}
-        />
-      )}
-      
-      {showLeaderboard && (
-        <Leaderboard
-          onClose={() => setShowLeaderboard(false)}
-          onViewProfile={handleViewProfile}
-        />
-      )}
-    </AppLayout>
-  );
-}
+        <AnimatePresence>
+          {currentEvent && (
+            <EventModal
+              event={currentEvent}
+              onOptionSelect={handleEventOption}
+            />
+          )}
+        </AnimatePresence>
+      </AppLayout>
+    );
+  }

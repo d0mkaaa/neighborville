@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mail, Lock, User, ArrowRight, CheckCircle, RefreshCcw, AlertCircle } from 'lucide-react';
+import { Mail, Lock, User, ArrowRight, CheckCircle, RefreshCcw, AlertCircle, Info } from 'lucide-react';
 import { sendVerificationEmail } from '../../services/emailService';
 import { verifyEmail, checkRegisteredEmail } from '../../services/userService';
 
@@ -16,6 +16,7 @@ export default function AuthModal({ onClose, onLogin }: AuthModalProps) {
   const [isVerifying, setIsVerifying] = useState(false);
   const [isCodeSent, setIsCodeSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isNewUser, setIsNewUser] = useState(false);
   const [isUsernameStep, setIsUsernameStep] = useState(false);
@@ -32,6 +33,7 @@ export default function AuthModal({ onClose, onLogin }: AuthModalProps) {
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setInfoMessage(null);
     
     if (!isCodeSent) {
       setIsLoading(true);
@@ -39,13 +41,17 @@ export default function AuthModal({ onClose, onLogin }: AuthModalProps) {
         const { exists } = await checkRegisteredEmail(email);
         setIsNewUser(!exists);
         
-        const emailSent = await sendVerificationEmail(email, '', username);
+        const emailResult = await sendVerificationEmail(email, '', username);
         
-        if (emailSent) {
+        if (emailResult.success) {
           setIsCodeSent(true);
           setError(null);
+          
+          if (emailResult.isExistingCode) {
+            setInfoMessage('You already have a valid verification code. It will expire 10 minutes after it was first created.');
+          }
         } else {
-          setError('Failed to send verification email. Please try again.');
+          setError(emailResult.message || 'Failed to send verification email. Please try again.');
         }
       } catch (err) {
         console.error('Error during email verification:', err);
@@ -156,15 +162,18 @@ export default function AuthModal({ onClose, onLogin }: AuthModalProps) {
 
   const handleResendCode = async () => {
     setError(null);
+    setInfoMessage(null);
     setIsLoading(true);
     
     try {
-      const emailSent = await sendVerificationEmail(email, '', username);
+      const emailResult = await sendVerificationEmail(email, '', username);
       
-      if (emailSent) {
-        setError(null);
+      if (emailResult.success) {
+        setInfoMessage(emailResult.isExistingCode 
+          ? 'You already have a valid verification code. Remember, it will expire 10 minutes after it was first created.' 
+          : 'A new verification code has been sent to your email.');
       } else {
-        setError('Failed to resend verification email. Please try again.');
+        setError(emailResult.message || 'Failed to resend verification email. Please try again.');
       }
     } catch (err) {
       console.error('Error during email verification:', err);
@@ -293,6 +302,13 @@ export default function AuthModal({ onClose, onLogin }: AuthModalProps) {
                 </div>
               )}
 
+              {infoMessage && (
+                <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 flex items-start">
+                  <Info size={18} className="text-blue-500 mr-2 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-blue-600">{infoMessage}</p>
+                </div>
+              )}
+
               <button
                 type="submit"
                 className={`w-full py-2 px-4 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center justify-center gap-2 ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
@@ -353,6 +369,13 @@ export default function AuthModal({ onClose, onLogin }: AuthModalProps) {
                 <div className="bg-red-50 border border-red-100 rounded-lg p-3 flex items-start">
                   <AlertCircle size={18} className="text-red-500 mr-2 flex-shrink-0 mt-0.5" />
                   <p className="text-sm text-red-600">{error}</p>
+                </div>
+              )}
+
+              {infoMessage && (
+                <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 flex items-start">
+                  <Info size={18} className="text-blue-500 mr-2 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-blue-600">{infoMessage}</p>
                 </div>
               )}
 

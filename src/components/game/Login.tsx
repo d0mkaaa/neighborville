@@ -61,6 +61,7 @@ export default function Login({ onStartGame, onLoadGame, onShowTutorial }: Login
             const status = await checkAuthStatus();
             setAuthVerified(status);
             if (status) {
+              console.log('Login: User authenticated, loading cloud saves immediately');
               await loadCloudSaves();
             }
           } catch (error) {
@@ -73,7 +74,7 @@ export default function Login({ onStartGame, onLoadGame, onShowTutorial }: Login
       }
       
       verifyAuth();
-    }, 300);
+    }, 100);
     
     const handleUnauthorized = () => {
       console.log("Unauthorized event detected in Login page");
@@ -88,12 +89,21 @@ export default function Login({ onStartGame, onLoadGame, onShowTutorial }: Login
     };
   }, [user, isAuthenticated, checkAuthStatus, setShowLogin]);
   
+  useEffect(() => {
+    if (authVerified && isAuthenticated) {
+      console.log('Login: Auth verified, loading cloud saves');
+      loadCloudSaves();
+    }
+  }, [authVerified, isAuthenticated]);
+  
   const loadCloudSaves = async () => {
     if (!authVerified) return;
     
+    console.log('Login: Loading cloud saves...');
     setLoadingCloudSaves(true);
     try {
       const serverSaves = await getAllSavesFromServer();
+      console.log(`Login: Received ${serverSaves.length} saves from server`);
       
       const formattedSaves = serverSaves.map(save => ({
         id: save.id,
@@ -112,7 +122,11 @@ export default function Login({ onStartGame, onLoadGame, onShowTutorial }: Login
       setCloudSaves(formattedSaves);
       
       if (formattedSaves.length > 0) {
-        setLatestSave(formattedSaves[0]);
+        const latest = formattedSaves[0];
+        console.log(`Login: Setting latest save: ${latest.name} (ID: ${latest.id})`);
+        setLatestSave(latest);
+      } else {
+        console.log('Login: No saves found on server');
       }
     } catch (err) {
       console.error("Error loading cloud saves:", err);
@@ -290,10 +304,7 @@ export default function Login({ onStartGame, onLoadGame, onShowTutorial }: Login
                               <Coins size={10} className="mr-1" />
                               {latestSave.data.coins} coins
                             </div>
-                            <div className="flex items-center">
-                              <Smile size={10} className="mr-1" />
-                              {latestSave.data.happiness}% happy
-                            </div>
+                                                                                    <div className="flex items-center">                              <Home size={10} className="mr-1" />                              {latestSave.data.grid?.filter(item => item !== null).length || 0} buildings                            </div>
                           </div>
                         </div>
                       </div>
@@ -471,10 +482,7 @@ export default function Login({ onStartGame, onLoadGame, onShowTutorial }: Login
                                 <Coins size={10} className="mr-1" />
                                 {save.data.coins} coins
                               </div>
-                              <div className="flex items-center text-xs text-gray-600">
-                                <Smile size={10} className="mr-1" />
-                                {save.data.happiness}% happy
-                              </div>
+                              <div className="flex items-center text-xs text-gray-600">                                <Home size={10} className="mr-1" />                                {save.data.grid?.filter(item => item !== null).length || 0} buildings                              </div>
                             </div>
                             
                             <div className="mt-2 text-xs text-gray-500 flex gap-2 flex-wrap">

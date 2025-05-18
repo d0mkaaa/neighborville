@@ -1,6 +1,6 @@
 import express from 'express';
 import { sendVerificationEmail, generateVerificationCode } from '../services/email.js';
-import { storeVerificationCode, findUserByEmail, createUser, findUserByUsername } from '../services/userService.js';
+import { storeVerificationCode, findUserByEmail, createUser, findUserByUsername, getStoredVerificationCode } from '../services/userService.js';
 
 const router = express.Router();
 
@@ -30,21 +30,26 @@ router.post('/send-verification', async (req, res) => {
       }
     }
     
-    const verificationCode = generateVerificationCode();
+    const existingCode = await getStoredVerificationCode(email);
+    const verificationCode = existingCode || generateVerificationCode();
     
-    console.log(`Storing verification code in Redis: ${email}`);
-    const stored = await storeVerificationCode(email, verificationCode);
-    
-    if (!stored) {
-      console.error(`Failed to store verification code for ${email}`);
-      return res.status(500).json({ success: false, message: 'Failed to store verification code' });
+    if (!existingCode) {
+      console.log(`Storing new verification code in Redis: ${email}`);
+      const stored = await storeVerificationCode(email, verificationCode);
+      
+      if (!stored) {
+        console.error(`Failed to store verification code for ${email}`);
+        return res.status(500).json({ success: false, message: 'Failed to store verification code' });
+      }
+    } else {
+      console.log(`Reusing existing verification code for ${email}`);
     }
     
     const result = await sendVerificationEmail(email, verificationCode, username);
     
     const response = {
       success: true,
-      message: 'Verification email sent',
+      message: existingCode ? 'You already have a valid verification code' : 'Verification email sent with new code',
       fallback: result.fallback || false
     };
     

@@ -53,7 +53,6 @@ export default function PlayerStatsModal({ gameData, achievements, neighbors, gr
     { label: 'Total Coins', value: gameData.coins, icon: <Coins className="text-yellow-500" size={20} /> },
     { label: 'Buildings', value: totalBuildings, icon: <Building className="text-indigo-500" size={20} /> },
     { label: 'Residents', value: housedResidents, icon: <Users className="text-orange-500" size={20} /> },
-    { label: 'Happiness', value: `${Math.round(gameData.happiness)}%`, icon: <Users className="text-green-500" size={20} /> },
     { label: 'Achievements', value: `${completedAchievements}/${achievements.length}`, icon: <Trophy className="text-amber-500" size={20} /> },
     { label: 'Grid Size', value: `${Math.sqrt(gameData.gridSize)}×${Math.sqrt(gameData.gridSize)}`, icon: <Home className="text-gray-500" size={20} /> },
     { label: 'Total XP Earned', value: totalXP, icon: <Award className="text-purple-500" size={20} /> },

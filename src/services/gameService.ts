@@ -115,8 +115,33 @@ export const loadGameFromServer = async (): Promise<{gameData: GameProgress | nu
     console.log('Load result:', result);
     
     if (result.success && result.gameData) {
+      const gameData = result.gameData;
+      
+      if (gameData.vitality !== undefined) {
+        delete gameData.vitality;
+      }
+      
+      if (gameData.vitalityDecay !== undefined) {
+        delete gameData.vitalityDecay;
+      }
+      
+      if (gameData.happiness !== undefined) {
+        delete gameData.happiness;
+      }
+      
+      if (gameData.grid && Array.isArray(gameData.grid)) {
+        gameData.grid = gameData.grid.map(building => {
+          if (building && building.happiness !== undefined) {
+            const newBuilding = {...building};
+            delete newBuilding.happiness;
+            return newBuilding;
+          }
+          return building;
+        });
+      }
+      
       return {
-        gameData: result.gameData,
+        gameData,
         lastSave: result.lastSave ? new Date(result.lastSave) : null
       };
     }

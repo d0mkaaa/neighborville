@@ -268,6 +268,7 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
     
     const intervalRef = { current: null as number | null };
     let isMounted = true;
+    let hasCompleted = false;
     
     intervalRef.current = window.setInterval(() => {
       if (!isMounted) return;
@@ -280,7 +281,8 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
             intervalRef.current = null;
           }
           
-          if (isMounted) {
+          if (isMounted && !hasCompleted) {
+            hasCompleted = true;
             setTimeout(() => {
               if (isMounted) {
                 setPhase('complete');
@@ -362,12 +364,9 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
                 </div>
                 <h3 className="text-lg font-medium text-gray-800 mb-2">ready to build?</h3>
                 <p className="text-gray-600 mb-4">complete a puzzle to start construction</p>
-                <div className="grid grid-cols-3 gap-2 mb-6 text-sm">
+                <div className="grid grid-cols-2 gap-2 mb-6 text-sm">
                   <div className="bg-emerald-50 p-2 rounded">
                     <span className="font-medium">cost:</span> {building.cost}c
-                  </div>
-                  <div className="bg-emerald-50 p-2 rounded">
-                    <span className="font-medium">happiness:</span> +{building.happiness}
                   </div>
                   <div className="bg-emerald-50 p-2 rounded">
                     <span className="font-medium">income:</span> {building.income}c/day

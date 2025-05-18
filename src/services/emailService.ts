@@ -4,7 +4,7 @@ export const sendVerificationEmail = async (
   email: string,
   _code?: string, // i kept it for development purposes, but does nothing currently
   username?: string
-): Promise<boolean> => {
+): Promise<{ success: boolean, isExistingCode?: boolean, message?: string }> => {
   try {
     const response = await fetch(`${API_URL}/api/email/send-verification`, {
       method: 'POST',
@@ -19,20 +19,16 @@ export const sendVerificationEmail = async (
 
     const data = await response.json();
     
-    if (data.success) {
-      if (data.code && import.meta.env.DEV) {
-        console.log('==========================================');
-        console.log(`📧 DEV MODE: Email to: ${email}`);
-        console.log(`📝 DEV MODE: Code: ${data.code}`);
-        console.log('==========================================');
-      }
-      return true;
-    } else {
-      console.log('Email verification API call failed');
-      return false;
-    }
+    return {
+      success: data.success,
+      isExistingCode: data.message?.includes('already have a valid verification code') || data.message?.includes('existing code'),
+      message: data.message
+    };
   } catch (error) {
-    console.error('Error calling email API:', error);
-    return false;
+    console.error('Error sending verification email:', error);
+    return { 
+      success: false,
+      message: 'Server error occurred while sending verification email'
+    };
   }
 };

@@ -10,7 +10,6 @@ import type { TimeOfDay, WeatherType } from '../../types/game';
 interface GameHeaderProps {
   playerName: string;
   coins: number;
-  happiness: number;
   energy: number;
   day: number;
   level: number;
@@ -32,7 +31,8 @@ interface GameHeaderProps {
   onLogout?: () => void;
   onToggleTimePause: () => void;
   onTimeChange: (newTime: number, newTimeOfDay: TimeOfDay) => void;
-  onShowHappinessAnalytics: () => void;
+  timeSpeed: 1 | 2 | 3;
+  onChangeTimeSpeed: (speed: 1 | 2 | 3) => void;
   onShowCalendar: () => void;
   onToggleWeatherForecast: () => void;
   onShowCoinHistory: () => void;
@@ -48,7 +48,6 @@ interface GameHeaderProps {
 export default function GameHeader({
   playerName,
   coins,
-  happiness,
   energy,
   day,
   level,
@@ -69,7 +68,8 @@ export default function GameHeader({
   onShowAchievements,
   onToggleTimePause,
   onTimeChange,
-  onShowHappinessAnalytics,
+  timeSpeed,
+  onChangeTimeSpeed,
   onShowCalendar,
   onToggleWeatherForecast,
   onShowCoinHistory,
@@ -131,30 +131,6 @@ export default function GameHeader({
             <motion.div 
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="flex items-center bg-white/10 backdrop-blur-sm border border-white/20 px-3 py-1.5 rounded-lg cursor-pointer"
-              onClick={() => onShowHappinessAnalytics()}
-            >
-              <span className="mr-2 text-xl">😊</span>
-              <div className="w-24 h-4 bg-black/20 rounded-full overflow-hidden shadow-inner">
-                <motion.div
-                  initial={{ width: "0%" }}
-                  animate={{ width: `${happiness !== undefined ? happiness : 0}%` }}
-                  transition={{ duration: 1, ease: "easeOut" }}
-                  className="h-full bg-white bg-opacity-80"
-                  style={{ 
-                    background: `linear-gradient(90deg, #34d399 0%, #10b981 ${happiness !== undefined ? happiness : 0}%)` 
-                  }}
-                ></motion.div>
-              </div>
-              <Tooltip content={`Exact happiness: ${happiness.toFixed(2)}%`}>
-                <span className="ml-2 font-medium lowercase text-base cursor-help">{Math.round(happiness !== undefined ? happiness : 0)}%</span>
-              </Tooltip>
-            </motion.div>
-            
-            <motion.div 
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
               className="flex items-center gap-3"
             >
@@ -169,16 +145,50 @@ export default function GameHeader({
 
               <div className="flex items-center bg-white/10 backdrop-blur-sm border border-white/20 px-3 py-1.5 rounded-lg">
                 <Clock size={18} className="mr-2" />
-                <span className="font-medium lowercase text-base">{getFormattedTime()}</span>
-                <button 
-                  className="ml-2 p-0.5 bg-white/10 rounded-full"
-                  onClick={onToggleTimePause}
+                <motion.span 
+                  key={gameTime + ":" + gameMinutes}
+                  initial={{ opacity: 0.8, y: 3 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="font-medium lowercase text-base"
                 >
-                  {timePaused ? 
-                    <Play size={14} className="text-white" /> : 
-                    <Pause size={14} className="text-white" />
-                  }
-                </button>
+                  {getFormattedTime()}
+                </motion.span>
+                <div className="flex ml-2">
+                  <button 
+                    className="p-0.5 bg-white/10 rounded-full"
+                    onClick={onToggleTimePause}
+                  >
+                    {timePaused ? 
+                      <Play size={14} className="text-white" /> : 
+                      <Pause size={14} className="text-white" />
+                    }
+                  </button>
+                  
+                  <div className="flex ml-1 bg-white/10 rounded-full">
+                    <motion.button 
+                      className={`px-1 text-xs rounded-l-full ${timeSpeed === 1 ? 'bg-white/20 font-medium' : ''}`}
+                      onClick={() => onChangeTimeSpeed(1)}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      1x
+                    </motion.button>
+                    <motion.button 
+                      className={`px-1 text-xs ${timeSpeed === 2 ? 'bg-white/20 font-medium' : ''}`}
+                      onClick={() => onChangeTimeSpeed(2)}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      2x
+                    </motion.button>
+                    <motion.button 
+                      className={`px-1 text-xs rounded-r-full ${timeSpeed === 3 ? 'bg-white/20 font-medium' : ''}`}
+                      onClick={() => onChangeTimeSpeed(3)}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      3x
+                    </motion.button>
+                  </div>
+                </div>
               </div>
 
               <WeatherForecast
@@ -186,6 +196,7 @@ export default function GameHeader({
                 forecast={weatherForecast}
                 isExpanded={showWeatherForecast}
                 onToggle={onToggleWeatherForecast}
+                currentTime={gameTime}
               />
             </motion.div>
           </div>
