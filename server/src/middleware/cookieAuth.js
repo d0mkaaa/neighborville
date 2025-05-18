@@ -3,6 +3,7 @@ import User from '../models/User.js';
 import Session from '../models/Session.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'neighborvillesecretkey';
+const isDevelopment = process.env.NODE_ENV === 'development';
 
 export const createToken = (userId) => {
   return jwt.sign({ userId }, JWT_SECRET, { expiresIn: '7d' });
@@ -19,8 +20,8 @@ export const verifyToken = (token) => {
 
 export const cookieOptions = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+  secure: !isDevelopment,
+  sameSite: isDevelopment ? 'lax' : 'strict',
   maxAge: 7 * 24 * 60 * 60 * 1000,
   path: '/'
 };
@@ -43,21 +44,16 @@ export const auth = async (req, res, next) => {
     }
     
     if (!token) {
-      console.log('Auth middleware - No token found');
       return res.status(401).json({ success: false, message: 'Authentication required' });
     }
     
     const decoded = verifyToken(token);
     if (!decoded || !decoded.userId) {
-      console.log('Auth middleware - Token verification failed');
       return res.status(401).json({ success: false, message: 'Invalid or expired token' });
     }
     
-    console.log('Auth middleware - Token verified for user ID:', decoded.userId);
-    
     const user = await User.findById(decoded.userId);
     if (!user) {
-      console.log('Auth middleware - User not found for ID:', decoded.userId);
       return res.status(401).json({ success: false, message: 'User not found' });
     }
     
@@ -80,7 +76,6 @@ export const auth = async (req, res, next) => {
             device: userAgent ? userAgent.split('(')[0] : 'Unknown'
           }
         });
-        console.log('Auth middleware - Created new session for user');
       } catch (error) {
         console.error('Error creating session:', error);
       }
@@ -94,7 +89,6 @@ export const auth = async (req, res, next) => {
     req.session = session || { token };
     req.user = user;
     
-    console.log('Auth middleware - Authentication successful for user:', user.username || user.email);
     next();
   } catch (error) {
     console.error('Auth middleware error:', error);

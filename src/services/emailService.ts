@@ -1,4 +1,4 @@
-import { API_URL } from '../config/apiConfig';
+import { NORMALIZED_API_URL } from '../config/apiConfig';
 
 export const sendVerificationEmail = async (
   email: string,
@@ -6,7 +6,7 @@ export const sendVerificationEmail = async (
   username?: string
 ): Promise<{ success: boolean, isExistingCode?: boolean, message?: string }> => {
   try {
-    const response = await fetch(`${API_URL}/api/email/send-verification`, {
+    const response = await fetch(`${NORMALIZED_API_URL}/api/email/send-verification`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -14,7 +14,8 @@ export const sendVerificationEmail = async (
       body: JSON.stringify({
         email,
         username
-      })
+      }),
+      credentials: 'include'
     });
 
     const data = await response.json();

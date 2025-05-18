@@ -19,7 +19,7 @@ import {
   findUserByUsername
 } from '../services/userService.js';
 import { generateVerificationCode, sendVerificationEmail } from '../services/email.js';
-import { auth, optionalAuth, createToken, cookieOptions, setAuthCookie } from '../middleware/cookieAuth.js';
+import { auth, optionalAuth, createToken, cookieOptions, setAuthCookie, verifyToken } from '../middleware/cookieAuth.js';
 
 const router = express.Router();
 
@@ -859,6 +859,73 @@ router.post('/update-username', [
   } catch (error) {
     console.error('Error in /update-username route:', error);
     res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+router.get('/auth-check', async (req, res) => {
+  try {
+    console.log('Auth check request received');
+    console.log('Request cookies:', req.cookies);
+    
+    let token = req.cookies.neighborville_auth;
+    
+    console.log('Token from cookies:', token ? `${token.substring(0, 15)}...` : 'No token');
+    
+    if (!token && req.headers.authorization) {
+      const authHeader = req.headers.authorization;
+      if (authHeader.startsWith('Bearer ')) {
+        token = authHeader.substring(7);
+        console.log('Token from Authorization header:', token ? `${token.substring(0, 15)}...` : 'No token');
+      }
+    }
+    
+    if (!token) {
+      return res.status(200).json({ 
+        success: false, 
+        authenticated: false,
+        message: 'No authentication token found' 
+      });
+    }
+    
+    const decoded = verifyToken(token);
+    if (!decoded || !decoded.userId) {
+      return res.status(200).json({ 
+        success: false, 
+        authenticated: false,
+        message: 'Invalid or expired token' 
+      });
+    }
+    
+    console.log('Token verified for user ID:', decoded.userId);
+    
+    const user = await findUserById(decoded.userId);
+    if (!user) {
+      return res.status(200).json({ 
+        success: false, 
+        authenticated: false,
+        message: 'User not found' 
+      });
+    }
+    
+    console.log('User found:', user.username || user.email);
+    console.log('User has saves:', user.gameSaves ? user.gameSaves.length : 0);
+    
+    return res.status(200).json({
+      success: true,
+      authenticated: true,
+      user: {
+        id: user._id,
+        email: user.email,
+        username: user.username,
+        verified: user.verified
+      },
+      hasSaves: user.gameSaves && user.gameSaves.length > 0,
+      saveCount: user.gameSaves ? user.gameSaves.length : 0,
+      lastSave: user.lastSave
+    });
+  } catch (error) {
+    console.error('Error in /auth-check route:', error);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
   }
 });
 

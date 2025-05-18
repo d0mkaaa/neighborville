@@ -87,7 +87,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         setIsLoading(false);
         return true;
       } else {
-        console.log('No user data found, setting user to null');
         setUser(null);
         setIsLoading(false);
         return false;

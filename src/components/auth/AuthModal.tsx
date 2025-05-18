@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mail, Lock, User, ArrowRight, CheckCircle, RefreshCcw, AlertCircle, Info } from 'lucide-react';
 import { sendVerificationEmail } from '../../services/emailService';
-import { verifyEmail, checkRegisteredEmail } from '../../services/userService';
+import { verifyEmail, checkRegisteredEmail, saveAuthToken } from '../../services/userService';
+import { NORMALIZED_API_URL } from '../../config/apiConfig';
 
 type AuthModalProps = {
   onClose: () => void;
@@ -120,7 +121,7 @@ export default function AuthModal({ onClose, onLogin }: AuthModalProps) {
     
     setIsLoading(true);
     try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/user/update-username`, {
+        const response = await fetch(`${NORMALIZED_API_URL}/api/user/update-username`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -130,9 +131,18 @@ export default function AuthModal({ onClose, onLogin }: AuthModalProps) {
       });
       
       const data = await response.json();
+      console.log('Username update response:', data);
       
       if (data.success) {
         setError(null);
+        
+        if (data.token) {
+          console.log(`Token received from username update: ${data.token.substring(0, 15)}...`);
+          saveAuthToken(data.token);
+        } else {
+          console.warn('No token received from username update');
+        }
+        
         setIsVerifying(true);
         
         if (loginTimeoutRef.current) {
@@ -419,6 +429,12 @@ export default function AuthModal({ onClose, onLogin }: AuthModalProps) {
               </motion.div>
             )}
           </AnimatePresence>
+
+          {!isVerifying && (
+            <div className="mt-4 text-xs text-gray-500 flex justify-center">
+              <span>© NeighborVille {new Date().getFullYear()}</span>
+            </div>
+          )}
         </div>
       </motion.div>
     </motion.div>

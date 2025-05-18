@@ -1,4 +1,4 @@
-import { API_URL } from '../config/apiConfig';
+import { NORMALIZED_API_URL } from '../config/apiConfig';
 
 export interface User {
   id: string;
@@ -33,24 +33,26 @@ export interface AuthResponse {
   message?: string;
 }
 
-const saveAuthToken = (token: string): void => {
-  if (!token) return;
+export const saveAuthToken = (token: string): void => {
+  if (!token) {
+    console.warn('Attempted to save null/empty token');
+    return;
+  }
   try {
     const expiryDate = new Date();
     expiryDate.setDate(expiryDate.getDate() + 7);
+    
     document.cookie = `neighborville_auth=${token}; expires=${expiryDate.toUTCString()}; path=/; SameSite=Lax`;
-    
     sessionStorage.setItem('neighborville_auth_token', token);
-    
-    console.log('Auth token saved successfully');
   } catch (error) {
     console.error('Error saving auth token:', error);
   }
 };
 
-const getAuthToken = (): string | null => {
+export const getAuthToken = (): string | null => {
   try {
     const cookies = document.cookie.split(';');
+    
     let token = null;
     
     for (const cookie of cookies) {
@@ -104,7 +106,7 @@ export const register = async (
   username?: string
 ): Promise<AuthResponse> => {
   try {
-    const response = await fetch(`${API_URL}/api/user/register`, {
+    const response = await fetch(`${NORMALIZED_API_URL}/api/user/register`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify({
@@ -129,7 +131,7 @@ export const login = async (
   password: string
 ): Promise<AuthResponse> => {
   try {
-    const checkUser = await fetch(`${API_URL}/api/user/check-registered`, {
+    const checkUser = await fetch(`${NORMALIZED_API_URL}/api/user/check-registered`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify({ email })
@@ -146,7 +148,7 @@ export const login = async (
       }
     }
     
-    const response = await fetch(`${API_URL}/api/user/login`, {
+    const response = await fetch(`${NORMALIZED_API_URL}/api/user/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -176,7 +178,7 @@ export const login = async (
 
 export const logout = async (): Promise<boolean> => {
   try {
-    const response = await fetch(`${API_URL}/api/user/logout`, {
+    const response = await fetch(`${NORMALIZED_API_URL}/api/user/logout`, {
       method: 'POST',
       headers: getAuthHeaders(),
       credentials: 'include'
@@ -200,7 +202,7 @@ export const getCurrentUser = async (): Promise<User | null> => {
       return null;
     }
     
-    const response = await fetch(`${API_URL}/api/user/me`, {
+    const response = await fetch(`${NORMALIZED_API_URL}/api/user/me`, {
       method: 'GET',
       headers: getAuthHeaders(),
       credentials: 'include'
@@ -236,7 +238,7 @@ export const checkRegisteredEmail = async (
   email: string
 ): Promise<{ exists: boolean; message?: string }> => {
   try {
-    const response = await fetch(`${API_URL}/api/user/check-registered`, {
+    const response = await fetch(`${NORMALIZED_API_URL}/api/user/check-registered`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -261,7 +263,7 @@ export const verifyEmail = async (
   username?: string
 ): Promise<{ success: boolean; user?: any; message?: string; isNewRegistration?: boolean }> => {
   try {
-    const response = await fetch(`${API_URL}/api/user/verify`, {
+    const response = await fetch(`${NORMALIZED_API_URL}/api/user/verify`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -273,7 +275,6 @@ export const verifyEmail = async (
     const data = await response.json();
     
     if (!data.success) {
-      console.error('Verification failed:', data.message);
       return {
         success: false,
         message: data.message || 'Verification failed'
@@ -282,14 +283,11 @@ export const verifyEmail = async (
 
     if (data.token) {
       saveAuthToken(data.token);
-      console.log('Auth token saved after verification');
       
       if (username || (data.user && data.user.username)) {
         const usernameToBeSaved = username || data.user.username;
         sessionStorage.setItem('neighborville_playerName', usernameToBeSaved);
       }
-    } else {
-      console.warn('No token received from verification');
     }
     
     return {
@@ -307,7 +305,7 @@ export const resendVerification = async (
   email: string
 ): Promise<boolean> => {
   try {
-    const response = await fetch(`${API_URL}/api/user/resend-verification`, {
+    const response = await fetch(`${NORMALIZED_API_URL}/api/user/resend-verification`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify({
@@ -328,7 +326,7 @@ export const updateUserSettings = async (
   settings: any
 ): Promise<boolean> => {
   try {
-    const response = await fetch(`${API_URL}/api/user/${userId}/settings`, {
+    const response = await fetch(`${NORMALIZED_API_URL}/api/user/${userId}/settings`, {
       method: 'PUT',
       headers: getAuthHeaders(),
       body: JSON.stringify({
@@ -351,7 +349,7 @@ export const updateUser = async (
   try {
     const { username, ...allowedUpdates } = userData;
     
-    const response = await fetch(`${API_URL}/api/user/${userId}`, {
+    const response = await fetch(`${NORMALIZED_API_URL}/api/user/${userId}`, {
       method: 'PUT',
       headers: getAuthHeaders(),
       body: JSON.stringify(allowedUpdates)
@@ -367,7 +365,7 @@ export const updateUser = async (
 
 export const getUserProfile = async (): Promise<User | null> => {
   try {
-    const response = await fetch(`${API_URL}/api/user/profile`, {
+    const response = await fetch(`${NORMALIZED_API_URL}/api/user/profile`, {
       method: 'GET',
       headers: getAuthHeaders(),
       credentials: 'include'
@@ -392,7 +390,7 @@ export const getUserProfile = async (): Promise<User | null> => {
 
 export const getUserSessions = async () => {
   try {
-    const response = await fetch(`${API_URL}/api/user/sessions`, {
+    const response = await fetch(`${NORMALIZED_API_URL}/api/user/sessions`, {
       method: 'GET',
       headers: getAuthHeaders(),
       credentials: 'include'
@@ -439,7 +437,7 @@ export const getLeaderboard = async (
 ): Promise<LeaderboardResponse> => {
   try {
     const response = await fetch(
-      `${API_URL}/api/user/leaderboard?sort=${sort}&page=${page}&limit=${limit}`,
+      `${NORMALIZED_API_URL}/api/user/leaderboard?sort=${sort}&page=${page}&limit=${limit}`,
       {
         method: 'GET',
         credentials: 'include',
@@ -501,7 +499,7 @@ export const getPublicProfile = async (username: string): Promise<{
   message?: string;
 }> => {
   try {
-    const response = await fetch(`${API_URL}/api/user/profile/${username}`, {
+    const response = await fetch(`${NORMALIZED_API_URL}/api/user/profile/${username}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json'
@@ -524,6 +522,34 @@ export const getPublicProfile = async (username: string): Promise<{
     return {
       success: false,
       message: typeof error === 'string' ? error : error instanceof Error ? error.message : 'Failed to load profile'
+    };
+  }
+};
+
+export const checkAuthenticationStatus = async (): Promise<{
+  success: boolean;
+  authenticated: boolean;
+  user?: User;
+  message?: string;
+  hasSaves?: boolean;
+  saveCount?: number;
+}> => {
+  try {
+    const response = await fetch(`${NORMALIZED_API_URL}/api/user/auth-check`, {
+      method: 'GET',
+      headers: getAuthHeaders(),
+      credentials: 'include'
+    });
+    
+    const data = await response.json();
+    
+    return data;
+  } catch (error) {
+    console.error('Error checking authentication status:', error);
+    return {
+      success: false,
+      authenticated: false,
+      message: 'Error checking authentication status'
     };
   }
 };

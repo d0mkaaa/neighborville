@@ -25,40 +25,24 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use(cookieParser(process.env.COOKIE_SECRET || 'neighborvillecookiesecret'));
 
-app.use((req, res, next) => {
-  console.log('Request cookies:', req.cookies);
-  const oldSend = res.send;
-  res.send = function(data) {
-    console.log('Response cookies:', res.getHeader('set-cookie') || 'No cookies set');
-    return oldSend.apply(res, arguments);
-  };
-  next();
-});
-
 app.use(cors({
   origin: function(origin, callback) {
     if (!origin) {
-      console.log('Request with no origin allowed');
       return callback(null, true);
     }
     
-    console.log(`CORS request from origin: ${origin}`);
-    
     if (isDevelopment) {
-      console.log(`Development mode: allowing all origins`);
-      return callback(null, true);
+      return callback(null, origin);
     }
     
     if (allowedOrigins.indexOf(origin) === -1) {
-      console.log(`Origin ${origin} not in allowed list:`, allowedOrigins);
       const msg = `The CORS policy for this site does not allow access from the specified origin: ${origin}`;
       return callback(new Error(msg), false);
     }
-    console.log(`Origin ${origin} allowed`);
-    return callback(null, true);
+    return callback(null, origin);
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   exposedHeaders: ['Set-Cookie']
 }));
