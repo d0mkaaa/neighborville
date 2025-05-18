@@ -27,13 +27,13 @@ export const cookieOptions = {
 
 export const setAuthCookie = (res, userId) => {
   const token = createToken(userId);
-  res.cookie('token', token, cookieOptions);
+  res.cookie('neighborville_auth', token, cookieOptions);
   return token;
 };
 
 export const auth = async (req, res, next) => {
   try {
-    let token = req.cookies.token;
+    let token = req.cookies.neighborville_auth;
     
     if (!token && req.headers.authorization) {
       const authHeader = req.headers.authorization;
@@ -104,7 +104,7 @@ export const auth = async (req, res, next) => {
 
 export const optionalAuth = async (req, res, next) => {
   try {
-    let token = req.cookies.token;
+    let token = req.cookies.neighborville_auth;
     
     if (!token && req.headers.authorization) {
       const authHeader = req.headers.authorization;

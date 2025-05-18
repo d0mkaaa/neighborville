@@ -178,8 +178,7 @@ router.post('/verify', [
     const ip = req.ip;
     const session = await createSession(user, userAgent, ip);
     
-    const token = createToken(user._id);
-    setAuthCookie(res, user._id);
+    const token = setAuthCookie(res, user._id);
     
     res.status(200).json({
       success: true,
@@ -198,7 +197,7 @@ router.post('/logout', auth, async (req, res) => {
   try {
     await deleteSession(req.session.token);
     
-    res.clearCookie('token');
+    res.clearCookie('neighborville_auth');
     
     res.status(200).json({
       success: true,
@@ -846,9 +845,7 @@ router.post('/update-username', [
     }
     
     const session = await createSession(user, req.headers['user-agent'] || 'Unknown', req.ip);
-    const token = createToken(user._id);
-
-    setAuthCookie(res, token);
+    const token = setAuthCookie(res, user._id);
     
     const updatedUser = await findUserById(user._id);
     
