@@ -74,12 +74,14 @@ export default function GameGrid({
         setSelectedSource(null);
       }
     } else {
-      const building = grid[index];
-      if (building && !selectedBuilding) {
-        onBuildingManage(building, index);
-      } else {
-        onTileClick(index);
-      }
+      onTileClick(index);
+    }
+  };
+
+  const handleTileDoubleClick = (index: number) => {
+    const building = grid[index];
+    if (building && !selectedBuilding) {
+      onBuildingManage(building, index);
     }
   };
 
@@ -186,6 +188,7 @@ export default function GameGrid({
               whileTap={{ scale: 0.95 }}
               layout
               onClick={() => handleTileClick(index)}
+              onDoubleClick={() => handleTileDoubleClick(index)}
               className={`aspect-ratio-1 rounded-lg flex flex-col items-center justify-center cursor-pointer ${
                 selectedTile === index ? 'ring-2 ring-emerald-500' : ''
               } ${
@@ -265,66 +268,6 @@ export default function GameGrid({
           );
         })}
       </div>
-      
-      <AnimatePresence>
-        {selectedTile !== null && grid[selectedTile] && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 10 }}
-            transition={{ type: "spring", damping: 20 }}
-            className="mt-4 p-3 bg-emerald-50 rounded-lg"
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <motion.div 
-                  whileHover={{ scale: 1.1 }}
-                  className="w-8 h-8 rounded-full flex items-center justify-center mr-2 text-white"
-                  style={{ backgroundColor: grid[selectedTile]?.color }}
-                >
-                  {grid[selectedTile]?.icon && getIcon(grid[selectedTile]!.icon, 16)}
-                </motion.div>
-                <div>
-                  <div className="font-medium lowercase text-gray-800">{grid[selectedTile]?.name}</div>
-                  <div className="text-xs text-gray-700 lowercase flex flex-wrap gap-x-2">
-                    <span>value: {Math.floor((grid[selectedTile]?.cost || 0) * 0.5)} coins</span>
-                    <span>happiness: +{grid[selectedTile]?.happiness}</span>
-                    <span>income: {grid[selectedTile]?.income} coins/day</span>
-                    {grid[selectedTile]?.energyUsage !== undefined && (
-                      <span>energy: {grid[selectedTile]?.energyUsage > 0 ? '+' : ''}{grid[selectedTile]?.energyUsage} units</span>
-                    )}
-                    {(grid[selectedTile]?.id === 'house' || grid[selectedTile]?.id === 'apartment') && (
-                      <span>
-                        {grid[selectedTile]?.isOccupied ? 'occupied' : 'vacant'}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-              
-              <div className="flex gap-2">
-                <motion.button
-                  whileHover={{ scale: 1.1, backgroundColor: "#f0fdf4" }}
-                  whileTap={{ scale: 0.9 }}
-                  onClick={() => onBuildingManage(grid[selectedTile]!, selectedTile)}
-                  className="p-2 bg-emerald-100 text-emerald-600 rounded-lg hover:bg-emerald-200 transition-colors"
-                >
-                  <Home size={16} />
-                </motion.button>
-                
-                <motion.button
-                  whileHover={{ scale: 1.1, backgroundColor: "#fee2e2" }}
-                  whileTap={{ scale: 0.9 }}
-                  onClick={() => handleDeleteBuilding(selectedTile)}
-                  className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
-                >
-                  <Trash2 size={16} />
-                </motion.button>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

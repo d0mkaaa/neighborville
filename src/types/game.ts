@@ -6,8 +6,7 @@ export type Building = {
   type?: string;
   color: string;
   income: number;
-  vitality: number;
-  happiness?: number;
+  communitySatisfaction?: number;
   upgrades?: string[];
   level?: number;
   cost?: number;
@@ -39,6 +38,13 @@ export type Building = {
   trafficFlow?: number;
   pollution?: number;
   serviceCoverage?: ServiceCoverage;
+  ecoFriendly?: boolean;
+  wasteReduction?: number;
+  jobCapacity?: number;
+  description?: string;
+  culturalValue?: number;
+  entertainmentValue?: number;
+  touristAttraction?: boolean;
 };
 
 export type ServiceCoverage = {
@@ -47,40 +53,14 @@ export type ServiceCoverage = {
   healthcare?: number;
   education?: number;
   parks?: number;
-  transportation?: number;
 };
-
-export type VitalityFactor = {
-  id: string;
-  name: string;
-  value: number;
-  category: VitalityCategory;
-  icon?: React.ReactNode;
-  description?: string;
-};
-
-export type VitalityCategory = 
-  | 'services' 
-  | 'landValue' 
-  | 'education' 
-  | 'health' 
-  | 'traffic' 
-  | 'pollution' 
-  | 'residential'
-  | 'commercial'
-  | 'industrial'
-  | 'water'
-  | 'power'
-  | 'parks'
-  | 'leisure';
 
 export type Neighbor = {
   id: string | number;
   name: string;
   type?: string;
   dailyRent: number;
-  vitality: number;
-  happiness?: number;
+  satisfaction?: number;
   preferences?: string[];
   unlocked?: boolean;
   hasHome?: boolean;
@@ -94,7 +74,7 @@ export type Neighbor = {
   trait?: string;
   education?: number;
   health?: number;
-  satisfaction?: number;
+  communitySatisfaction?: number;
 };
 
 export type Neighborhood = {
@@ -102,8 +82,7 @@ export type Neighborhood = {
   buildings: Building[];
   neighbors: Neighbor[];
   stats: {
-    totalVitality: number;
-    totalHappiness?: number;
+    totalCommunitySatisfaction?: number;
     totalIncome: number;
     totalResidents: number;
     totalBuildings: number;
@@ -112,6 +91,9 @@ export type Neighborhood = {
     pollution?: number;
     education?: number;
     health?: number;
+    publicTrust?: number;
+    mediaReputation?: number;
+    infrastructureHealth?: number;
   };
 };
 
@@ -121,8 +103,7 @@ export interface BuildingUpgrade {
   description: string;
   cost: number;
   incomeBoost: number;
-  vitalityBoost: number;
-  happinessBoost?: number;
+  satisfactionBoost?: number;
   energyEfficiency?: number;
   waterEfficiency?: number;
   level: number;
@@ -135,7 +116,7 @@ export interface BuildingUpgrade {
 };
 
 export interface UnlockCondition {
-  type: 'building' | 'level' | 'vitality' | 'happiness' | 'day' | 'achievement';
+  type: 'building' | 'level' | 'happiness' | 'day' | 'achievement';
   buildingId?: string;
   count?: number;
   level?: number;
@@ -147,18 +128,23 @@ export interface EventOption {
   text: string;
   outcome: string;
   coins: number;
-  vitality: number;
-  happiness?: number;
+  communitySatisfaction?: number;
   neighborEffects?: {
     neighborId?: number;
-    vitalityChange: number;
-    happinessChange?: number;
+    satisfactionChange?: number;
   }[];
   landValueChange?: number;
   educationChange?: number;
   healthChange?: number;
   pollutionChange?: number;
   trafficChange?: number;
+  serviceBudgetImpact?: {
+    serviceId: string;
+    efficiencyChange: number;
+  }[];
+  infraRepairCost?: number;
+  publicTrustChange?: number;
+  mediaAttention?: 'positive' | 'negative' | 'neutral';
 };
 
 export interface GameEvent {
@@ -170,7 +156,6 @@ export interface GameEvent {
   minimumDay?: number;
   timeOfDay?: TimeOfDay;
   affectedNeighbors?: (number | string)[];
-  affectedCategoryVitality?: VitalityCategory[];
 };
 
 export interface ScheduledEvent {
@@ -194,11 +179,9 @@ export interface Achievement {
 export interface RecentEvent {
   id: string;
   name: string;
-  vitalityImpact: number;
   happinessImpact?: number;
   coinImpact: number;
   day: number;
-  category?: VitalityCategory;
 };
 
 export interface Bill {
@@ -215,7 +198,6 @@ export type TimeOfDay = 'morning' | 'day' | 'evening' | 'night';
 export type WeatherType = 'sunny' | 'rainy' | 'cloudy' | 'stormy' | 'snowy';
 
 export type BonusType = 
-  | 'vitality' 
   | 'happiness'
   | 'income' 
   | 'energy' 
@@ -235,7 +217,6 @@ export interface TimeBasedBonus {
   buildingId: string;
   timeOfDay: TimeOfDay;
   incomeMultiplier?: number;
-  vitalityMultiplier?: number;
   happinessMultiplier?: number;
 };
 
@@ -291,23 +272,10 @@ export interface CoinHistoryEntry {
   timestamp: number;
 };
 
-export interface VitalitySnapshot {
-  day: number;
-  overall: number;
-  landValue: number;
-  education: number;
-  health: number;
-  traffic: number;
-  pollution: number;
-  services: number;
-  timestamp: number;
-};
-
 export interface GameProgress {
   playerName: string;
   coins: number;
-  vitality?: number;
-  happiness?: number;
+  communitySatisfaction?: number;
   day: number;
   level: number;
   experience: number;
@@ -336,14 +304,21 @@ export interface GameProgress {
   saveTimestamp?: number;
   saveId?: string;
   version?: string;
-  vitalityFactors?: VitalityFactor[];
-  vitalityHistory?: VitalitySnapshot[];
   landValue?: number;
   education?: number;
   health?: number;
   pollution?: number;
   trafficFlow?: number;
   services?: ServiceCoverage;
+  taxPolicies?: TaxPolicy[];
+  cityBudget?: CityBudget;
+  maintenanceCosts?: MaintenanceCost[];
+  cityBudgetSystem?: CityBudgetSystem;
+  serviceBudgets?: ServiceBudget[];
+  infrastructureUpgrades?: string[];
+  activeInfrastructureProjects?: { upgradeId: string; startDay: number; }[];
+  publicTrust?: number;
+  mediaReputation?: number;
 };
 
 export interface PowerGridState {
@@ -358,4 +333,112 @@ export interface WaterGridState {
   totalWaterConsumption: number;
   connectedBuildings: number[];
   waterShortages: number[];
-};
+}
+
+export interface MaintenanceCost {
+  id: string;
+  buildingId?: string;
+  name: string;
+  baseCost: number;
+  frequency: 'daily' | 'weekly' | 'monthly';
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  deferralPenalty: number;
+  maxDeferrals: number;
+  currentDeferrals: number;
+  lastPaid: number;
+  nextDue: number;
+  category: 'infrastructure' | 'services' | 'utilities' | 'environmental';
+  description: string;
+}
+
+export interface TaxPolicy {
+  id: string;
+  name: string;
+  rate: number;
+  category: 'residential' | 'commercial' | 'industrial' | 'luxury';
+  description: string;
+  happinessImpact: number;
+  revenueMultiplier: number;
+  enabled: boolean;
+}
+
+export interface CityBudget {
+  totalRevenue: number;
+  totalExpenses: number;
+  maintenanceCosts: number;
+  taxRevenue: number;
+  buildingIncome: number;
+  balance: number;
+  dailyBalance: number;
+  emergencyFund: number;
+  budgetHealth: 'excellent' | 'good' | 'fair' | 'poor' | 'critical';
+}
+
+export interface MaintenanceEvent {
+  id: string;
+  title: string;
+  description: string;
+  buildingId?: string;
+  cost: number;
+  urgency: 'low' | 'medium' | 'high' | 'emergency';
+  consequences: string;
+  dayTriggered: number;
+  daysUntilCritical?: number;
+  effects: {
+    happinessChange?: number;
+    incomeChange?: number;
+    buildingDisabled?: boolean;
+  };
+}
+
+export interface ServiceBudget {
+  id: string;
+  name: string;
+  category: 'utilities' | 'services' | 'infrastructure' | 'environment';
+  baseCost: number;
+  currentBudget: number;
+  efficiency: number;
+  coverage: number;
+  description: string;
+  effects: {
+    communitySatisfaction?: number;
+    income?: number;
+    pollution?: number;
+    landValue?: number;
+    energyEfficiency?: number;
+    waterEfficiency?: number;
+  };
+  maintenanceMultiplier: number;
+  qualityMultiplier: number;
+}
+
+export interface CityBudgetSystem {
+  totalBudget: number;
+  allocatedBudget: number;
+  unallocatedBudget: number;
+  serviceBudgets: ServiceBudget[];
+  taxRevenue: number;
+  buildingIncome: number;
+  totalExpenses: number;
+  budgetSurplus: number;
+  citizenSatisfaction: number;
+  infrastructureHealth: number;
+}
+
+export interface InfrastructureUpgrade {
+  id: string;
+  name: string;
+  category: 'power' | 'water' | 'transport' | 'waste' | 'telecom';
+  cost: number;
+  maintenanceCost: number;
+  description: string;
+  effects: {
+    efficiency: number;
+    capacity: number;
+    communitySatisfaction: number;
+    pollution?: number;
+  };
+  prerequisite?: string;
+  unlockLevel: number;
+  buildTime: number;
+}

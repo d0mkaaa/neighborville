@@ -60,12 +60,14 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
   const [flippedCards, setFlippedCards] = useState<number[]>([]);
   const [matchedCards, setMatchedCards] = useState<number[]>([]);
   const [buildingProgress, setBuildingProgress] = useState(0);
+  const [isProcessingMemoryClick, setIsProcessingMemoryClick] = useState(false);
   
   const [sequence, setSequence] = useState<number[]>([]);
   const [playerSequence, setPlayerSequence] = useState<number[]>([]);
   const [showingSequence, setShowingSequence] = useState(false);
+  const [sequenceClickCooldown, setSequenceClickCooldown] = useState(false);
   
-  const [connectPoints, setConnectPoints] = useState<{x: number, y: number}[]>([]);
+  const [connectPoints, setConnectPoints] = useState<{x: number, y: number, number: number}[]>([]);
   const [connectLines, setConnectLines] = useState<{start: number, end: number}[]>([]);
   const [selectedPoint, setSelectedPoint] = useState<number | null>(null);
   const [completedConnections, setCompletedConnections] = useState<number>(0);
@@ -90,58 +92,116 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
   }, [puzzleType, difficultyLevel]);
   
   const initializeConnectPuzzle = useCallback(() => {
-    const numberOfPoints = 6 + difficultyLevel;
-    const pointsArray: {x: number, y: number}[] = [];
+    const numberOfPairs = 3 + difficultyLevel;
+    const pointsArray: {x: number, y: number, number: number}[] = [];
     
-    for (let i = 0; i < numberOfPoints; i++) {
-      const x = Math.floor(Math.random() * 80) + 10; 
-      const y = Math.floor(Math.random() * 80) + 10; 
-      pointsArray.push({ x, y });
+    for (let i = 1; i <= numberOfPairs; i++) {
+      for (let j = 0; j < 2; j++) {
+        const x = Math.floor(Math.random() * 70) + 15;
+        const y = Math.floor(Math.random() * 70) + 15;
+        pointsArray.push({ x, y, number: i });
+      }
     }
     
-    setConnectPoints(pointsArray);
-    setRequiredConnections(Math.floor(numberOfPoints / 2));
+    const shuffled = pointsArray.sort(() => Math.random() - 0.5);
+    
+    setConnectPoints(shuffled);
+    setRequiredConnections(numberOfPairs);
   }, [difficultyLevel]);
   
   const handleMemoryCardClick = useCallback((index: number) => {
-    if (flippedCards.includes(index) || matchedCards.includes(index)) return;
+    console.log('=== MEMORY CARD CLICK START ===');
+    console.log('Clicked index:', index);
+    console.log('Current flippedCards:', flippedCards);
+    console.log('Current matchedCards:', matchedCards);
+    console.log('Is processing click:', isProcessingMemoryClick);
+    console.log('Card at index:', memoryCards[index]);
+    
+    if (flippedCards.includes(index)) {
+      console.log('REJECTED: Card already flipped');
+      return;
+    }
+    
+    if (matchedCards.includes(index)) {
+      console.log('REJECTED: Card already matched');
+      return;
+    }
+    
+    if (isProcessingMemoryClick) {
+      console.log('REJECTED: Currently processing a click');
+      return;
+    }
+    
+    if (flippedCards.length >= 2) {
+      console.log('REJECTED: Already have 2 cards flipped');
+      return;
+    }
+    
+    console.log('ACCEPTED: Processing card click');
     
     const newFlipped = [...flippedCards, index];
+    console.log('New flipped cards:', newFlipped);
     setFlippedCards(newFlipped);
     
-    if (newFlipped.length === 2) {
+    if (newFlipped.length === 1) {
+      console.log('First card flipped, ready for second card immediately');
+    } else if (newFlipped.length === 2) {
+      console.log('Second card flipped, checking for match - setting processing lock');
+      setIsProcessingMemoryClick(true);
+      
       const [first, second] = newFlipped;
-      if (memoryCards[first] === memoryCards[second]) {
-        setMatchedCards(prev => [...prev, first, second]);
-        if (matchedCards.length + 2 === memoryCards.length) {
-          const completedPuzzleKey = `completed_puzzles_${buildingRef.current.id}`;
-          const storedPuzzles = localStorage.getItem(completedPuzzleKey);
-          let completedPuzzles: PuzzleType[] = [];
-          
-          try {
-            completedPuzzles = storedPuzzles ? JSON.parse(storedPuzzles) : [];
-          } catch (e) {
-            console.error('Error parsing completed puzzles:', e);
-          }
-          
-          if (!completedPuzzles.includes(puzzleType)) {
-            completedPuzzles.push(puzzleType);
-            localStorage.setItem(completedPuzzleKey, JSON.stringify(completedPuzzles));
-          }
-          
-          setTimeout(() => setPhase('building'), 500);
+      console.log('Comparing cards:', memoryCards[first], 'vs', memoryCards[second]);
+      
+      setTimeout(() => {
+        if (memoryCards[first] === memoryCards[second]) {
+          console.log('MATCH FOUND!');
+          setMatchedCards(prev => {
+            const newMatched = [...prev, first, second];
+            console.log('New matched cards:', newMatched);
+            
+            if (newMatched.length === memoryCards.length) {
+              console.log('GAME COMPLETE!');
+              const completedPuzzleKey = `completed_puzzles_${buildingRef.current.id}`;
+              const storedPuzzles = localStorage.getItem(completedPuzzleKey);
+              let completedPuzzles: PuzzleType[] = [];
+              
+              try {
+                completedPuzzles = storedPuzzles ? JSON.parse(storedPuzzles) : [];
+              } catch (e) {
+                console.error('Error parsing completed puzzles:', e);
+              }
+              
+              if (!completedPuzzles.includes(puzzleType)) {
+                completedPuzzles.push(puzzleType);
+                localStorage.setItem(completedPuzzleKey, JSON.stringify(completedPuzzles));
+              }
+              
+              setTimeout(() => setPhase('building'), 500);
+            }
+            return newMatched;
+          });
+        } else {
+          console.log('NO MATCH - incrementing attempts');
+          setAttempts(prev => {
+            const newAttempts = prev + 1;
+            console.log('New attempts:', newAttempts, 'Max attempts:', maxAttempts);
+            if (newAttempts >= maxAttempts) {
+              console.log('MAX ATTEMPTS REACHED - closing modal');
+              closeCallbackRef.current();
+            }
+            return newAttempts;
+          });
         }
-      } else {
-        setAttempts(prev => {
-          const newAttempts = prev + 1;
-          if (newAttempts >= maxAttempts) {
-            closeCallbackRef.current();
-          }
-          return newAttempts;
-        });
-      }
-      setTimeout(() => setFlippedCards([]), 1000);
+        
+        setTimeout(() => {
+          console.log('Resetting flipped cards and processing state');
+          setFlippedCards([]);
+          setIsProcessingMemoryClick(false);
+        }, 800);
+      }, 600);
     }
+    
+    console.log('=== MEMORY CARD CLICK END ===');
   }, [flippedCards, matchedCards, memoryCards, puzzleType, maxAttempts]);
   
   const showSequence = useCallback(async () => {
@@ -175,7 +235,10 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
   }, [sequence]);
   
   const handleSequenceClick = useCallback((index: number) => {
-    if (showingSequence) return;
+    if (showingSequence || sequenceClickCooldown) return;
+    
+    setSequenceClickCooldown(true);
+    setTimeout(() => setSequenceClickCooldown(false), 200);
     
     const button = document.querySelectorAll('.sequence-button')[index] as HTMLElement | undefined;
     if (button) {
@@ -226,42 +289,62 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
       
       return newPlayerSequence;
     });
-  }, [showingSequence, sequence, puzzleType, maxAttempts]);
+  }, [showingSequence, sequenceClickCooldown, sequence, puzzleType, maxAttempts]);
   
   const handlePointClick = useCallback((index: number) => {
     if (selectedPoint === null) {
       setSelectedPoint(index);
     } else if (selectedPoint !== index) {
-      setConnectLines(prev => [...prev, { start: selectedPoint, end: index }]);
-      setCompletedConnections(prev => {
-        const newCompletedConnections = prev + 1;
+      const startPoint = connectPoints[selectedPoint];
+      const endPoint = connectPoints[index];
+      
+      if (startPoint.number === endPoint.number) {
+        const connectionExists = connectLines.some(line => 
+          (line.start === selectedPoint && line.end === index) ||
+          (line.start === index && line.end === selectedPoint)
+        );
         
-        if (newCompletedConnections >= requiredConnections) {
-          const completedPuzzleKey = `completed_puzzles_${buildingRef.current.id}`;
-          const storedPuzzles = localStorage.getItem(completedPuzzleKey);
-          let completedPuzzles: PuzzleType[] = [];
-          
-          try {
-            completedPuzzles = storedPuzzles ? JSON.parse(storedPuzzles) : [];
-          } catch (e) {
-            console.error('Error parsing completed puzzles:', e);
-          }
-          
-          if (!completedPuzzles.includes(puzzleType)) {
-            completedPuzzles.push(puzzleType);
-            localStorage.setItem(completedPuzzleKey, JSON.stringify(completedPuzzles));
-          }
-          
-          setTimeout(() => setPhase('building'), 500);
+        if (!connectionExists) {
+          setConnectLines(prev => [...prev, { start: selectedPoint, end: index }]);
+          setCompletedConnections(prev => {
+            const newCompletedConnections = prev + 1;
+            
+            if (newCompletedConnections >= requiredConnections) {
+              const completedPuzzleKey = `completed_puzzles_${buildingRef.current.id}`;
+              const storedPuzzles = localStorage.getItem(completedPuzzleKey);
+              let completedPuzzles: PuzzleType[] = [];
+              
+              try {
+                completedPuzzles = storedPuzzles ? JSON.parse(storedPuzzles) : [];
+              } catch (e) {
+                console.error('Error parsing completed puzzles:', e);
+              }
+              
+              if (!completedPuzzles.includes(puzzleType)) {
+                completedPuzzles.push(puzzleType);
+                localStorage.setItem(completedPuzzleKey, JSON.stringify(completedPuzzles));
+              }
+              
+              setTimeout(() => setPhase('building'), 500);
+            }
+            
+            return newCompletedConnections;
+          });
         }
-        
-        return newCompletedConnections;
-      });
+      } else {
+        setAttempts(prev => {
+          const newAttempts = prev + 1;
+          if (newAttempts >= maxAttempts) {
+            closeCallbackRef.current();
+          }
+          return newAttempts;
+        });
+      }
       setSelectedPoint(null);
     } else {
       setSelectedPoint(null);
     }
-  }, [selectedPoint, requiredConnections, puzzleType]);
+  }, [selectedPoint, requiredConnections, puzzleType, connectPoints, connectLines, maxAttempts]);
   
   useEffect(() => {
     if (phase !== 'building') return;
@@ -413,16 +496,18 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
               >
                 <h3 className="text-lg font-medium text-gray-800 mb-4 text-center">memory game</h3>
                 <p className="text-sm text-gray-600 mb-4 text-center">
-                  match the construction tools {puzzleType === 'memory' ? '(unlimited attempts)' : `(attempts: ${attempts}/${maxAttempts})`}
+                  match the construction tools (unlimited attempts) {isProcessingMemoryClick && "| processing..."}
                 </p>
                 <div className="grid grid-cols-2 gap-2">
                   {memoryCards.map((card, index) => (
                     <motion.div
                       key={index}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
+                      whileHover={!isProcessingMemoryClick ? { scale: 1.05 } : {}}
+                      whileTap={!isProcessingMemoryClick ? { scale: 0.95 } : {}}
                       onClick={() => handleMemoryCardClick(index)}
-                      className="aspect-square bg-gray-100 rounded-lg flex items-center justify-center cursor-pointer"
+                      className={`aspect-square bg-gray-100 rounded-lg flex items-center justify-center cursor-pointer transition-opacity ${
+                        isProcessingMemoryClick ? 'opacity-60 cursor-not-allowed' : ''
+                      }`}
                     >
                       {(flippedCards.includes(index) || matchedCards.includes(index)) ? (
                         <span className="text-2xl">{card}</span>
@@ -481,9 +566,9 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
               >
-                <h3 className="text-lg font-medium text-gray-800 mb-4 text-center">connect the lines</h3>
+                <h3 className="text-lg font-medium text-gray-800 mb-4 text-center">connect matching numbers</h3>
                 <p className="text-sm text-gray-600 mb-4 text-center">
-                  create {requiredConnections} connections ({completedConnections}/{requiredConnections})
+                  connect pairs with the same numbers ({completedConnections}/{requiredConnections} pairs) | attempts: {attempts}/{maxAttempts}
                 </p>
                 <div 
                   className="relative bg-slate-100 rounded-lg h-80 mb-4"
@@ -525,19 +610,21 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
                       key={i}
                       whileHover={{ scale: 1.2 }}
                       onClick={() => handlePointClick(i)}
-                      className={`absolute w-4 h-4 rounded-full -translate-x-1/2 -translate-y-1/2 cursor-pointer ${
-                        selectedPoint === i ? 'bg-emerald-400 ring-4 ring-emerald-200' : 'bg-emerald-500'
+                      className={`absolute w-8 h-8 rounded-full -translate-x-1/2 -translate-y-1/2 cursor-pointer flex items-center justify-center text-white font-bold text-sm ${
+                        selectedPoint === i ? 'bg-emerald-400 ring-4 ring-emerald-200' : 'bg-emerald-500 hover:bg-emerald-600'
                       }`}
                       style={{
                         left: `${point.x}%`,
                         top: `${point.y}%`,
                       }}
-                    />
+                    >
+                      {point.number}
+                    </motion.div>
                   ))}
                 </div>
                 
                 <p className="text-xs text-gray-500 text-center">
-                  Click on connection points to draw structural lines
+                  Click on numbered points to connect matching pairs
                 </p>
               </motion.div>
             )}

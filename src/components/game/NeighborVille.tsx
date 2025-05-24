@@ -18,6 +18,7 @@ import AchievementsModal from "./AchievementsModal";
 import AchievementUnlockModal from "./AchievementUnlockModal";
 import EnergyUsagePanel from "./EnergyUsagePanel";
 import BillsPanel from "./BillsPanel";
+import BudgetAndCoinModal from "./BudgetAndCoinModal";
 import NotificationSystem from "./NotificationSystem";
 import type { ExtendedNotification } from "./NotificationSystem";
 import PlotExpansion from "./PlotExpansion";
@@ -25,7 +26,6 @@ import ProgressBar from "./ProgressBar";
 import ResidentAssignment from "./ResidentAssignment";
 import TimeBonus from "./TimeBonus";
 import { getRandomEvent } from "../../data/events";
-import CoinHistory from "./CoinHistory";
 import CalendarView from "./CalendarView";
 import ModalWrapper from "../ui/ModalWrapper";
 import SettingsModal from "./SettingsModal";
@@ -44,6 +44,7 @@ import PlayerStatsModal from "./PlayerStatsModal";
 import PublicProfileModal from "../profile/PublicProfileModal";
 import MusicControls from "./MusicControls";
 import { saveGameToServer, loadGameFromServer, shouldSaveGame } from "../../services/gameService";
+import { DEFAULT_TAX_POLICIES, calculateCityBudget, updateTaxPolicy, toggleTaxPolicy, DEFAULT_SERVICE_BUDGETS, calculateCityBudgetSystem } from "../../data/taxPolicies";
 import ContinueModal from "./ContinueModal";
 import GameLayout from "../ui/GameLayout";
 import GlassCard from "../ui/GlassCard";
@@ -65,7 +66,9 @@ import type {
   RecentEvent,
   Achievement,
   CoinHistoryEntry,
-  EventOption
+  EventOption,
+  TaxPolicy,
+  CityBudget
 } from "../../types/game";
 import { buildings as initialBuildings } from "../../data/buildings";
 import { neighborProfiles } from "../../data/neighbors";
@@ -176,6 +179,18 @@ export default function NeighborVille({
   const [neighbors, setNeighbors] = useState<Neighbor[]>(neighborProfiles);
   const [achievements, setAchievements] = useState<Achievement[]>(ACHIEVEMENTS);
   const [bills, setBills] = useState<Bill[]>([]);
+  const [taxPolicies, setTaxPolicies] = useState<TaxPolicy[]>(DEFAULT_TAX_POLICIES);
+  const [cityBudget, setCityBudget] = useState<CityBudget>({
+    totalRevenue: 0,
+    totalExpenses: 0,
+    maintenanceCosts: 0,
+    taxRevenue: 0,
+    buildingIncome: 0,
+    balance: 0,
+    dailyBalance: 0,
+    emergencyFund: 0,
+    budgetHealth: 'fair'
+  });
   const [currentEvent, setCurrentEvent] = useState<GameEvent | null>(null);
   const [recentEvents, setRecentEvents] = useState<RecentEvent[]>([]);
   const [showNeighborUnlock, setShowNeighborUnlock] = useState<Neighbor | null>(null);
@@ -195,6 +210,7 @@ export default function NeighborVille({
     events: { name: string; type: 'good' | 'bad' | 'neutral' }[];
   }[]>([]);
   const [showCoinHistory, setShowCoinHistory] = useState(false);
+  const [showBudgetModal, setShowBudgetModal] = useState(false);
   const [coinHistory, setCoinHistory] = useState<CoinHistoryEntry[]>([]);
   const [showPlayerStats, setShowPlayerStats] = useState(false);
   const [showMarketplace, setShowMarketplace] = useState(false);
@@ -258,6 +274,8 @@ export default function NeighborVille({
       weather,
       powerGrid,
       waterGrid,
+      taxPolicies,
+      cityBudget,
       saveTimestamp: now
     };
     
@@ -355,6 +373,18 @@ export default function NeighborVille({
         totalWaterConsumption: 0,
         connectedBuildings: [],
         waterShortages: []
+      },
+      taxPolicies: state.taxPolicies || DEFAULT_TAX_POLICIES,
+      cityBudget: state.cityBudget || {
+        totalRevenue: 0,
+        totalExpenses: 0,
+        maintenanceCosts: 0,
+        taxRevenue: 0,
+        buildingIncome: 0,
+        balance: 0,
+        dailyBalance: 0,
+        emergencyFund: 0,
+        budgetHealth: 'fair' as const
       }
     };
     
@@ -381,6 +411,8 @@ export default function NeighborVille({
     setCoinHistory(batchedUpdates.coinHistory);
     setPowerGrid(batchedUpdates.powerGrid);
     setWaterGrid(batchedUpdates.waterGrid);
+    setTaxPolicies(batchedUpdates.taxPolicies);
+    setCityBudget(batchedUpdates.cityBudget);
     
     const currentLevel = state.level || 1;
     const unlockedBuildings = initialBuildings.map(building => ({
@@ -939,6 +971,7 @@ export default function NeighborVille({
       setCoins(newCoins);
       
       setSelectedBuilding(null);
+      setSelectedTile(null);
       
       setTimeout(() => {
         setShowBuildingModal(false);
@@ -977,7 +1010,6 @@ export default function NeighborVille({
       {
         id: crypto.randomUUID(),
         name: `Removed ${buildingToDelete.name}`,
-        vitalityImpact: 0,
         coinImpact: Math.floor(buildingToDelete.cost! * 0.5),
         day: day
       }
@@ -1025,7 +1057,7 @@ export default function NeighborVille({
       ...building,
       level: currentLevel + 1,
       income: upgradedStats.income,
-      happiness: upgradedStats.happiness,
+      communitySatisfaction: upgradedStats.communitySatisfaction,
       energyUsage: upgradedStats.energyUsage,
       currentUpgrades: newUpgrades
     };
@@ -1054,22 +1086,57 @@ export default function NeighborVille({
     
     hourlyIncome = Math.floor(hourlyIncome * (1 + (level * 0.05)));
     
-    setCoins(prev => prev + hourlyIncome + hourlyCoinBonus);
+    const gridBuildings = grid.filter(building => building !== null);
+    const updatedCityBudget = calculateCityBudget(gridBuildings, taxPolicies);
+    const taxRevenue = updatedCityBudget.taxRevenue;
+    
+    setCityBudget(updatedCityBudget);
+    
+    const totalDailyIncome = hourlyIncome + hourlyCoinBonus + taxRevenue;
+    
+    setCoins(prev => prev + totalDailyIncome);
     
     const timestamp = Date.now();
     
-    setCoinHistory(prev => [
-      ...prev,
-      {
+    const newCoinHistory = [];
+    
+    if (hourlyIncome > 0) {
+      newCoinHistory.push({
         id: crypto.randomUUID(),
         day,
-        balance: coins + hourlyIncome + hourlyCoinBonus,
-        amount: hourlyIncome + hourlyCoinBonus,
-        type: 'income',
-        description: 'Daily income',
+        balance: coins + hourlyIncome,
+        amount: hourlyIncome,
+        type: 'income' as const,
+        description: 'Building income',
         timestamp
-      }
-    ]);
+      });
+    }
+    
+    if (taxRevenue > 0) {
+      newCoinHistory.push({
+        id: crypto.randomUUID(),
+        day,
+        balance: coins + hourlyIncome + taxRevenue,
+        amount: taxRevenue,
+        type: 'income' as const,
+        description: 'Tax revenue',
+        timestamp: timestamp + 1
+      });
+    }
+    
+    if (hourlyCoinBonus > 0) {
+      newCoinHistory.push({
+        id: crypto.randomUUID(),
+        day,
+        balance: coins + totalDailyIncome,
+        amount: hourlyCoinBonus,
+        type: 'income' as const,
+        description: 'Daily bonus',
+        timestamp: timestamp + 2
+      });
+    }
+    
+    setCoinHistory(prev => [...prev, ...newCoinHistory]);
     
     setDay(prevDay => prevDay + 1);
     setRecentEvents([]);
@@ -1085,8 +1152,6 @@ export default function NeighborVille({
     });
     
     checkForRandomEvent();
-    
-    checkAchievements();
     
     checkForNewUnlocks();
     
@@ -1113,7 +1178,6 @@ export default function NeighborVille({
       {
         id: crypto.randomUUID(),
         name: option.outcome,
-        vitalityImpact: 0,
         coinImpact: option.coins,
         day
       }
@@ -1140,35 +1204,35 @@ export default function NeighborVille({
     setCurrentEvent(null);
   };
 
-  const updateNeighborHappiness = () => {
+  const updateNeighborSatisfaction = () => {
     const updatedNeighbors = neighbors.map(neighbor => {
       if (!neighbor.unlocked || !neighbor.hasHome) return neighbor;
       
-      let happinessChange = 0;
+      let satisfactionChange = 0;
       let reasons = [];
       
       const house = neighbor.houseIndex !== undefined ? grid[neighbor.houseIndex] : null;
       if (house) {
         if (neighbor.housingPreference === 'house' && house.id === 'apartment') {
-          happinessChange -= 25;
+          satisfactionChange -= 25;
           reasons.push('Prefers house over apartment (-25)');
         } else if (neighbor.housingPreference === 'apartment' && house.id === 'house') {
-          happinessChange -= 15;
+          satisfactionChange -= 15;
           reasons.push('Prefers apartment over house (-15)');
         }
         
         if (house.occupants && house.occupants.length > (neighbor.maxNeighbors || 1)) {
-          happinessChange -= 30;
+          satisfactionChange -= 30;
           reasons.push('Too many roommates (-30)');
         }
         
         if (house.needsElectricity && !house.isConnectedToPower) {
-          happinessChange -= 40;
+          satisfactionChange -= 40;
           reasons.push('No electricity (-40)');
         }
         
         if (house.needsWater && !house.isConnectedToWater) {
-          happinessChange -= 35;
+          satisfactionChange -= 35;
           reasons.push('No water (-35)');
         }
       }
@@ -1179,7 +1243,7 @@ export default function NeighborVille({
             if (neighbor.likes.some(like => building.name.toLowerCase() === like.toLowerCase())) {
               if (!building.needsElectricity || building.isConnectedToPower) {
                 if (!building.needsWater || building.isConnectedToWater) {
-                  happinessChange += 20;
+                  satisfactionChange += 20;
                   reasons.push(`Likes ${building.name} (+20)`);
                 }
               }
@@ -1188,7 +1252,7 @@ export default function NeighborVille({
             if (building.name.toLowerCase() === neighbor.likes.toLowerCase()) {
               if (!building.needsElectricity || building.isConnectedToPower) {
                 if (!building.needsWater || building.isConnectedToWater) {
-                  happinessChange += 20;
+                  satisfactionChange += 20;
                   reasons.push(`Likes ${building.name} (+20)`);
                 }
               }
@@ -1197,12 +1261,12 @@ export default function NeighborVille({
           
           if (neighbor.dislikes && Array.isArray(neighbor.dislikes)) {
             if (neighbor.dislikes.some(dislike => building.name.toLowerCase() === dislike.toLowerCase())) {
-              happinessChange -= 25;
+              satisfactionChange -= 25;
               reasons.push(`Dislikes ${building.name} (-25)`);
             }
           } else if (neighbor.dislikes && typeof neighbor.dislikes === 'string') {
             if (building.name.toLowerCase() === neighbor.dislikes.toLowerCase()) {
-              happinessChange -= 25;
+              satisfactionChange -= 25;
               reasons.push(`Dislikes ${building.name} (-25)`);
             }
           }
@@ -1210,25 +1274,25 @@ export default function NeighborVille({
       });
       
       const weatherBonus = getWeatherHappinessEffect();
-      happinessChange += weatherBonus;
+      satisfactionChange += weatherBonus;
       if (weatherBonus !== 0) {
         reasons.push(`Weather: ${weather} (${weatherBonus > 0 ? '+' : ''}${weatherBonus})`);
       }
       
-      const newHappiness = Math.min(100, Math.max(0, (neighbor.happiness || 70) + happinessChange));
+      const newSatisfaction = Math.min(100, Math.max(0, (neighbor.satisfaction || 70) + satisfactionChange));
       
-      if (newHappiness < 20 && (neighbor.happiness || 70) >= 20) {
-        addNotification(`${neighbor.name} is extremely unhappy and might leave! ${reasons.join('. ')}`, 'error');
-      } else if (newHappiness < 40 && (neighbor.happiness || 70) >= 40) {
-        addNotification(`${neighbor.name} is very unhappy! ${reasons.join('. ')}`, 'warning');
+      if (newSatisfaction < 20 && (neighbor.satisfaction || 70) >= 20) {
+        addNotification(`${neighbor.name} is extremely dissatisfied and might leave! ${reasons.join('. ')}`, 'error');
+      } else if (newSatisfaction < 40 && (neighbor.satisfaction || 70) >= 40) {
+        addNotification(`${neighbor.name} is very dissatisfied! ${reasons.join('. ')}`, 'warning');
       }
       
-      if (newHappiness < 10) {
+      if (newSatisfaction < 10) {
         handleRemoveResident(neighbor.id);
         addNotification(`${neighbor.name} has left your neighborhood due to poor living conditions!`, 'error');
         return {
           ...neighbor,
-          happiness: 60,
+          satisfaction: 60,
           hasHome: false,
           houseIndex: undefined
         };
@@ -1236,7 +1300,7 @@ export default function NeighborVille({
       
       return {
         ...neighbor,
-        happiness: newHappiness
+        satisfaction: newSatisfaction
       };
     });
     
@@ -1415,59 +1479,6 @@ export default function NeighborVille({
   };
 
   const checkAchievements = () => {
-    const updatedAchievements = achievements.map(achievement => {
-      if (achievement.completed) return achievement;
-      
-      let shouldComplete = false;
-      
-      switch (achievement.id) {
-        case 'first_building':
-          shouldComplete = grid.some(building => building !== null);
-          break;
-        case 'three_buildings':
-          const buildingTypes = new Set(grid.filter(b => b !== null).map(b => b!.id));
-          shouldComplete = buildingTypes.size >= 3;
-          break;
-        case 'day_10':
-          shouldComplete = day >= 10;
-          break;
-        case 'coins_2000':
-          shouldComplete = coins >= 2000;
-          break;
-        case 'expand_plot':
-          shouldComplete = gridSize > 16;
-          break;
-        case 'unlock_neighbor':
-          shouldComplete = neighbors.some(n => n.unlocked && n.unlockCondition !== null);
-          break;
-        case 'full_grid':
-          shouldComplete = grid.slice(0, gridSize).every(tile => tile !== null);
-          break;
-        case 'level_5':
-          shouldComplete = level >= 5;
-          break;
-        case 'max_expansion':
-          shouldComplete = gridSize >= 64;
-          break;
-      }
-      
-      if (shouldComplete && !achievement.completed) {
-        setExperience(experience + achievement.xpReward);
-        addNotification(`Achievement unlocked: ${achievement.title}! (+${achievement.xpReward} XP)`, 'success');
-        
-        const updatedAchievement = {
-          ...achievement,
-          completed: true
-        };
-        
-        setShowAchievementUnlock(updatedAchievement);
-        return updatedAchievement;
-      }
-      
-      return achievement;
-    });
-    
-    setAchievements(updatedAchievements);
   };
 
   useEffect(() => {
@@ -1585,11 +1596,11 @@ export default function NeighborVille({
         case 'residential':
           return building.id === 'house' || building.id === 'apartment' || building.id === 'condo';
         case 'commercial':
-          return building.id === 'cafe' || building.id === 'fancy_restaurant' || building.id === 'tech_hub';
+          return building.id === 'cafe' || building.id === 'fancy_restaurant' || building.id === 'tech_hub' || building.id === 'shopping_mall' || building.id === 'office_tower';
         case 'utility':
-          return building.id === 'solar_panel' || building.id === 'power_plant' || building.id === 'water_tower' || building.id === 'water_pump' || building.id === 'charging_station';
+          return building.id === 'solar_panel' || building.id === 'power_plant' || building.id === 'water_tower' || building.id === 'water_pump' || building.id === 'charging_station' || building.id === 'wind_turbine' || building.id === 'recycling_center';
         case 'entertainment':
-          return building.id === 'park' || building.id === 'library' || building.id === 'music_venue' || building.id === 'movie_theater';
+          return building.id === 'park' || building.id === 'library' || building.id === 'music_venue' || building.id === 'movie_theater' || building.id === 'sports_complex' || building.id === 'aquarium';
         default:
           return true;
       }
@@ -1699,6 +1710,114 @@ export default function NeighborVille({
 
   const [showSettings, setShowSettings] = useState(false);
 
+  const checkAchievementsInstant = useCallback(() => {
+    const updatedAchievements = achievements.map(achievement => {
+      if (achievement.completed) return achievement;
+      
+      let shouldComplete = false;
+      
+      switch (achievement.id) {
+        case 'first_building':
+          shouldComplete = grid.some(building => building !== null);
+          break;
+        case 'three_buildings':
+          const buildingTypes = new Set(grid.filter(b => b !== null).map(b => b!.id));
+          shouldComplete = buildingTypes.size >= 3;
+          break;
+        case 'day_5':
+          shouldComplete = day >= 5;
+          break;
+        case 'day_10':
+          shouldComplete = day >= 10;
+          break;
+        case 'day_30':
+          shouldComplete = day >= 30;
+          break;
+        case 'coins_1000':
+          shouldComplete = coins >= 1000;
+          break;
+        case 'coins_5000':
+          shouldComplete = coins >= 5000;
+          break;
+        case 'coins_10000':
+          shouldComplete = coins >= 10000;
+          break;
+        case 'expand_plot':
+          shouldComplete = gridSize > 16;
+          break;
+        case 'unlock_neighbor':
+          shouldComplete = neighbors.some(n => n.unlocked && n.unlockCondition !== null);
+          break;
+        case 'five_neighbors':
+          shouldComplete = neighbors.filter(n => n.unlocked).length >= 5;
+          break;
+        case 'full_grid':
+          shouldComplete = grid.slice(0, gridSize).every(tile => tile !== null);
+          break;
+        case 'level_2':
+          shouldComplete = level >= 2;
+          break;
+        case 'level_5':
+          shouldComplete = level >= 5;
+          break;
+        case 'level_10':
+          shouldComplete = level >= 10;
+          break;
+        case 'max_expansion':
+          shouldComplete = gridSize >= 64;
+          break;
+        case 'ten_residents':
+          shouldComplete = neighbors.filter(n => n.hasHome).length >= 10;
+          break;
+        case 'power_system':
+          const connectedPowerBuildings = grid.filter(b => b && b.isConnectedToPower).length;
+          shouldComplete = connectedPowerBuildings >= 5;
+          break;
+        case 'water_system':
+          const connectedWaterBuildings = grid.filter(b => b && b.isConnectedToWater).length;
+          shouldComplete = connectedWaterBuildings >= 5;
+          break;
+        case 'energy_positive':
+          const totalProduction = grid.filter(b => b && b.isPowerGenerator).reduce((sum, b) => sum + (b.powerOutput || 0), 0);
+          const totalConsumption = grid.filter(b => b && b.energyUsage).reduce((sum, b) => sum + (b.energyUsage || 0), 0);
+          shouldComplete = totalProduction > totalConsumption;
+          break;
+        case 'first_upgrade':
+          shouldComplete = grid.some(b => b && b.currentUpgrades && b.currentUpgrades.length > 0);
+          break;
+        case 'five_upgrades':
+          const totalUpgrades = grid.reduce((sum, b) => sum + (b?.currentUpgrades?.length || 0), 0);
+          shouldComplete = totalUpgrades >= 5;
+          break;
+      }
+      
+      if (shouldComplete && !achievement.completed) {
+        setExperience(prev => prev + achievement.xpReward);
+        addNotification(`🏆 Achievement unlocked: ${achievement.title}! (+${achievement.xpReward} XP)`, 'success');
+        
+        const updatedAchievement = {
+          ...achievement,
+          completed: true
+        };
+        
+        setShowAchievementUnlock(updatedAchievement);
+        return updatedAchievement;
+      }
+      
+      return achievement;
+    });
+    
+    setAchievements(updatedAchievements);
+  }, [achievements, grid, day, coins, gridSize, neighbors, level, addNotification]);
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      checkAchievementsInstant();
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [coins, level, gridSize, grid, neighbors, day]);
+
   return (
     <AppLayout 
       header={
@@ -1730,7 +1849,7 @@ export default function NeighborVille({
             onChangeTimeSpeed={handleChangeTimeSpeed}
               onShowCalendar={() => setShowCalendar(true)}
               onToggleWeatherForecast={() => setShowWeatherForecast(!showWeatherForecast)}
-              onShowCoinHistory={() => setShowCoinHistory(true)}
+              onShowBudgetModal={() => setShowBudgetModal(true)}
               onPlayerNameClick={handlePlayerNameClick}
               autoSaving={autoSaving}
               lastSaveTime={lastSaveTime}
@@ -1773,7 +1892,7 @@ export default function NeighborVille({
         
         <div className="container mx-auto px-4 py-4">
           <div className="grid grid-cols-12 gap-4">
-            <div className="col-span-3 space-y-4">
+            <div className="col-span-4 space-y-4">
               <div className="bg-white/80 backdrop-blur-sm rounded-xl overflow-hidden shadow-sm">
                 <div className="grid grid-cols-3 gap-1 p-1">
                   {['buildings', 'utilities', 'residents'].map((tab) => (
@@ -1816,16 +1935,24 @@ export default function NeighborVille({
                       className="w-32"
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {getCategorizedBuildings().map((building) => (
-                      <BuildingOption 
-                        key={building.id}
-                        building={building}
-                        isSelected={selectedBuilding?.id === building.id}
-                        onSelect={handleBuildingSelect}
-                        playerLevel={level}
-                      />
-                    ))}
+                  <div 
+                    className="max-h-96 overflow-y-auto pr-2 buildings-scroll"
+                    style={{
+                      scrollbarWidth: 'thin',
+                      scrollbarColor: '#10b981 #f3f4f6'
+                    }}
+                  >
+                    <div className="grid grid-cols-2 gap-2">
+                      {getCategorizedBuildings().map((building) => (
+                        <BuildingOption 
+                          key={building.id}
+                          building={building}
+                          isSelected={selectedBuilding?.id === building.id}
+                          onSelect={handleBuildingSelect}
+                          playerLevel={level}
+                        />
+                      ))}
+                    </div>
                   </div>
                 </div>
               )}
@@ -1864,23 +1991,21 @@ export default function NeighborVille({
               )}
             </div>
             
-            <div className="col-span-9">
-              <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-sm p-4">
-                <GameGrid 
-                  grid={grid}
-                  gridSize={gridSize}
-                  maxSize={64}
-                  selectedBuilding={selectedBuilding}
-                  selectedTile={selectedTile}
-                  onTileClick={handleTileClick}
-                  onDeleteBuilding={handleDeleteBuilding}
-                  onBuildingManage={handleBuildingManage}
-                  powerGrid={powerGrid}
-                  waterGrid={waterGrid}
-                  onConnectUtility={handleConnectUtility}
-                  showUtilityMode={activeTab === 'utilities'}
-                />
-              </div>
+            <div className="col-span-8">
+              <GameGrid
+                grid={grid}
+                gridSize={gridSize}
+                maxSize={64}
+                selectedBuilding={selectedBuilding}
+                selectedTile={selectedTile}
+                onTileClick={handleTileClick}
+                onDeleteBuilding={handleDeleteBuilding}
+                onBuildingManage={handleBuildingManage}
+                powerGrid={powerGrid}
+                waterGrid={waterGrid}
+                onConnectUtility={handleConnectUtility}
+                showUtilityMode={activeTab === 'utilities'}
+              />
             </div>
           </div>
         </div>
@@ -2261,15 +2386,6 @@ export default function NeighborVille({
         </AnimatePresence>
 
         <AnimatePresence>
-          {showCoinHistory && (
-            <CoinHistory 
-              history={coinHistory}
-              onClose={() => setShowCoinHistory(false)}
-            />
-          )}
-        </AnimatePresence>
-
-        <AnimatePresence>
           {showTutorial && (
             <TutorialGuide 
               step={tutorialStep}
@@ -2366,6 +2482,45 @@ export default function NeighborVille({
             <EventModal
               event={currentEvent}
               onOptionSelect={handleEventOption}
+            />
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {showBudgetModal && (
+            <BudgetAndCoinModal
+              coins={coins}
+              coinHistory={coinHistory}
+              buildings={grid.filter(b => b !== null) as Building[]}
+              currentDay={day}
+              taxPolicies={taxPolicies}
+              serviceBudgets={DEFAULT_SERVICE_BUDGETS}
+              infrastructureUpgrades={[]}
+              cityBudgetSystem={calculateCityBudgetSystem(
+                grid.filter(b => b !== null),
+                taxPolicies,
+                DEFAULT_SERVICE_BUDGETS,
+                []
+              )}
+              onUpdateServiceBudget={(serviceId, newBudgetPercentage) => {
+                addNotification(`Updated ${serviceId} budget to ${newBudgetPercentage}%`, 'info');
+              }}
+              onUpdateTaxPolicy={(policyId, rate) => {
+                const updatedPolicies = updateTaxPolicy(taxPolicies, policyId, rate);
+                setTaxPolicies(updatedPolicies);
+                setCityBudget(calculateCityBudget(grid.filter(b => b !== null), updatedPolicies));
+              }}
+              onToggleTaxPolicy={(policyId) => {
+                const updatedPolicies = toggleTaxPolicy(taxPolicies, policyId);
+                setTaxPolicies(updatedPolicies);
+                setCityBudget(calculateCityBudget(grid.filter(b => b !== null), updatedPolicies));
+              }}
+              onPurchaseInfrastructureUpgrade={(upgradeId) => {
+                addNotification(`Infrastructure upgrade ${upgradeId} purchased!`, 'success');
+              }}
+              onClose={() => setShowBudgetModal(false)}
+              playerLevel={level}
+              grid={grid}
             />
           )}
         </AnimatePresence>

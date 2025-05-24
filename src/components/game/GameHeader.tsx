@@ -35,7 +35,7 @@ interface GameHeaderProps {
   onChangeTimeSpeed: (speed: 1 | 2 | 3) => void;
   onShowCalendar: () => void;
   onToggleWeatherForecast: () => void;
-  onShowCoinHistory: () => void;
+  onShowBudgetModal: () => void;
   onPlayerNameClick?: () => void;
   autoSaving?: boolean;
   lastSaveTime?: Date | null;
@@ -72,7 +72,7 @@ export default function GameHeader({
   onChangeTimeSpeed,
   onShowCalendar,
   onToggleWeatherForecast,
-  onShowCoinHistory,
+  onShowBudgetModal,
   onPlayerNameClick,
   autoSaving,
   lastSaveTime,
@@ -119,7 +119,7 @@ export default function GameHeader({
             >
               <motion.div 
                 whileHover={{ scale: 1.05 }}
-                onClick={onShowCoinHistory}
+                onClick={onShowBudgetModal}
                 className="cursor-pointer flex items-center rounded-lg bg-white/10 backdrop-blur-sm px-3 py-1.5 border border-white/20"
               >
                 <span className="mr-2 text-xl">💰</span>

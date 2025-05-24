@@ -174,6 +174,50 @@ export default function BuildingInfoModal({
                     <span className="ml-auto">{building.energyUsage} units/day</span>
                   </div>
                   
+
+                  
+                  {building.ecoFriendly && (
+                    <div className="flex items-center">
+                      <span className="text-gray-500">Eco-friendly:</span>
+                      <span className="ml-auto text-green-600">✓ Yes</span>
+                    </div>
+                  )}
+                  
+                  {building.wasteReduction && (
+                    <div className="flex items-center">
+                      <span className="text-gray-500">Waste reduction:</span>
+                      <span className="ml-auto text-green-600">-{building.wasteReduction}%</span>
+                    </div>
+                  )}
+                  
+                  {building.jobCapacity && (
+                    <div className="flex items-center">
+                      <span className="text-gray-500">Job capacity:</span>
+                      <span className="ml-auto">{building.jobCapacity} jobs</span>
+                    </div>
+                  )}
+                  
+                  {building.culturalValue && (
+                    <div className="flex items-center">
+                      <span className="text-gray-500">Cultural value:</span>
+                      <span className="ml-auto text-purple-600">+{building.culturalValue}</span>
+                    </div>
+                  )}
+                  
+                  {building.entertainmentValue && (
+                    <div className="flex items-center">
+                      <span className="text-gray-500">Entertainment value:</span>
+                      <span className="ml-auto text-blue-600">+{building.entertainmentValue}</span>
+                    </div>
+                  )}
+                  
+                  {building.touristAttraction && (
+                    <div className="flex items-center">
+                      <span className="text-gray-500">Tourist attraction:</span>
+                      <span className="ml-auto text-orange-600">✓ Yes</span>
+                    </div>
+                  )}
+                  
                   {enhancedBuilding.maintenanceCost && enhancedBuilding.maintenanceCost > 0 && (
                     <div className="flex items-center">
                       <span className="text-gray-500">Maintenance:</span>

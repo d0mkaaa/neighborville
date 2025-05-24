@@ -6,10 +6,10 @@ export const buildingUpgrades: Record<string, BuildingUpgrade[]> = {
     {
       id: "insulation",
       name: "Energy Efficient Insulation",
-      description: "Reduce energy costs by 15% and improve resident happiness",
+      description: "Reduce energy costs by 15% and improve resident satisfaction",
       cost: 500,
       incomeBoost: 0,
-      happinessBoost: 5,
+      satisfactionBoost: 5,
       energyEfficiency: 0.15,
       level: 1,
       icon: "🌡️"
@@ -20,7 +20,7 @@ export const buildingUpgrades: Record<string, BuildingUpgrade[]> = {
       description: "Generate a small income and reduce energy costs by 25%",
       cost: 800,
       incomeBoost: 5,
-      happinessBoost: 2,
+      satisfactionBoost: 2,
       energyEfficiency: 0.25,
       level: 2,
       icon: "☀️"
@@ -28,10 +28,10 @@ export const buildingUpgrades: Record<string, BuildingUpgrade[]> = {
     {
       id: "smart_home",
       name: "Smart Home System",
-      description: "Improve resident happiness and reduce energy costs by 10%",
+      description: "Improve resident satisfaction and reduce energy costs by 10%",
       cost: 1200,
       incomeBoost: 0,
-      happinessBoost: 10,
+      satisfactionBoost: 10,
       energyEfficiency: 0.10,
       level: 3,
       icon: "🏠"
@@ -41,30 +41,30 @@ export const buildingUpgrades: Record<string, BuildingUpgrade[]> = {
     {
       id: "lobby_renovation",
       name: "Lobby Renovation",
-      description: "Increase happiness of all residents",
+      description: "Increase satisfaction of all residents",
       cost: 600,
       incomeBoost: 0,
-      happinessBoost: 7,
+      satisfactionBoost: 7,
       level: 1,
       icon: "🛋️"
     },
     {
       id: "laundry_room",
       name: "Laundry Room",
-      description: "Generate additional income and slightly increase resident happiness",
+      description: "Generate additional income and slightly increase resident satisfaction",
       cost: 900,
       incomeBoost: 10,
-      happinessBoost: 3,
+      satisfactionBoost: 3,
       level: 2,
       icon: "🧺"
     },
     {
       id: "rooftop_garden",
       name: "Rooftop Garden",
-      description: "Significantly increase happiness and generate a small income",
+      description: "Significantly increase satisfaction and generate a small income",
       cost: 1400,
       incomeBoost: 5,
-      happinessBoost: 12,
+      satisfactionBoost: 12,
       level: 3,
       icon: "🌱"
     }
@@ -78,27 +78,27 @@ export const buildingUpgrades: Record<string, BuildingUpgrade[]> = {
       description: "Increase maximum capacity and income",
       cost: 400,
       incomeBoost: 15,
-      happinessBoost: 2,
+      satisfactionBoost: 2,
       level: 1,
       icon: "☕"
     },
     {
       id: "wifi_upgrade",
       name: "Free High-Speed WiFi",
-      description: "Attract more customers and increase happiness",
+      description: "Attract more customers and increase satisfaction",
       cost: 650,
       incomeBoost: 10,
-      happinessBoost: 5,
+      satisfactionBoost: 5,
       level: 2,
       icon: "📡"
     },
     {
       id: "gourmet_menu",
       name: "Gourmet Menu",
-      description: "Significantly increase income and happiness",
+      description: "Significantly increase income and satisfaction",
       cost: 1100,
       incomeBoost: 25,
-      happinessBoost: 8,
+      satisfactionBoost: 8,
       level: 3,
       icon: "🍰"
     }
@@ -110,7 +110,7 @@ export const buildingUpgrades: Record<string, BuildingUpgrade[]> = {
       description: "Attract more customers and increase income",
       cost: 350,
       incomeBoost: 12,
-      happinessBoost: 3,
+      satisfactionBoost: 3,
       level: 1,
       icon: "🏪"
     },
@@ -120,7 +120,7 @@ export const buildingUpgrades: Record<string, BuildingUpgrade[]> = {
       description: "Increase income from sales",
       cost: 700,
       incomeBoost: 20,
-      happinessBoost: 0,
+      satisfactionBoost: 0,
       level: 2,
       icon: "📦"
     },
@@ -130,7 +130,7 @@ export const buildingUpgrades: Record<string, BuildingUpgrade[]> = {
       description: "Generate income 24/7 with reduced energy consumption",
       cost: 1000,
       incomeBoost: 30,
-      happinessBoost: 5,
+      satisfactionBoost: 5,
       energyEfficiency: 0.10,
       level: 3,
       icon: "🖥️"
@@ -145,17 +145,17 @@ export const buildingUpgrades: Record<string, BuildingUpgrade[]> = {
       description: "Increase power output by 20%",
       cost: 800,
       incomeBoost: 0,
-      happinessBoost: 0,
+      satisfactionBoost: 0,
       level: 1,
       icon: "⚡"
     },
     {
       id: "green_tech",
       name: "Green Technology",
-      description: "Reduce pollution and increase happiness",
+      description: "Reduce pollution and increase satisfaction",
       cost: 1200,
       incomeBoost: 0,
-      happinessBoost: 8,
+      satisfactionBoost: 8,
       level: 2,
       icon: "🌿"
     },
@@ -165,7 +165,7 @@ export const buildingUpgrades: Record<string, BuildingUpgrade[]> = {
       description: "Extend connection range to 4 tiles and increase output",
       cost: 2000,
       incomeBoost: 0,
-      happinessBoost: 5,
+      satisfactionBoost: 5,
       level: 3,
       icon: "🔌"
     }
@@ -174,10 +174,10 @@ export const buildingUpgrades: Record<string, BuildingUpgrade[]> = {
     {
       id: "filters",
       name: "Advanced Filtration",
-      description: "Improve water quality and resident happiness",
+      description: "Improve water quality and resident satisfaction",
       cost: 600,
       incomeBoost: 0,
-      happinessBoost: 5,
+      satisfactionBoost: 5,
       level: 1,
       icon: "💧"
     },
@@ -187,17 +187,17 @@ export const buildingUpgrades: Record<string, BuildingUpgrade[]> = {
       description: "Extend connection range to 4 tiles",
       cost: 1000,
       incomeBoost: 0,
-      happinessBoost: 0,
+      satisfactionBoost: 0,
       level: 2,
       icon: "🔧"
     },
     {
       id: "recycling",
       name: "Water Recycling",
-      description: "Significantly increase water output and happiness",
+      description: "Significantly increase water output and satisfaction",
       cost: 1600,
       incomeBoost: 0,
-      happinessBoost: 10,
+      satisfactionBoost: 10,
       level: 3,
       icon: "♻️"
     }
@@ -208,20 +208,20 @@ export const buildingUpgrades: Record<string, BuildingUpgrade[]> = {
     {
       id: "playground",
       name: "Playground",
-      description: "Increase happiness for nearby residents",
+      description: "Increase satisfaction for nearby residents",
       cost: 300,
       incomeBoost: 0,
-      happinessBoost: 10,
+      satisfactionBoost: 10,
       level: 1,
       icon: "🛝"
     },
     {
       id: "events",
       name: "Community Events",
-      description: "Host events that generate income and happiness",
+      description: "Host events that generate income and satisfaction",
       cost: 500,
       incomeBoost: 15,
-      happinessBoost: 8,
+      satisfactionBoost: 8,
       level: 2,
       icon: "🎪"
     },
@@ -231,7 +231,7 @@ export const buildingUpgrades: Record<string, BuildingUpgrade[]> = {
       description: "Transform into a premium attraction with entrance fees",
       cost: 1200,
       incomeBoost: 30,
-      happinessBoost: 15,
+      satisfactionBoost: 15,
       level: 3,
       icon: "🌺"
     }
@@ -240,10 +240,10 @@ export const buildingUpgrades: Record<string, BuildingUpgrade[]> = {
     {
       id: "seating",
       name: "Premium Seating",
-      description: "Increase ticket income and visitor happiness",
+      description: "Increase ticket income and visitor satisfaction",
       cost: 700,
       incomeBoost: 18,
-      happinessBoost: 5,
+      satisfactionBoost: 5,
       level: 1,
       icon: "🎬"
     },
@@ -253,17 +253,17 @@ export const buildingUpgrades: Record<string, BuildingUpgrade[]> = {
       description: "Significantly increase income from concessions",
       cost: 1100,
       incomeBoost: 25,
-      happinessBoost: 3,
+      satisfactionBoost: 3,
       level: 2,
       icon: "🍿"
     },
     {
       id: "imax",
       name: "IMAX Upgrade",
-      description: "Premium movie experience with major income and happiness boosts",
+      description: "Premium movie experience with major income and satisfaction boosts",
       cost: 2000,
       incomeBoost: 40,
-      happinessBoost: 12,
+      satisfactionBoost: 12,
       level: 3,
       icon: "🎞️"
     }
@@ -282,21 +282,21 @@ export const calculateUpgradedStats = (
   upgradeIds: string[]
 ): { 
   income: number, 
-  happiness: number, 
+  communitySatisfaction: number, 
   energyUsage: number 
 } => {
   const baseType = building.id.split('_')[0];
   const allUpgrades = buildingUpgrades[baseType] || [];
   
   let incomeBoost = 0;
-  let happinessBoost = 0;
+  let satisfactionBoost = 0;
   let energyEfficiency = 0;
   
   upgradeIds.forEach(upgradeId => {
     const upgrade = allUpgrades.find(u => u.id === upgradeId);
     if (upgrade) {
       incomeBoost += upgrade.incomeBoost;
-      happinessBoost += upgrade.happinessBoost;
+      satisfactionBoost += upgrade.satisfactionBoost || 0;
       energyEfficiency += upgrade.energyEfficiency || 0;
     }
   });
@@ -308,7 +308,7 @@ export const calculateUpgradedStats = (
   
   return {
     income: building.income + incomeBoost,
-    happiness: building.happiness + happinessBoost,
+    communitySatisfaction: (building.communitySatisfaction || 0) + satisfactionBoost,
     energyUsage: reducedEnergyUsage
   };
 };

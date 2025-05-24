@@ -1,7 +1,3 @@
-/**
- * Format a date to a human readable string relative to now
- * e.g. "5 minutes ago", "2 hours ago", "yesterday", "5 days ago"
- */
 export function formatDistanceToNow(date: Date | string | number): string {
   const now = new Date();
   const inputDate = new Date(date);
@@ -52,9 +48,6 @@ export function formatDistanceToNow(date: Date | string | number): string {
   return `${diffInYears} ${diffInYears === 1 ? 'year' : 'years'} ago`;
 }
 
-/**
- * Format a date to a locale string with specified options
- */
 export function formatDate(date: Date | string | number, options?: Intl.DateTimeFormatOptions): string {
   const inputDate = new Date(date);
   
@@ -73,9 +66,7 @@ export function formatDate(date: Date | string | number, options?: Intl.DateTime
   return new Intl.DateTimeFormat('en-US', options || defaultOptions).format(inputDate);
 }
 
-/**
- * Format a date to just the time part
- */
+
 export function formatTime(date: Date | string | number): string {
   const inputDate = new Date(date);
   

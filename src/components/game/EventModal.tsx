@@ -44,8 +44,8 @@ export default function EventModal({ event, onOptionSelect }: EventModalProps) {
 
   const getOptionClass = (index: number) => {
     const option = event.options[index];
-    const isPositive = option.coins >= 0 && option.happiness && option.happiness >= 0;
-    const isNegative = option.coins < 0 || (option.happiness && option.happiness < 0);
+    const isPositive = option.coins >= 0 && option.communitySatisfaction && option.communitySatisfaction >= 0;
+    const isNegative = option.coins < 0 || (option.communitySatisfaction && option.communitySatisfaction < 0);
     
     if (isPositive) {
       return 'hover:bg-emerald-50 hover:border-emerald-200 border-emerald-100';
@@ -103,9 +103,9 @@ export default function EventModal({ event, onOptionSelect }: EventModalProps) {
                       </span>
                     )}
                     
-                    {option.happiness && option.happiness !== 0 && (
-                      <span className={`px-2 py-1 rounded-full ${option.happiness > 0 ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'}`}>
-                        {option.happiness > 0 ? `+${option.happiness}` : option.happiness} happiness
+                    {option.communitySatisfaction && option.communitySatisfaction !== 0 && (
+                      <span className={`px-2 py-1 rounded-full ${option.communitySatisfaction > 0 ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'}`}>
+                        {option.communitySatisfaction > 0 ? `+${option.communitySatisfaction}` : option.communitySatisfaction} community satisfaction
                       </span>
                     )}
                   </div>

@@ -288,5 +288,79 @@ export const ACHIEVEMENTS: Achievement[] = [
     description: 'survive a severe storm',
     completed: false,
     xpReward: 45
+  },
+  
+  // budget and finance achievements
+  {
+    id: 'budget_master',
+    title: 'budget master',
+    description: 'maintain a positive budget for 10 days',
+    completed: false,
+    xpReward: 60
+  },
+  {
+    id: 'tax_collector',
+    title: 'tax collector',
+    description: 'enable all tax policies',
+    completed: false,
+    xpReward: 40
+  },
+  {
+    id: 'efficient_services',
+    title: 'efficient manager',
+    description: 'achieve 90% efficiency in all services',
+    completed: false,
+    xpReward: 80
+  },
+  {
+    id: 'financial_guru',
+    title: 'financial guru',
+    description: 'earn 2000 coins in daily revenue',
+    completed: false,
+    xpReward: 100
+  },
+  {
+    id: 'infrastructure_investor',
+    title: 'infrastructure investor',
+    description: 'spend 1000 coins on service budgets in one day',
+    completed: false,
+    xpReward: 70
+  },
+  
+  // building and infrastructure achievements
+  {
+    id: 'power_mogul',
+    title: 'power mogul',
+    description: 'build 5 power generation buildings',
+    completed: false,
+    xpReward: 50
+  },
+  {
+    id: 'water_baron',
+    title: 'water baron',
+    description: 'build 3 water supply buildings',
+    completed: false,
+    xpReward: 45
+  },
+  {
+    id: 'entertainment_district',
+    title: 'entertainment district',
+    description: 'build 5 entertainment buildings',
+    completed: false,
+    xpReward: 55
+  },
+  {
+    id: 'commercial_hub',
+    title: 'commercial hub',
+    description: 'build 10 commercial buildings',
+    completed: false,
+    xpReward: 65
+  },
+  {
+    id: 'residential_developer',
+    title: 'residential developer',
+    description: 'build 15 residential buildings',
+    completed: false,
+    xpReward: 60
   }
 ];

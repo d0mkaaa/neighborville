@@ -117,14 +117,6 @@ export const loadGameFromServer = async (): Promise<{gameData: GameProgress | nu
     if (result.success && result.gameData) {
       const gameData = result.gameData;
       
-      if (gameData.vitality !== undefined) {
-        delete gameData.vitality;
-      }
-      
-      if (gameData.vitalityDecay !== undefined) {
-        delete gameData.vitalityDecay;
-      }
-      
       if (gameData.happiness !== undefined) {
         delete gameData.happiness;
       }

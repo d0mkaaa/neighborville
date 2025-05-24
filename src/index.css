@@ -89,3 +89,21 @@ body {
 .bg-gray-100 {
   background-color: #f3f4f6 !important;
 }
+
+.buildings-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.buildings-scroll::-webkit-scrollbar-track {
+  background: #f3f4f6;
+  border-radius: 3px;
+}
+
+.buildings-scroll::-webkit-scrollbar-thumb {
+  background: #10b981;
+  border-radius: 3px;
+}
+
+.buildings-scroll::-webkit-scrollbar-thumb:hover {
+  background: #059669;
+}

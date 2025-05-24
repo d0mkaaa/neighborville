@@ -1,9 +1,6 @@
 import { NORMALIZED_API_URL } from '../config/apiConfig';
 import { getAuthToken } from '../services/userService';
 
-/**
- * Checks the current authentication status with the server
- */
 export const checkAuthenticationStatus = async (): Promise<{
   success: boolean;
   authenticated: boolean;
