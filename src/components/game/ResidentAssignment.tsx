@@ -49,10 +49,10 @@ export default function ResidentAssignment({
   };
 
   const getNeighborHappinessIndicator = (neighbor: Neighbor) => {
-    const happiness = neighbor.happiness || 70;
-    if (happiness >= 80) return '😊';
-    if (happiness >= 60) return '😐';
-    if (happiness >= 40) return '😕';
+    const satisfaction = neighbor.satisfaction || 70;
+    if (satisfaction >= 80) return '😊';
+    if (satisfaction >= 60) return '😐';
+    if (satisfaction >= 40) return '😕';
     return '😢';
   };
 

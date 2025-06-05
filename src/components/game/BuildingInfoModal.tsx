@@ -70,7 +70,7 @@ export default function BuildingInfoModal({
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl shadow-xl z-40 max-h-[80vh] overflow-auto w-full max-w-md"
+        className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl shadow-xl z-40 max-h-[85vh] overflow-auto w-full max-w-lg"
       >
         <div className="sticky top-0 bg-white z-10 px-4 pt-4 pb-2 border-b border-gray-100 flex justify-between items-center">
           <div className="flex items-center">
@@ -326,10 +326,6 @@ export default function BuildingInfoModal({
                               <div className="text-sm font-medium text-gray-700">{resident.name}</div>
                               <div className="text-xs text-gray-500 flex items-center gap-2">
                                 <span>rent: {resident.dailyRent} coins/day</span>
-                                <span className="flex items-center gap-1">
-                                  <Heart size={10} />
-                                  happiness: {resident.happiness}%
-                                </span>
                               </div>
                             </div>
                           </div>

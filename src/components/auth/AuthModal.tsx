@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mail, Lock, User, ArrowRight, CheckCircle, RefreshCcw, AlertCircle, Info } from 'lucide-react';
+import { Mail, Lock, User, ArrowRight, CheckCircle, RefreshCcw, AlertCircle, Info, Shield } from 'lucide-react';
 import { sendVerificationEmail } from '../../services/emailService';
-import { verifyEmail, checkRegisteredEmail, saveAuthToken } from '../../services/userService';
+import { verifyEmail, checkRegisteredEmail, saveAuthToken, checkLegalAcceptanceRequired, updateLegalAcceptance, isRememberMeEnabled } from '../../services/userService';
 import { NORMALIZED_API_URL } from '../../config/apiConfig';
+import LegalAcceptance from '../legal/LegalAcceptance';
 
 type AuthModalProps = {
   onClose: () => void;
@@ -25,8 +26,23 @@ export default function AuthModal({ onClose, onLogin }: AuthModalProps) {
   const [isAutoVerifying, setIsAutoVerifying] = useState(false);
   const [codeInputFocused, setCodeInputFocused] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [showLegalAcceptance, setShowLegalAcceptance] = useState(false);
+  const [pendingUserData, setPendingUserData] = useState<{ id: string; username: string; email?: string } | null>(null);
+  const [legalAccepted, setLegalAccepted] = useState(false);
+  const [legalAcceptanceData, setLegalAcceptanceData] = useState<{ termsOfService: boolean; privacyPolicy: boolean; marketingConsent: boolean } | null>(null);
+  const [rememberMe, setRememberMe] = useState(isRememberMeEnabled());
+  const [emailSaved, setEmailSaved] = useState(false);
+  
   const loginTimeoutRef = useRef<number | null>(null);
   const codeInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const savedEmail = localStorage.getItem('neighborville_saved_email');
+    if (savedEmail && rememberMe) {
+      setEmail(savedEmail);
+      setEmailSaved(true);
+    }
+  }, [rememberMe]);
 
   useEffect(() => {
     return () => {
@@ -50,6 +66,14 @@ export default function AuthModal({ onClose, onLogin }: AuthModalProps) {
     }
   }, [isCodeSent]);
 
+  const saveEmailIfRemembered = (emailToSave: string) => {
+    if (rememberMe) {
+      localStorage.setItem('neighborville_saved_email', emailToSave);
+    } else {
+      localStorage.removeItem('neighborville_saved_email');
+    }
+  };
+
   const handleAutoVerification = async () => {
     if (isAutoVerifying) return;
     
@@ -61,6 +85,7 @@ export default function AuthModal({ onClose, onLogin }: AuthModalProps) {
       
       if (success) {
         setSuccessMessage('Email verified successfully!');
+        saveEmailIfRemembered(email);
         
         if (isNewRegistration || !user?.username || (user?.username && user.username.includes('@'))) {
           setIsUsernameStep(true);
@@ -68,21 +93,27 @@ export default function AuthModal({ onClose, onLogin }: AuthModalProps) {
           return;
         }
         
-        setIsVerifying(true);
+        const needsLegalAcceptance = checkLegalAcceptanceRequired(user);
         
-        if (loginTimeoutRef.current) {
-          window.clearTimeout(loginTimeoutRef.current);
+        const finalUserData = {
+          id: user.id || email,
+          username: user.username || email.split('@')[0],
+          email: user.email || email
+        };
+        
+        if (needsLegalAcceptance) {
+          setPendingUserData(finalUserData);
+          setShowLegalAcceptance(true);
+          setIsAutoVerifying(false);
+          return;
         }
-
+        
+        setIsVerifying(true);
         loginTimeoutRef.current = window.setTimeout(() => {
-          onLogin({
-            id: user.id || email,
-            username: user.username || email.split('@')[0],
-            email: user.email || email
-          });
-          
+          saveLegalAcceptanceAfterLogin(finalUserData);
           setIsVerifying(false);
-        }, 1500);
+        }, 1000);
+        setIsAutoVerifying(false);
       } else {
         setError(message || 'Invalid or expired verification code.');
       }
@@ -101,10 +132,16 @@ export default function AuthModal({ onClose, onLogin }: AuthModalProps) {
     setSuccessMessage(null);
     
     if (!isCodeSent) {
+      if (!legalAccepted) {
+        setShowLegalAcceptance(true);
+        return;
+      }
+      
       setIsLoading(true);
       try {
         const { exists } = await checkRegisteredEmail(email);
         setIsNewUser(!exists);
+        saveEmailIfRemembered(email);
         
         const emailResult = await sendVerificationEmail(email, '', username);
         
@@ -134,6 +171,7 @@ export default function AuthModal({ onClose, onLogin }: AuthModalProps) {
           if (success) {
             setError(null);
             setSuccessMessage('Email verified successfully!');
+            saveEmailIfRemembered(email);
             
             if (isNewRegistration || !user?.username || (user?.username && user.username.includes('@'))) {
               setIsUsernameStep(true);
@@ -141,21 +179,27 @@ export default function AuthModal({ onClose, onLogin }: AuthModalProps) {
               return;
             }
             
-            setIsVerifying(true);
+            const finalUserData = {
+              id: user.id || email,
+              username: user.username || email.split('@')[0],
+              email: user.email || email
+            };
             
-            if (loginTimeoutRef.current) {
-              window.clearTimeout(loginTimeoutRef.current);
+            const needsLegalAcceptance = checkLegalAcceptanceRequired(user);
+            
+            if (needsLegalAcceptance) {
+              setPendingUserData(finalUserData);
+              setShowLegalAcceptance(true);
+              setIsLoading(false);
+              return;
             }
-
+            
+            setIsVerifying(true);
             loginTimeoutRef.current = window.setTimeout(() => {
-              onLogin({
-                id: user.id || email,
-                username: user.username || email.split('@')[0],
-                email: user.email || email
-              });
-              
+              saveLegalAcceptanceAfterLogin(finalUserData);
               setIsVerifying(false);
             }, 1000);
+            setIsLoading(false);
           } else {
             setError(message || 'Invalid or expired verification code.');
             setIsLoading(false);
@@ -206,26 +250,32 @@ export default function AuthModal({ onClose, onLogin }: AuthModalProps) {
         
         if (data.token) {
           console.log(`Token received from username update: ${data.token.substring(0, 15)}...`);
-          saveAuthToken(data.token);
+          saveAuthToken(data.token, rememberMe);
         } else {
           console.warn('No token received from username update');
         }
         
-        setIsVerifying(true);
+        const finalUserData = {
+          id: data.user?.id || email,
+          username: data.user?.username || username,
+          email: data.user?.email || email
+        };
         
-        if (loginTimeoutRef.current) {
-          window.clearTimeout(loginTimeoutRef.current);
+        const needsLegalAcceptance = data.user ? checkLegalAcceptanceRequired(data.user) : true;
+        
+        if (needsLegalAcceptance && !legalAccepted) {
+          setPendingUserData(finalUserData);
+          setShowLegalAcceptance(true);
+          setIsLoading(false);
+          return;
         }
-
+        
+        setIsVerifying(true);
         loginTimeoutRef.current = window.setTimeout(() => {
-          onLogin({
-            id: data.user?.id || email,
-            username: data.user?.username || username,
-            email: data.user?.email || email
-          });
-          
+          saveLegalAcceptanceAfterLogin(finalUserData);
           setIsVerifying(false);
         }, 1000);
+        setIsLoading(false);
       } else {
         console.error('Username update failed:', data.message);
         setError(data.message || 'Failed to set username. Please try again.');
@@ -263,6 +313,68 @@ export default function AuthModal({ onClose, onLogin }: AuthModalProps) {
     }
   };
 
+  const saveLegalAcceptanceAfterLogin = async (userData: { id: string; username: string; email?: string }) => {
+    if (legalAcceptanceData) {
+      try {
+        await updateLegalAcceptance({
+          ...legalAcceptanceData,
+          version: '1.0.0'
+        });
+        console.log('Legal acceptance saved successfully after login');
+      } catch (error) {
+        console.error('Failed to save legal acceptance after login:', error);
+      }
+    }
+    
+    onLogin(userData);
+  };
+
+  const handleLegalAccept = (acceptanceData?: { termsOfService: boolean; privacyPolicy: boolean; marketingConsent: boolean }) => {
+    setLegalAccepted(true);
+    setShowLegalAcceptance(false);
+    setError(null);
+    
+    if (acceptanceData) {
+      setLegalAcceptanceData(acceptanceData);
+    }
+    
+    if (pendingUserData) {
+      setIsVerifying(true);
+      loginTimeoutRef.current = window.setTimeout(() => {
+        saveLegalAcceptanceAfterLogin(pendingUserData);
+        setIsVerifying(false);
+      }, 1000);
+      setPendingUserData(null);
+    } else {
+      handleEmailSubmit({ preventDefault: () => {} } as React.FormEvent);
+    }
+  };
+
+  const handleLegalDecline = () => {
+    setShowLegalAcceptance(false);
+    setLegalAccepted(false);
+    setPendingUserData(null);
+    setError('You must accept the Privacy Policy and Terms of Service to use NeighborVille.');
+  };
+
+  if (showLegalAcceptance) {
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gradient-to-br from-emerald-500/20 via-teal-500/20 to-blue-500/20 backdrop-blur-md"
+      >
+        <LegalAcceptance 
+          onAccept={handleLegalAccept}
+          onDecline={handleLegalDecline}
+          isRequired={true}
+          skipServerSave={true}
+        />
+      </motion.div>
+    );
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -287,7 +399,9 @@ export default function AuthModal({ onClose, onLogin }: AuthModalProps) {
                 Welcome to NeighborVille
               </h2>
               <p className="text-emerald-100 text-sm mt-1">
-                {!isCodeSent ? 'Sign in or create account' : 'Verify your email'}
+                {!isCodeSent ? 'Sign in or create account' : 
+                 isUsernameStep ? 'Choose your username' : 
+                 'Verify your email'}
               </p>
             </div>
             {!isUsernameStep && (
@@ -300,349 +414,265 @@ export default function AuthModal({ onClose, onLogin }: AuthModalProps) {
             )}
           </div>
           
-          {/* Progress indicator */}
           <div className="absolute bottom-0 left-0 w-full h-1 bg-white/20">
             <motion.div
               className="h-full bg-white/60"
-              initial={{ width: "33%" }}
+              initial={{ width: "25%" }}
               animate={{ 
-                width: isUsernameStep ? "100%" : isCodeSent ? "66%" : "33%" 
+                width: isVerifying ? "100%" : isUsernameStep ? "75%" : isCodeSent ? "50%" : "25%" 
               }}
               transition={{ duration: 0.3 }}
             />
           </div>
         </div>
 
-        <div className="p-8">
-          {isUsernameStep ? (
-            <motion.form 
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              onSubmit={handleUsernameSubmit} 
-              className="space-y-6"
-            >
-              <div className="text-center mb-6">
-                <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-full flex items-center justify-center">
-                  <User className="text-white" size={24} />
-                </div>
-                <h3 className="text-2xl font-bold text-gray-800 mb-2">Choose Your Username</h3>
-                <p className="text-gray-600">
-                  {isNewUser 
-                    ? "Welcome to NeighborVille! Let's set up your profile."
-                    : "Please choose a username to continue to the game."}
-                </p>
-              </div>
-              
-              <div className="space-y-4">
+        <div className="p-6 space-y-4">
+          <AnimatePresence mode="wait">
+            {!isCodeSent && !isUsernameStep && !isVerifying && (
+              <motion.div
+                key="email-step"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="space-y-4"
+              >
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Username <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={username}
-                      onChange={e => setUsername(e.target.value)}
-                      className="w-full py-3 px-4 pl-12 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all bg-gray-50 focus:bg-white"
-                      placeholder="e.g., d0mkaaa"
-                      required
-                      minLength={3}
-                      disabled={isLoading}
-                    />
-                    <User className="absolute left-4 top-3.5 text-gray-400" size={18} />
-                  </div>
-                  <div className="text-xs text-gray-500 mt-2 space-y-1 bg-gray-50 p-3 rounded-lg">
-                    <p>✓ Will be displayed in game and leaderboards</p>
-                    <p>✓ Must be at least 3 characters</p>
-                    <p>✓ Cannot be an email address</p>
-                  </div>
-                </div>
+                  <p className="text-gray-600 text-sm mb-4">
+                    Enter your email to sign in or create a new account
+                  </p>
+                  
+                  <form onSubmit={handleEmailSubmit} className="space-y-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">Email Address</label>
+                      <div className="relative">
+                        <Mail className="absolute left-3 top-3 text-gray-400" size={18} />
+                        <input
+                          type="email"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          placeholder="your.email@example.com"
+                          className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                          required
+                        />
+                        {emailSaved && (
+                          <div className="absolute right-3 top-3 text-emerald-500">
+                            <CheckCircle size={18} />
+                          </div>
+                        )}
+                      </div>
+                    </div>
 
-                {error && (
-                  <motion.div 
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start"
-                  >
-                    <AlertCircle size={18} className="text-red-500 mr-3 flex-shrink-0 mt-0.5" />
-                    <p className="text-sm text-red-700 font-medium">{error}</p>
-                  </motion.div>
-                )}
+                    <div className="flex items-center justify-between">
+                      <label className="flex items-center space-x-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={rememberMe}
+                          onChange={(e) => setRememberMe(e.target.checked)}
+                          className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
+                        />
+                        <span className="text-sm text-gray-600">Remember me</span>
+                      </label>
+                      
+                      {!legalAccepted && (
+                        <button
+                          type="button"
+                          onClick={() => setShowLegalAcceptance(true)}
+                          className="text-sm text-emerald-600 hover:text-emerald-700 underline flex items-center gap-1"
+                        >
+                          <Shield size={14} />
+                          Review Terms
+                        </button>
+                      )}
+                    </div>
 
-                <button
-                  type="submit"
-                  className={`w-full py-3 px-6 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl hover:from-emerald-600 hover:to-teal-600 transition-all flex items-center justify-center gap-3 font-semibold shadow-lg hover:shadow-xl transform hover:scale-[1.02] ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
-                  disabled={isLoading}
-                >
-                  {isLoading ? (
-                    <>
-                      <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Setting Username...
-                    </>
-                  ) : (
-                    <>
-                      <ArrowRight size={20} />
-                      Continue to Game
-                    </>
-                  )}
-                </button>
-              </div>
-            </motion.form>
-          ) : !isCodeSent ? (
-            <motion.form 
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              onSubmit={handleEmailSubmit} 
-              className="space-y-6"
-            >
-              <div className="text-center mb-6">
-                <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-full flex items-center justify-center">
-                  <Mail className="text-white" size={24} />
-                </div>
-                <h3 className="text-2xl font-bold text-gray-800 mb-2">Sign In or Register</h3>
-                <p className="text-gray-600">
-                  Enter your email address to continue. We'll send you a secure verification code.
-                </p>
-              </div>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Email address
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={e => setEmail(e.target.value)}
-                      className="w-full py-3 px-4 pl-12 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-gray-50 focus:bg-white"
-                      placeholder="you@example.com"
-                      required
-                      disabled={isLoading}
-                    />
-                    <Mail className="absolute left-4 top-3.5 text-gray-400" size={18} />
-                  </div>
-                </div>
-
-                {error && (
-                  <motion.div 
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start"
-                  >
-                    <AlertCircle size={18} className="text-red-500 mr-3 flex-shrink-0 mt-0.5" />
-                    <p className="text-sm text-red-700 font-medium">{error}</p>
-                  </motion.div>
-                )}
-
-                {infoMessage && (
-                  <motion.div 
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start"
-                  >
-                    <Info size={18} className="text-blue-500 mr-3 flex-shrink-0 mt-0.5" />
-                    <p className="text-sm text-blue-700 font-medium">{infoMessage}</p>
-                  </motion.div>
-                )}
-
-                {successMessage && (
-                  <motion.div 
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-start"
-                  >
-                    <CheckCircle size={18} className="text-emerald-500 mr-3 flex-shrink-0 mt-0.5" />
-                    <p className="text-sm text-emerald-700 font-medium">{successMessage}</p>
-                  </motion.div>
-                )}
-
-                <button
-                  type="submit"
-                  className={`w-full py-3 px-6 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-xl hover:from-blue-600 hover:to-indigo-600 transition-all flex items-center justify-center gap-3 font-semibold shadow-lg hover:shadow-xl transform hover:scale-[1.02] ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
-                  disabled={isLoading}
-                >
-                  {isLoading ? (
-                    <>
-                      <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Sending Code...
-                    </>
-                  ) : (
-                    <>
-                      <ArrowRight size={20} />
-                      Send Verification Code
-                    </>
-                  )}
-                </button>
-              </div>
-            </motion.form>
-          ) : (
-            <motion.form 
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              onSubmit={handleEmailSubmit} 
-              className="space-y-6"
-            >
-              <div className="text-center mb-6">
-                <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-teal-400 to-emerald-500 rounded-full flex items-center justify-center">
-                  <Lock className="text-white" size={24} />
-                </div>
-                <h3 className="text-2xl font-bold text-gray-800 mb-2">Verify Your Email</h3>
-                <p className="text-gray-600">
-                  We've sent a 6-digit verification code to <br />
-                  <span className="font-semibold text-gray-800">{email}</span>
-                </p>
-              </div>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Verification Code
-                  </label>
-                  <div className="relative">
-                    <input
-                      ref={codeInputRef}
-                      type="text"
-                      value={verificationCode}
-                      onChange={e => {
-                        const value = e.target.value.replace(/\D/g, '').slice(0, 6);
-                        setVerificationCode(value);
-                      }}
-                      onFocus={() => setCodeInputFocused(true)}
-                      onBlur={() => setCodeInputFocused(false)}
-                      className={`w-full py-3 px-4 pl-12 border-2 rounded-xl focus:ring-2 focus:ring-teal-500 transition-all text-center text-lg font-mono tracking-widest ${
-                        codeInputFocused || verificationCode
-                          ? 'border-teal-300 bg-white'
-                          : 'border-gray-200 bg-gray-50'
-                      } ${
-                        verificationCode.length === 6
-                          ? 'border-emerald-300 bg-emerald-50'
-                          : ''
-                      }`}
-                      placeholder="123456"
-                      required
-                      disabled={isLoading || isAutoVerifying}
-                      maxLength={6}
-                    />
-                    <Lock className={`absolute left-4 top-3.5 transition-colors ${
-                      codeInputFocused || verificationCode
-                        ? 'text-teal-500'
-                        : 'text-gray-400'
-                    }`} size={18} />
-                    {verificationCode.length === 6 && (
-                      <CheckCircle className="absolute right-4 top-3.5 text-emerald-500" size={18} />
-                    )}
-                  </div>
-                  <div className="text-xs text-gray-500 mt-2 flex justify-between items-center">
-                    <span>Enter the 6-digit code from your email</span>
-                    <span className={`font-mono ${verificationCode.length === 6 ? 'text-emerald-600' : 'text-gray-400'}`}>
-                      {verificationCode.length}/6
-                    </span>
-                  </div>
-                </div>
-
-                {(error || infoMessage || successMessage) && (
-                  <div className="space-y-2">
-                    {error && (
-                      <motion.div 
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start"
-                      >
-                        <AlertCircle size={18} className="text-red-500 mr-3 flex-shrink-0 mt-0.5" />
-                        <p className="text-sm text-red-700 font-medium">{error}</p>
-                      </motion.div>
+                    {legalAccepted && (
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                        <div className="flex items-center gap-2 text-green-700">
+                          <CheckCircle size={16} />
+                          <span className="text-sm font-medium">Legal requirements accepted</span>
+                        </div>
+                      </div>
                     )}
 
-                    {infoMessage && (
-                      <motion.div 
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start"
-                      >
-                        <Info size={18} className="text-blue-500 mr-3 flex-shrink-0 mt-0.5" />
-                        <p className="text-sm text-blue-700 font-medium">{infoMessage}</p>
-                      </motion.div>
-                    )}
-
-                    {successMessage && (
-                      <motion.div 
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-start"
-                      >
-                        <CheckCircle size={18} className="text-emerald-500 mr-3 flex-shrink-0 mt-0.5" />
-                        <p className="text-sm text-emerald-700 font-medium">{successMessage}</p>
-                      </motion.div>
-                    )}
-                  </div>
-                )}
-
-                <div className="flex flex-col gap-3">
-                  {!isAutoVerifying && verificationCode.length < 6 && (
-                    <button
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
                       type="submit"
-                      className={`w-full py-3 px-6 bg-gradient-to-r from-teal-500 to-emerald-500 text-white rounded-xl hover:from-teal-600 hover:to-emerald-600 transition-all flex items-center justify-center gap-3 font-semibold shadow-lg hover:shadow-xl transform hover:scale-[1.02] ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
-                      disabled={isLoading || verificationCode.length === 0}
+                      disabled={isLoading || !legalAccepted}
+                      className={`w-full py-3 px-4 rounded-lg font-medium transition-all flex items-center justify-center gap-2 ${
+                        isLoading || !legalAccepted
+                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                          : 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white hover:from-emerald-600 hover:to-teal-700 shadow-lg hover:shadow-xl'
+                      }`}
                     >
                       {isLoading ? (
                         <>
-                          <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                          Verifying...
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          <span>Sending...</span>
                         </>
                       ) : (
                         <>
-                          <CheckCircle size={20} />
-                          Verify Code
+                          <span>Continue</span>
+                          <ArrowRight size={16} />
                         </>
                       )}
-                    </button>
-                  )}
-
-                  {isAutoVerifying && (
-                    <div className="w-full py-3 px-6 bg-gradient-to-r from-emerald-400 to-teal-400 text-white rounded-xl flex items-center justify-center gap-3 font-semibold">
-                      <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Auto-verifying...
-                    </div>
-                  )}
-
-                  <button 
-                    type="button" 
-                    onClick={handleResendCode}
-                    className="text-sm text-teal-600 hover:text-teal-800 flex items-center justify-center gap-2 py-2 hover:bg-teal-50 rounded-lg transition-colors"
-                    disabled={isLoading || isAutoVerifying}
-                  >
-                    <RefreshCcw size={16} />
-                    Resend verification code
-                  </button>
+                    </motion.button>
+                  </form>
                 </div>
-              </div>
-            </motion.form>
-          )}
+              </motion.div>
+            )}
 
-          <AnimatePresence mode="wait">
+            {isCodeSent && !isUsernameStep && !isVerifying && (
+              <motion.div
+                key="verification-step"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="space-y-4"
+              >
+                <div>
+                  <p className="text-gray-600 text-sm mb-4">
+                    Enter the verification code sent to <span className="font-medium text-gray-800">{email}</span>
+                  </p>
+                  
+                  <form onSubmit={handleEmailSubmit} className="space-y-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">Verification Code</label>
+                      <div className="relative">
+                        <Shield className="absolute left-3 top-3 text-gray-400" size={18} />
+                        <input
+                          ref={codeInputRef}
+                          type="text"
+                          value={verificationCode}
+                          onChange={(e) => {
+                            const value = e.target.value.replace(/\D/g, '').slice(0, 6);
+                            setVerificationCode(value);
+                          }}
+                          onFocus={() => setCodeInputFocused(true)}
+                          onBlur={() => setCodeInputFocused(false)}
+                          className={`w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all font-mono text-center text-lg tracking-widest ${
+                            codeInputFocused || verificationCode ? 'border-emerald-300' : 'border-gray-200'
+                          }`}
+                          placeholder="123456"
+                          maxLength={6}
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between items-center text-sm">
+                      <button
+                        type="button"
+                        onClick={handleResendCode}
+                        disabled={isLoading}
+                        className="text-emerald-600 hover:text-emerald-700 underline disabled:opacity-50"
+                      >
+                        Resend code
+                      </button>
+                      <span className="text-gray-500">Code expires in 10 minutes</span>
+                    </div>
+
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      type="submit"
+                      disabled={isLoading || verificationCode.length !== 6}
+                      className={`w-full py-3 px-4 rounded-lg font-medium transition-all flex items-center justify-center gap-2 ${
+                        isLoading || verificationCode.length !== 6
+                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                          : 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white hover:from-emerald-600 hover:to-teal-700 shadow-lg hover:shadow-xl'
+                      }`}
+                    >
+                      {isLoading ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          <span>Verifying...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>Verify Email</span>
+                          <ArrowRight size={16} />
+                        </>
+                      )}
+                    </motion.button>
+                  </form>
+                </div>
+              </motion.div>
+            )}
+
+            {isUsernameStep && !isVerifying && (
+              <motion.div
+                key="username-step"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="space-y-4"
+              >
+                <div>
+                  <p className="text-gray-600 text-sm mb-4">
+                    Choose a username for your account
+                  </p>
+                  
+                  <form onSubmit={handleUsernameSubmit} className="space-y-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">Username</label>
+                      <div className="relative">
+                        <User className="absolute left-3 top-3 text-gray-400" size={18} />
+                        <input
+                          type="text"
+                          value={username}
+                          onChange={(e) => setUsername(e.target.value)}
+                          placeholder="e.g., d0mkaaa"
+                          className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                          required
+                        />
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        Must be at least 3 characters and cannot contain @ symbol
+                      </p>
+                    </div>
+
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      type="submit"
+                      disabled={isLoading || username.length < 3}
+                      className={`w-full py-3 px-4 rounded-lg font-medium transition-all flex items-center justify-center gap-2 ${
+                        isLoading || username.length < 3
+                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                          : 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white hover:from-emerald-600 hover:to-teal-700 shadow-lg hover:shadow-xl'
+                      }`}
+                    >
+                      {isLoading ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          <span>Setting Username...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>Complete Setup</span>
+                          <ArrowRight size={16} />
+                        </>
+                      )}
+                    </motion.button>
+                  </form>
+                </div>
+              </motion.div>
+            )}
+
             {isVerifying && (
               <motion.div
+                key="verification-result"
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.8 }}
                 transition={{ duration: 0.3 }}
-                className="absolute inset-0 bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center p-6 rounded-2xl"
+                className="space-y-4"
               >
-                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center mb-6 shadow-lg">
-                  <CheckCircle size={40} className="text-white" />
+                <div className="flex items-center justify-center">
+                  <div className="w-20 h-20 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center mb-6 shadow-lg">
+                    <CheckCircle size={40} className="text-white" />
+                  </div>
                 </div>
                 <h3 className="text-2xl font-bold text-gray-800 mb-3">Welcome to NeighborVille!</h3>
                 <p className="text-gray-600 text-center mb-4">Your account has been verified successfully.</p>
@@ -655,13 +685,11 @@ export default function AuthModal({ onClose, onLogin }: AuthModalProps) {
             )}
           </AnimatePresence>
 
-          {!isVerifying && (
-            <div className="mt-6 text-xs text-gray-400 text-center">
-              <span>© NeighborVille {new Date().getFullYear()} • Secure Email Verification</span>
-            </div>
-          )}
+          <div className="mt-6 text-xs text-gray-400 text-center">
+            <span>© NeighborVille {new Date().getFullYear()} • Secure Email Verification</span>
+          </div>
         </div>
       </motion.div>
     </motion.div>
   );
-} 
+}

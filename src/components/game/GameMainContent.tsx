@@ -4,15 +4,14 @@ import EnergyUsagePanel from './EnergyUsagePanel';
 import BillsPanel from './BillsPanel';
 import PlotExpansion from './PlotExpansion';
 import ResidentAssignment from './ResidentAssignment';
-import type { Building, PowerGridState, WaterGridState, Bill, Neighbor } from '../../types/game';
+import type { Building, PowerGrid, WaterGrid, Bill, Neighbor } from '../../types/game';
 
 type GameMainContentProps = {
   grid: (Building | null)[];
   gridSize: number;
   selectedBuilding: Building | null;
-  selectedTile: number | null;
-  powerGrid: PowerGridState;
-  waterGrid: WaterGridState;
+  selectedTile: number | null;  powerGrid: PowerGrid;
+  waterGrid: WaterGrid;
   bills: Bill[];
   neighbors: Neighbor[];
   coins: number;

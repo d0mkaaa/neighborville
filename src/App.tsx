@@ -74,16 +74,6 @@ function App() {
   };
   
   const handleStartGame = (playerName: string) => {
-    if (!isAuthenticated) {
-      setShowAuth(true);
-      return;
-    }
-    
-    if (!user?.username || user.username.includes('@')) {
-      setShowAuth(true);
-      return;
-    }
-    
     const newGameProgress: GameProgress = {
       playerName,
       coins: 2000,
@@ -92,10 +82,14 @@ function App() {
       experience: 0,
       grid: Array(64).fill(null),
       gridSize: 16,
+      neighborProgress: {},
+      completedAchievements: [],
+      seenAchievements: [],
       neighbors: [],
       achievements: [],
       events: [],
       gameTime: 12,
+      gameMinutes: 0,
       timeOfDay: 'day',
       recentEvents: [],
       bills: [],
@@ -112,13 +106,28 @@ function App() {
         timestamp: Date.now()
       }],
       weather: 'sunny',
-      saveTimestamp: Date.now(),
-      saveName: `${playerName}'s City`
+      powerGrid: {
+        totalPowerProduction: 0,
+        totalPowerConsumption: 0,
+        connectedBuildings: [],
+        powerOutages: []
+      },
+      waterGrid: {
+        totalWaterProduction: 0,
+        totalWaterConsumption: 0,
+        connectedBuildings: [],
+        waterShortages: []
+      },
+      playerResources: {
+        wood: 10,
+        stone: 10,
+        iron_ore: 5
+      },
+      taxPolicies: []
     };
-    
     setGameProgress(newGameProgress);
     setGameStarted(true);
-    setGameLoaded(true);
+    setGameLoaded(false);
     
     if (isAuthenticated) {
       saveGameToServer(newGameProgress).catch(error => {
@@ -148,14 +157,8 @@ function App() {
     
     if (gameStarted && isAuthenticated && gameProgress) {
       autoSaveInterval = setInterval(() => {
-        if (gameProgress) {
-          const updatedProgress = {
-            ...gameProgress,
-            saveTimestamp: Date.now(),
-            saveName: `${gameProgress.playerName}'s City (Auto Save)`
-          };
-          
-          saveGameToServer(updatedProgress)
+        if (gameProgress) {          
+          saveGameToServer(gameProgress)
             .then(success => {
               if (success) {
                 console.log('Game auto-saved successfully');
@@ -240,13 +243,12 @@ function App() {
               initialGameState={gameProgress}
               onTimeChange={setTimeOfDay}
               onLoadGame={handleLoadGame}
-              showTutorialProp={false}
+              showTutorialProp={!gameLoaded}
             />
           </motion.div>
         )}
       </AnimatePresence>
       
-      {/* Floating action buttons */}
       {!gameStarted && (
         <div className="fixed bottom-4 right-4 flex flex-col gap-2">
           {isAuthenticated ? (
@@ -282,7 +284,6 @@ function App() {
         </div>
       )}
       
-      {/* Modals */}
       <AnimatePresence>
         {showAuth && (
           <AuthModal

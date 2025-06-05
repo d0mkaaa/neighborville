@@ -39,6 +39,25 @@ const userSchema = new mongoose.Schema({
     showActivity: { type: Boolean, default: true },
     bio: { type: String, default: '' }
   },
+  legalAcceptance: {
+    termsOfService: {
+      accepted: { type: Boolean, default: false },
+      version: { type: String, default: null },
+      acceptedAt: { type: Date, default: null },
+      ipAddress: { type: String, default: null }
+    },
+    privacyPolicy: {
+      accepted: { type: Boolean, default: false },
+      version: { type: String, default: null },
+      acceptedAt: { type: Date, default: null },
+      ipAddress: { type: String, default: null }
+    },
+    marketingConsent: {
+      accepted: { type: Boolean, default: false },
+      acceptedAt: { type: Date, default: null },
+      ipAddress: { type: String, default: null }
+    }
+  },
   gameData: {
     type: mongoose.Schema.Types.Mixed,
     default: null
@@ -96,6 +115,7 @@ userSchema.methods.toProfile = function() {
     verified: this.verified,
     settings: this.settings,
     profileSettings: this.profileSettings,
+    legalAcceptance: this.legalAcceptance,
     createdAt: this.createdAt,
     lastLogin: this.lastLogin,
     lastSave: this.lastSave

@@ -9,7 +9,8 @@ export const DEFAULT_TAX_POLICIES: TaxPolicy[] = [
     description: 'Standard tax on residential buildings like houses and apartments',
     happinessImpact: -2,
     revenueMultiplier: 1.0,
-    enabled: true
+    enabled: true,
+    unlockLevel: 1
   },
   {
     id: 'commercial_tax',
@@ -19,7 +20,8 @@ export const DEFAULT_TAX_POLICIES: TaxPolicy[] = [
     description: 'Tax on commercial buildings such as shops, cafes, and restaurants',
     happinessImpact: -1,
     revenueMultiplier: 1.2,
-    enabled: true
+    enabled: false,
+    unlockLevel: 3
   },
   {
     id: 'industrial_tax',
@@ -29,7 +31,8 @@ export const DEFAULT_TAX_POLICIES: TaxPolicy[] = [
     description: 'Tax on industrial buildings and factories',
     happinessImpact: 0,
     revenueMultiplier: 1.5,
-    enabled: false
+    enabled: false,
+    unlockLevel: 5
   },
   {
     id: 'luxury_tax',
@@ -39,7 +42,8 @@ export const DEFAULT_TAX_POLICIES: TaxPolicy[] = [
     description: 'Additional tax on high-value properties and luxury buildings',
     happinessImpact: -5,
     revenueMultiplier: 2.0,
-    enabled: false
+    enabled: false,
+    unlockLevel: 7
   }
 ];
 
@@ -58,7 +62,8 @@ export const DEFAULT_SERVICE_BUDGETS: ServiceBudget[] = [
       communitySatisfaction: 0
     },
     maintenanceMultiplier: 1.0,
-    qualityMultiplier: 1.0
+    qualityMultiplier: 1.0,
+    unlockLevel: 2
   },
   {
     id: 'water_system',
@@ -74,7 +79,8 @@ export const DEFAULT_SERVICE_BUDGETS: ServiceBudget[] = [
       communitySatisfaction: 0
     },
     maintenanceMultiplier: 1.0,
-    qualityMultiplier: 1.0
+    qualityMultiplier: 1.0,
+    unlockLevel: 2
   },
   {
     id: 'public_services',
@@ -90,7 +96,8 @@ export const DEFAULT_SERVICE_BUDGETS: ServiceBudget[] = [
       landValue: 0
     },
     maintenanceMultiplier: 1.0,
-    qualityMultiplier: 1.0
+    qualityMultiplier: 1.0,
+    unlockLevel: 4
   },
   {
     id: 'education',
@@ -107,7 +114,8 @@ export const DEFAULT_SERVICE_BUDGETS: ServiceBudget[] = [
       income: 0
     },
     maintenanceMultiplier: 1.0,
-    qualityMultiplier: 1.0
+    qualityMultiplier: 1.0,
+    unlockLevel: 5
   },
   {
     id: 'environment',
@@ -124,7 +132,8 @@ export const DEFAULT_SERVICE_BUDGETS: ServiceBudget[] = [
       landValue: 0
     },
     maintenanceMultiplier: 1.0,
-    qualityMultiplier: 1.0
+    qualityMultiplier: 1.0,
+    unlockLevel: 6
   }
 ];
 
@@ -351,12 +360,13 @@ export const updateServiceBudget = (
       if (newBudgetPercentage < 80) {
         happinessChange = -Math.floor((80 - newBudgetPercentage) / 10) * 2;
       } else if (newBudgetPercentage > 120) {
-        happinessChange = Math.floor((newBudgetPercentage - 120) / 20) * 1;
-      }
+        happinessChange = Math.floor((newBudgetPercentage - 120) / 20) * 1;      }
+
+      const newCurrentBudget = Math.round((service.baseCost * newBudgetPercentage) / 100);
 
       return {
         ...service,
-        currentBudget: Math.max(50, Math.min(200, newBudgetPercentage)),
+        currentBudget: newCurrentBudget,
         efficiency: newEfficiency,
         effects: {
           ...service.effects,

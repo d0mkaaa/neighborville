@@ -22,13 +22,11 @@ export default function BuildingUpgradesModal({
   const [confirmingUpgrade, setConfirmingUpgrade] = useState(false);
 
   const upgradeOptions = [
-    {
-      id: "eco_friendly",
+    {      id: "eco_friendly",
       name: "Eco-Friendly Materials",
-      description: "Use sustainable materials to improve happiness bonus and reduce energy usage",
+      description: "Use sustainable materials to reduce energy usage",
       cost: Math.round(building.cost * 0.3),
       effect: {
-        happiness: 5,
         energy: -2
       },
       icon: <Heart className="text-green-500" size={20} />
@@ -59,12 +57,10 @@ export default function BuildingUpgradesModal({
     
     ...(building.type === 'entertainment' ? [
       {
-        id: "special_events",
-        name: "Special Events",
-        description: "Regular events that boost happiness and income",
+        id: "special_events",        name: "Special Events",
+        description: "Regular events that boost income",
         cost: Math.round(building.cost * 0.6),
         effect: {
-          happiness: 8,
           income: Math.round(building.income * 0.2)
         },
         icon: <Zap className="text-yellow-500" size={20} />
@@ -95,11 +91,9 @@ export default function BuildingUpgradesModal({
     setConfirmingUpgrade(false);
     onClose();
   };
-
   const getEffectLabel = (effect: { [key: string]: number | string | undefined }) => {
     const labels = [];
     
-    if (effect.happiness) labels.push(`+${effect.happiness} happiness`);
     if (effect.income) labels.push(`+${effect.income} coins/day`);
     if (effect.energy && typeof effect.energy === 'number' && effect.energy < 0) labels.push(`${effect.energy} energy usage`);
     if (effect.energy && typeof effect.energy === 'number' && effect.energy > 0) labels.push(`+${effect.energy} energy production`);
@@ -117,11 +111,10 @@ export default function BuildingUpgradesModal({
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
       onClick={onClose}
     >
-      <motion.div
-        initial={{ scale: 0.9, opacity: 0, y: 20 }}
+      <motion.div        initial={{ scale: 0.9, opacity: 0, y: 20 }}
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.9, opacity: 0, y: 20 }}
-        className="bg-white rounded-xl shadow-xl max-w-md w-full overflow-hidden"
+        className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[85vh] overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
         <div className="p-4 bg-gradient-to-r from-blue-500 to-indigo-600 text-white flex justify-between items-center">

@@ -1,7 +1,6 @@
 import type { BuildingUpgrade } from "../types/game";
 
 export const buildingUpgrades: Record<string, BuildingUpgrade[]> = {
-  // resdential upgrades
   house: [
     {
       id: "insulation",
@@ -70,7 +69,6 @@ export const buildingUpgrades: Record<string, BuildingUpgrade[]> = {
     }
   ],
   
-  // comercial upgrades
   cafe: [
     {
       id: "outdoor_seating",
@@ -137,7 +135,6 @@ export const buildingUpgrades: Record<string, BuildingUpgrade[]> = {
     }
   ],
   
-  // utility upgrades
   power_plant: [
     {
       id: "efficiency",
@@ -203,7 +200,6 @@ export const buildingUpgrades: Record<string, BuildingUpgrade[]> = {
     }
   ],
   
-  // entertainment upgrades
   park: [
     {
       id: "playground",

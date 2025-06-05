@@ -1,4 +1,5 @@
 import type { Building } from "../types/game";
+import { PRODUCTION_BUILDINGS } from "./productionBuildings";
 
 export const buildings: Building[] = [
   {
@@ -323,3 +324,23 @@ export const buildings: Building[] = [
     description: 'Facility for processing recyclable materials'
   }
 ];
+
+export const ALL_BUILDINGS: Building[] = [...buildings, ...PRODUCTION_BUILDINGS];
+
+export function getBuildingsByCategory(category: string): Building[] {
+  if (category === 'production') {
+    return PRODUCTION_BUILDINGS;
+  }
+  if (category === 'all') {
+    return ALL_BUILDINGS;
+  }
+  return buildings.filter(building => building.type === category || category === 'all');
+}
+
+export function getProductionBuildings(): Building[] {
+  return PRODUCTION_BUILDINGS;
+}
+
+export function getBuildingById(id: string): Building | undefined {
+  return ALL_BUILDINGS.find(building => building.id === id);
+}

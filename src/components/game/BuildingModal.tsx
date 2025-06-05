@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Hammer, Shuffle, Brain, CheckCircle, Timer, Share2, Zap } from "lucide-react";
+import { X, Hammer, Shuffle, Brain, CheckCircle, Timer, Share2, Zap, Package, AlertTriangle } from "lucide-react";
 import type { Building } from "../../types/game";
+import { getResourceById, getRecipesByBuilding } from "../../data/resources";
 
 type PuzzleType = 'memory' | 'sequence' | 'connect';
 
@@ -12,9 +13,11 @@ type BuildingModalProps = {
   onSaveGame?: () => Promise<void>;
   selectedIndex: number;
   playerCoins: number;
+  playerResources?: { [resourceId: string]: number };
+  onResourceUpdate?: (resources: { [resourceId: string]: number }) => void;
 };
 
-export default function BuildingModal({ building, onClose, onComplete, selectedIndex, playerCoins }: BuildingModalProps) {
+export default function BuildingModal({ building, onClose, onComplete, selectedIndex, playerCoins, playerResources, onResourceUpdate }: BuildingModalProps) {
   
   const [phase, setPhase] = useState<'start' | 'puzzle' | 'building' | 'complete'>('start');
   const [difficultyLevel, setDifficultyLevel] = useState<1|2|3>(1);
@@ -76,6 +79,58 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
   const [attempts, setAttempts] = useState(0);
   const maxAttempts = puzzleType === 'memory' ? 999 : 3 + difficultyLevel;
 
+  const getResourceCosts = useCallback(() => {
+    if (building.productionType && building.id) {
+      const recipes = getRecipesByBuilding(building.id);
+      if (recipes.length > 0) {
+        return recipes[0].inputs;
+      }
+    }
+    
+    const cost = building.cost || 0;
+    const basicCosts = [];
+    
+    if (cost > 100) {
+      basicCosts.push({ resourceId: 'wood', quantity: Math.max(1, Math.floor(cost / 150)) });
+    }
+    if (cost > 200) {
+      basicCosts.push({ resourceId: 'stone', quantity: Math.max(1, Math.floor(cost / 300)) });
+    }
+    
+    if (cost > 800) {
+      basicCosts.push({ resourceId: 'iron_ore', quantity: Math.max(1, Math.floor(cost / 1000)) });
+    }
+    
+    return basicCosts;
+  }, [building]);
+
+  const resourceCosts = getResourceCosts();
+  
+  const canAffordBuilding = useCallback(() => {
+    const hasCoins = playerCoins >= (building.cost || 0);
+    
+    if (!playerResources || resourceCosts.length === 0) {
+      return hasCoins;
+    }
+    
+    const hasResources = resourceCosts.every(cost => 
+      (playerResources[cost.resourceId] || 0) >= cost.quantity
+    );
+    
+    return hasCoins && hasResources;
+  }, [playerCoins, building.cost, playerResources, resourceCosts]);
+  
+  const getRemainingResources = useCallback(() => {
+    if (!playerResources) return {};
+    
+    const remaining = { ...playerResources };
+    resourceCosts.forEach(cost => {
+      remaining[cost.resourceId] = (remaining[cost.resourceId] || 0) - cost.quantity;
+    });
+    
+    return remaining;
+  }, [playerResources, resourceCosts]);
+
   useEffect(() => {
     if (puzzleType === 'memory') {
       const baseItems = ['🔨', '🪚', '🧹', '🔧'];
@@ -97,8 +152,8 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
     
     for (let i = 1; i <= numberOfPairs; i++) {
       for (let j = 0; j < 2; j++) {
-        const x = Math.floor(Math.random() * 70) + 15;
-        const y = Math.floor(Math.random() * 70) + 15;
+        const x = Math.floor(Math.random() * 80) + 10;
+        const y = Math.floor(Math.random() * 80) + 10;
         pointsArray.push({ x, y, number: i });
       }
     }
@@ -176,7 +231,7 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
                 localStorage.setItem(completedPuzzleKey, JSON.stringify(completedPuzzles));
               }
               
-              setTimeout(() => setPhase('building'), 500);
+              setTimeout(() => setPhase('complete'), 500);
             }
             return newMatched;
           });
@@ -284,7 +339,7 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
           localStorage.setItem(completedPuzzleKey, JSON.stringify(completedPuzzles));
         }
         
-        setTimeout(() => setPhase('building'), 500);
+        setTimeout(() => setPhase('complete'), 500);
       }
       
       return newPlayerSequence;
@@ -325,7 +380,7 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
                 localStorage.setItem(completedPuzzleKey, JSON.stringify(completedPuzzles));
               }
               
-              setTimeout(() => setPhase('building'), 500);
+              setTimeout(() => setPhase('complete'), 500);
             }
             
             return newCompletedConnections;
@@ -388,26 +443,7 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
       }
     };
   }, [phase]);
-  
-  useEffect(() => {
-    if (phase !== 'complete') return;
-    
-    const closeTimerRef = { current: null as ReturnType<typeof setTimeout> | null };
-    
-    closeTimerRef.current = setTimeout(() => {
-      if (closeCallbackRef.current) {
-        closeCallbackRef.current();
-      }
-    }, 1500);
-    
-    return () => {
-      if (closeTimerRef.current !== null) {
-        clearTimeout(closeTimerRef.current);
-        closeTimerRef.current = null;
-      }
-    };
-  }, [phase]);
-  
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -421,7 +457,7 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
         initial={{ scale: 0.9, opacity: 0, y: 20 }}
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.9, opacity: 0, y: 20 }}
-        className="bg-white rounded-xl shadow-xl max-w-md w-full overflow-hidden"
+        className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[85vh] overflow-hidden"
       >
         <div className="p-4 bg-gradient-to-r from-emerald-500 to-teal-600 text-white flex justify-between items-center">
           <h2 className="text-lg font-medium lowercase">building {building.name}</h2>
@@ -447,14 +483,90 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
                 </div>
                 <h3 className="text-lg font-medium text-gray-800 mb-2">ready to build?</h3>
                 <p className="text-gray-600 mb-4">complete a puzzle to start construction</p>
-                <div className="grid grid-cols-2 gap-2 mb-6 text-sm">
-                  <div className="bg-emerald-50 p-2 rounded">
-                    <span className="font-medium">cost:</span> {building.cost}c
+                
+                <div className="space-y-3 mb-6">
+                  <div className={`p-3 rounded-lg border ${
+                    playerCoins >= (building.cost || 0) 
+                      ? 'bg-green-50 border-green-200' 
+                      : 'bg-red-50 border-red-200'
+                  }`}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Coin Cost:</span>
+                      <span className={`font-bold ${
+                        playerCoins >= (building.cost || 0) ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                        {building.cost}c
+                      </span>
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      You have: {playerCoins}c → {playerCoins - (building.cost || 0)}c
+                    </div>
                   </div>
-                  <div className="bg-emerald-50 p-2 rounded">
-                    <span className="font-medium">income:</span> {building.income}c/day
+                  
+                  {resourceCosts.length > 0 && (
+                    <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                      <h4 className="text-sm font-medium text-blue-800 mb-2 flex items-center gap-1">
+                        <Package size={14} />
+                        Resource Requirements:
+                      </h4>
+                      <div className="space-y-2">
+                        {resourceCosts.map((cost, index) => {
+                          const resource = getResourceById(cost.resourceId);
+                          const playerHas = playerResources?.[cost.resourceId] || 0;
+                          const hasEnough = playerHas >= cost.quantity;
+                          const remaining = playerHas - cost.quantity;
+                          
+                          return (
+                            <div key={index} className={`flex items-center justify-between p-2 rounded ${
+                              hasEnough ? 'bg-green-100' : 'bg-red-100'
+                            }`}>
+                              <div className="flex items-center gap-2">
+                                <span className="text-lg">{resource?.icon}</span>
+                                <span className="text-sm font-medium">{resource?.name}</span>
+                              </div>
+                              <div className="text-right">
+                                <div className={`text-sm font-bold ${
+                                  hasEnough ? 'text-green-600' : 'text-red-600'
+                                }`}>
+                                  -{cost.quantity}
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  {playerHas} → {remaining}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-200">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-emerald-800">Daily Income:</span>
+                      <span className="text-sm font-bold text-emerald-600">+{building.income}c/day</span>
+                    </div>
+                    {building.productionType && (
+                      <div className="text-xs text-emerald-600 mt-1">
+                        Production building - generates resources
+                      </div>
+                    )}
                   </div>
                 </div>
+                
+                {!canAffordBuilding() && (
+                  <div className="mb-4 p-3 bg-red-50 rounded-lg border border-red-200">
+                    <div className="flex items-center gap-2 text-red-700">
+                      <AlertTriangle size={16} />
+                      <span className="text-sm font-medium">Cannot afford this building</span>
+                    </div>
+                    <div className="text-xs text-red-600 mt-1">
+                      {playerCoins < (building.cost || 0) && "Insufficient coins. "}
+                      {resourceCosts.some(cost => (playerResources?.[cost.resourceId] || 0) < cost.quantity) && "Missing required resources."}
+                    </div>
+                  </div>
+                )}
+                
                 <div className="mb-4">
                   <p className="text-sm text-gray-600 mb-2">Select difficulty:</p>
                   <div className="flex gap-2 mb-4">
@@ -475,14 +587,12 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={() => setPhase('puzzle')}
-                  disabled={playerCoins < building.cost}
+                  disabled={!canAffordBuilding()}
                   className={`w-full py-2 rounded-lg text-white font-medium ${
-                    playerCoins < building.cost 
-                      ? 'bg-gray-300 cursor-not-allowed' 
-                      : 'bg-emerald-500 hover:bg-emerald-600'
+                    !canAffordBuilding() ? 'bg-gray-300 cursor-not-allowed' : 'bg-emerald-500 hover:bg-emerald-600'
                   }`}
                 >
-                  {playerCoins < building.cost ? 'insufficient funds' : 'start building'}
+                  {canAffordBuilding() ? 'start building' : 'insufficient funds'}
                 </motion.button>
               </motion.div>
             )}
@@ -629,31 +739,6 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
               </motion.div>
             )}
             
-            {phase === 'building' && (
-              <motion.div
-                key="building"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="text-center py-4"
-              >
-                <h3 className="text-lg font-medium text-gray-800 mb-4">construction in progress...</h3>
-                
-                <div className="relative h-6 bg-gray-200 rounded-full mb-6 overflow-hidden">
-                  <div 
-                    className="absolute left-0 top-0 h-full bg-gradient-to-r from-emerald-400 to-emerald-500 transition-all duration-300"
-                    style={{ width: `${buildingProgress}%` }}
-                  />
-                </div>
-                
-                <div className="w-20 h-20 mx-auto mb-4 rounded-full flex items-center justify-center bg-emerald-100">
-                  <Hammer size={32} className="text-emerald-500" />
-                </div>
-                
-                <p className="text-gray-600">Building {building.name}... {buildingProgress}%</p>
-              </motion.div>
-            )}
-            
             {phase === 'complete' && (
               <motion.div
                 key="complete"
@@ -666,14 +751,47 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
                   <CheckCircle size={32} className="text-green-500" />
                 </div>
                 
-                <h3 className="text-xl font-medium text-gray-800 mb-2">Building Complete!</h3>
-                <p className="text-gray-600 mb-6">You've successfully built a {building.name}</p>
+                <h3 className="text-xl font-medium text-gray-800 mb-2">Ready to Build!</h3>
+                <p className="text-gray-600 mb-4">Puzzle completed! Ready to construct your {building.name}</p>
+                
+                {resourceCosts.length > 0 && (
+                  <div className="mb-4 p-3 bg-green-50 rounded-lg border border-green-200">
+                    <h4 className="text-sm font-medium text-green-800 mb-2 flex items-center gap-1">
+                      <Package size={14} />
+                      Resources will be consumed:
+                    </h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      {resourceCosts.map((cost, index) => {
+                        const resource = getResourceById(cost.resourceId);
+                        const playerHas = playerResources?.[cost.resourceId] || 0;
+                        const remaining = playerHas - cost.quantity;
+                        
+                        return (
+                          <div key={index} className="text-center bg-white/60 backdrop-blur-sm p-2 rounded">
+                            <div className="text-lg mb-1">{resource?.icon}</div>
+                            <div className="text-xs text-green-700">-{cost.quantity}</div>
+                            <div className="text-xs text-gray-600">{playerHas} → {remaining}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
                 
                 <button
-                  onClick={closeCallbackRef.current}
+                  onClick={() => {
+                    if (onResourceUpdate && resourceCosts.length > 0) {
+                      const newResources = getRemainingResources();
+                      onResourceUpdate(newResources);
+                    }
+                    
+                    completeCallbackRef.current(buildingRef.current, selectedIndexRef.current);
+                    
+                    setPhase('building');
+                  }}
                   className="w-full py-2 bg-emerald-500 text-white rounded-lg font-medium hover:bg-emerald-600 transition-colors"
                 >
-                  Close
+                  Build & Place {building.name}
                 </button>
               </motion.div>
             )}

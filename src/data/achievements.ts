@@ -1,7 +1,6 @@
 import type { Achievement } from "../types/game";
 
 export const ACHIEVEMENTS: Achievement[] = [
-  // original achievements
   
   { 
     id: 'first_building', 
@@ -13,75 +12,74 @@ export const ACHIEVEMENTS: Achievement[] = [
   { 
     id: 'three_buildings', 
     title: 'small community', 
-    description: 'place 3 different building types', 
-    completed: false,
-    xpReward: 15
-  },
-  { 
-    id: 'day_5', 
-    title: 'first week', 
-    description: 'reach day 5', 
-    completed: false,
-    xpReward: 15
-  },
-  { 
-    id: 'day_10', 
-    title: 'established', 
-    description: 'reach day 10', 
-    completed: false,
-    xpReward: 30
-  },
-  { 
-    id: 'day_30', 
-    title: 'thriving', 
-    description: 'reach day 30', 
-    completed: false,
-    xpReward: 60
-  },
-  { 
-    id: 'coins_1000', 
-    title: 'starter investor', 
-    description: 'have 1000 coins at once', 
-    completed: false,
-    xpReward: 15
-  },
-  { 
-    id: 'coins_5000', 
-    title: 'savvy investor', 
-    description: 'have 5000 coins at once', 
-    completed: false,
-    xpReward: 40
-  },
-  { 
-    id: 'coins_10000', 
-    title: 'wealthy', 
-    description: 'have 10000 coins at once', 
-    completed: false,
-    xpReward: 80
-  },
-  { 
-    id: 'expand_plot', 
-    title: 'growth mindset', 
-    description: 'expand your neighborhood plot', 
+    description: 'place 8 different building types', 
     completed: false,
     xpReward: 25
   },
   { 
+    id: 'day_5', 
+    title: 'first week', 
+    description: 'reach day 15', 
+    completed: false,
+    xpReward: 30
+  },
+  { 
+    id: 'day_10', 
+    title: 'established', 
+    description: 'reach day 30', 
+    completed: false,
+    xpReward: 50
+  },
+  { 
+    id: 'day_30', 
+    title: 'thriving', 
+    description: 'reach day 75', 
+    completed: false,
+    xpReward: 100
+  },
+  { 
+    id: 'coins_3000', 
+    title: 'starter investor', 
+    description: 'have 8000 coins at once', 
+    completed: false,
+    xpReward: 50
+  },
+  { 
+    id: 'coins_5000', 
+    title: 'savvy investor', 
+    description: 'have 20000 coins at once', 
+    completed: false,
+    xpReward: 75
+  },
+  { 
+    id: 'coins_10000', 
+    title: 'wealthy', 
+    description: 'have 50000 coins at once', 
+    completed: false,
+    xpReward: 150
+  },
+  { 
+    id: 'expand_plot', 
+    title: 'growth mindset', 
+    description: 'expand your neighborhood plot to 6x6', 
+    completed: false,
+    xpReward: 40
+  },
+  { 
     id: 'unlock_neighbor', 
     title: 'friendly face', 
-    description: 'unlock a new neighbor', 
+    description: 'unlock 3 neighbors', 
     completed: false,
-    xpReward: 20
+    xpReward: 35
   },
   { 
     id: 'five_neighbors', 
     title: 'growing community', 
-    description: 'unlock 5 neighbors', 
+    description: 'unlock 12 neighbors', 
     completed: false,
-    xpReward: 45
+    xpReward: 80
   },
   
-  // season achievements
   { 
     id: 'first_season_change', 
     title: 'changing seasons', 
@@ -132,155 +130,153 @@ export const ACHIEVEMENTS: Achievement[] = [
     xpReward: 75
   },
   
-  // building upgrade achievements
   { 
     id: 'first_upgrade', 
     title: 'home improvement', 
-    description: 'upgrade your first building', 
+    description: 'upgrade 5 buildings', 
     completed: false,
-    xpReward: 30
+    xpReward: 45
   },
   { 
     id: 'five_upgrades', 
     title: 'renovation master', 
-    description: 'install 5 building upgrades', 
+    description: 'install 15 building upgrades', 
     completed: false,
-    xpReward: 50
+    xpReward: 80
   },
   { 
     id: 'eco_friendly', 
     title: 'environmentalist', 
-    description: 'install 3 eco-friendly upgrades', 
+    description: 'install 10 eco-friendly upgrades', 
     completed: false,
-    xpReward: 40
+    xpReward: 70
   },
   
-  // puzzle achievements
   { 
     id: 'memory_master', 
     title: 'memory master', 
-    description: 'complete 5 memory puzzles', 
+    description: 'complete 15 memory puzzles', 
     completed: false,
-    xpReward: 30
+    xpReward: 60
   },
   { 
     id: 'sequence_master', 
     title: 'sequence master', 
-    description: 'complete 5 sequence puzzles', 
+    description: 'complete 15 sequence puzzles', 
     completed: false,
-    xpReward: 30
+    xpReward: 60
   },
   { 
     id: 'connect_master', 
     title: 'blueprint master', 
-    description: 'complete 5 connect puzzles', 
+    description: 'complete 15 connect puzzles', 
     completed: false,
-    xpReward: 30
+    xpReward: 60
   },
   { 
     id: 'rotation_master', 
     title: 'rotation master', 
-    description: 'complete 5 rotation puzzles', 
+    description: 'complete 15 rotation puzzles', 
     completed: false,
-    xpReward: 30
+    xpReward: 60
   },
   { 
     id: 'hard_mode', 
     title: 'challenge seeker', 
-    description: 'complete 3 puzzles on hard difficulty', 
+    description: 'complete 10 puzzles on hard difficulty', 
     completed: false,
-    xpReward: 60
+    xpReward: 100
   },
   { 
     id: 'full_grid', 
     title: 'urban planner', 
-    description: 'fill all available tiles with buildings', 
+    description: 'fill all available tiles with buildings on an 8x8 grid', 
     completed: false,
-    xpReward: 45
+    xpReward: 120
   },
   {
     id: 'level_2',
     title: 'getting started',
-    description: 'reach level 2',
+    description: 'reach level 3',
     completed: false,
-    xpReward: 30
+    xpReward: 40
   },
   {
     id: 'level_5',
     title: 'experienced mayor',
-    description: 'reach level 5',
+    description: 'reach level 8',
     completed: false,
-    xpReward: 60
+    xpReward: 80
   },
   {
     id: 'level_10',
     title: 'master builder',
-    description: 'reach level 10',
+    description: 'reach level 15',
     completed: false,
-    xpReward: 100
+    xpReward: 150
   },
   {
     id: 'power_system',
     title: 'power expert',
-    description: 'connect 5 buildings to power',
+    description: 'connect 15 buildings to power',
     completed: false,
-    xpReward: 35
+    xpReward: 60
   },
   {
     id: 'water_system',
     title: 'water expert',
-    description: 'connect 5 buildings to water',
+    description: 'connect 15 buildings to water',
     completed: false,
-    xpReward: 35
+    xpReward: 60
   },
   {
     id: 'energy_positive',
     title: 'green energy',
-    description: 'generate more power than you consume',
+    description: 'generate 200% more power than you consume',
     completed: false,
-    xpReward: 50
+    xpReward: 90
   },
   {
     id: 'income_500',
     title: 'profitable business',
-    description: 'earn 500 coins in a single day',
+    description: 'earn 1500 coins in a single day',
     completed: false,
-    xpReward: 40
+    xpReward: 70
   },
   {
     id: 'income_1000',
     title: 'business mogul',
-    description: 'earn 1000 coins in a single day',
+    description: 'earn 3000 coins in a single day',
     completed: false,
-    xpReward: 75
+    xpReward: 120
   },
   {
     id: 'handle_disaster',
     title: 'crisis manager',
-    description: 'handle a neighborhood disaster',
+    description: 'survive 3 neighborhood disasters',
     completed: false,
-    xpReward: 55
+    xpReward: 85
   },
   {
     id: 'max_expansion',
     title: 'metropolis',
-    description: 'fully expand your neighborhood to 8×8',
+    description: 'fully expand your neighborhood to maximum size (8×8)',
     completed: false,
-    xpReward: 100
+    xpReward: 200
   },
   {
     id: 'ten_residents',
     title: 'bustling community',
-    description: 'house 10 residents',
+    description: 'house 25 residents',
     completed: false,
-    xpReward: 50
+    xpReward: 100
   },
   {
     id: 'pay_bills_ontime',
     title: 'responsible citizen',
-    description: 'pay 10 bills on time',
+    description: 'pay 25 bills on time without missing any',
     completed: false,
-    xpReward: 40
+    xpReward: 80
   },
   {
     id: 'storm_survivor',
@@ -290,77 +286,146 @@ export const ACHIEVEMENTS: Achievement[] = [
     xpReward: 45
   },
   
-  // budget and finance achievements
   {
     id: 'budget_master',
     title: 'budget master',
-    description: 'maintain a positive budget for 10 days',
+    description: 'maintain a positive budget for 30 consecutive days',
     completed: false,
-    xpReward: 60
+    xpReward: 120
   },
   {
     id: 'tax_collector',
     title: 'tax collector',
-    description: 'enable all tax policies',
-    completed: false,
-    xpReward: 40
-  },
-  {
-    id: 'efficient_services',
-    title: 'efficient manager',
-    description: 'achieve 90% efficiency in all services',
+    description: 'enable all tax policies and maintain them for 15 days',
     completed: false,
     xpReward: 80
   },
   {
+    id: 'efficient_services',
+    title: 'efficient manager',
+    description: 'achieve 95% efficiency in all services simultaneously',
+    completed: false,
+    xpReward: 150
+  },
+  {
     id: 'financial_guru',
     title: 'financial guru',
-    description: 'earn 2000 coins in daily revenue',
+    description: 'earn 5000 coins in daily revenue',
     completed: false,
-    xpReward: 100
+    xpReward: 180
   },
   {
     id: 'infrastructure_investor',
     title: 'infrastructure investor',
-    description: 'spend 1000 coins on service budgets in one day',
+    description: 'spend 3000 coins on service budgets in one day',
     completed: false,
-    xpReward: 70
+    xpReward: 120
   },
   
-  // building and infrastructure achievements
   {
     id: 'power_mogul',
     title: 'power mogul',
-    description: 'build 5 power generation buildings',
+    description: 'build 10 power generation buildings',
     completed: false,
-    xpReward: 50
+    xpReward: 90
   },
   {
     id: 'water_baron',
     title: 'water baron',
-    description: 'build 3 water supply buildings',
+    description: 'build 8 water supply buildings',
     completed: false,
-    xpReward: 45
+    xpReward: 85
   },
   {
     id: 'entertainment_district',
     title: 'entertainment district',
-    description: 'build 5 entertainment buildings',
+    description: 'build 12 entertainment buildings',
     completed: false,
-    xpReward: 55
+    xpReward: 100
   },
   {
     id: 'commercial_hub',
     title: 'commercial hub',
-    description: 'build 10 commercial buildings',
+    description: 'build 25 commercial buildings',
     completed: false,
-    xpReward: 65
+    xpReward: 120
   },
   {
     id: 'residential_developer',
     title: 'residential developer',
-    description: 'build 15 residential buildings',
+    description: 'build 30 residential buildings',
     completed: false,
-    xpReward: 60
+    xpReward: 130
+  },
+  
+  {
+    id: 'coin_millionaire',
+    title: 'millionaire mayor',
+    description: 'accumulate 100,000 coins at once',
+    completed: false,
+    xpReward: 300
+  },
+  {
+    id: 'day_100',
+    title: 'century milestone',
+    description: 'reach day 100',
+    completed: false,
+    xpReward: 200
+  },
+  {
+    id: 'day_365',
+    title: 'full year master',
+    description: 'reach day 365 (one full year)',
+    completed: false,
+    xpReward: 500
+  },
+  {
+    id: 'level_20',
+    title: 'legendary mayor',
+    description: 'reach level 20',
+    completed: false,
+    xpReward: 250
+  },
+  {
+    id: 'perfect_efficiency',
+    title: 'perfectionist',
+    description: 'maintain 100% efficiency in all services for 30 days',
+    completed: false,
+    xpReward: 400
+  },
+  {
+    id: 'mega_community',
+    title: 'mega community',
+    description: 'unlock all available neighbors (20+)',
+    completed: false,
+    xpReward: 300
+  },
+  {
+    id: 'master_builder',
+    title: 'construction magnate',
+    description: 'place 100 buildings of any type',
+    completed: false,
+    xpReward: 250
+  },
+  {
+    id: 'upgrade_master',
+    title: 'upgrade virtuoso',
+    description: 'install 50 building upgrades',
+    completed: false,
+    xpReward: 200
+  },
+  {
+    id: 'disaster_survivor',
+    title: 'disaster master',
+    description: 'survive 10 natural disasters without losing any buildings',
+    completed: false,
+    xpReward: 350
+  },
+  {
+    id: 'revenue_king',
+    title: 'revenue emperor',
+    description: 'earn 10,000 coins in a single day',
+    completed: false,
+    xpReward: 400
   }
 ];

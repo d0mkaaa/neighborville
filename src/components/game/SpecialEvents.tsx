@@ -457,10 +457,8 @@ export default function SpecialEventsManager({
 
   const canParticipateInEvent = (event: SpecialEvent) => {
     if (!event.requirements) return true;
-    
-    const req = event.requirements;
+      const req = event.requirements;
     if (req.residents && neighbors.filter(n => n.hasHome).length < req.residents) return false;
-    if (req.happiness && gameData.happiness < req.happiness) return false;
     if (req.level && gameData.level < req.level) return false;
     if (req.coins && gameData.coins < req.coins) return false;
     if (req.buildings) {
@@ -482,18 +480,13 @@ export default function SpecialEventsManager({
     
     const updates: Partial<GameProgress> = {
       coins: gameData.coins - activity.cost
-    };
-    
-    if (activity.impact) {
-      if (activity.impact.happiness) {
-        updates.happiness = Math.min(100, gameData.happiness + activity.impact.happiness);
-      }
-      if (activity.impact.experience) {
-        updates.experience = gameData.experience + activity.impact.experience;
-      }
-      if (activity.impact.coins) {
-        updates.coins = (updates.coins || gameData.coins) + activity.impact.coins;
-      }
+    };      if (activity.impact) {
+        if (activity.impact.experience) {
+          updates.experience = gameData.experience + activity.impact.experience;
+        }
+        if (activity.impact.coins) {
+          updates.coins = (updates.coins || gameData.coins) + activity.impact.coins;
+        }
     }
     
     onUpdateGameState(updates);
@@ -593,13 +586,7 @@ export default function SpecialEventsManager({
                 {selectedEvent.requirements.residents && (
                   <div className={neighbors.filter(n => n.hasHome).length >= selectedEvent.requirements.residents ? 'text-green-600' : 'text-red-600'}>
                     • At least {selectedEvent.requirements.residents} residents
-                  </div>
-                )}
-                {selectedEvent.requirements.happiness && (
-                  <div className={gameData.happiness >= selectedEvent.requirements.happiness ? 'text-green-600' : 'text-red-600'}>
-                    • {selectedEvent.requirements.happiness}% neighborhood happiness
-                  </div>
-                )}
+                  </div>                )}
                 {selectedEvent.requirements.level && (
                   <div className={gameData.level >= selectedEvent.requirements.level ? 'text-green-600' : 'text-red-600'}>
                     • Level {selectedEvent.requirements.level} or higher

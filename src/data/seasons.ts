@@ -88,7 +88,6 @@ export const SEASONS: Season[] = [
 ];
 
 export const SEASONAL_EVENTS: SeasonalEvent[] = [
-  // spring events
   {
     id: "spring_festival",
     name: "Spring Festival",
@@ -158,7 +157,6 @@ export const SEASONAL_EVENTS: SeasonalEvent[] = [
     ]
   },
   
-  // summer events
   {
     id: "summer_fair",
     name: "Summer Fair",
@@ -242,7 +240,6 @@ export const SEASONAL_EVENTS: SeasonalEvent[] = [
     ]
   },
   
-  // autumn events
   {
     id: "harvest_festival",
     name: "Harvest Festival",
@@ -326,7 +323,6 @@ export const SEASONAL_EVENTS: SeasonalEvent[] = [
     ]
   },
   
-  // winter events
   {
     id: "winter_festival",
     name: "Winter Festival",

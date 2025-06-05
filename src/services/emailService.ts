@@ -2,7 +2,7 @@ import { NORMALIZED_API_URL } from '../config/apiConfig';
 
 export const sendVerificationEmail = async (
   email: string,
-  _code?: string, // i kept it for development purposes, but does nothing currently
+  _code?: string,
   username?: string
 ): Promise<{ success: boolean, isExistingCode?: boolean, message?: string }> => {
   try {

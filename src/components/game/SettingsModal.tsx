@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Volume2, VolumeX, HelpCircle, Settings as SettingsIcon, Music, User, LogOut, Shield, Save, Eye, EyeOff, AlertCircle, CloudUpload, LogIn } from "lucide-react";
+import { X, Volume2, VolumeX, HelpCircle, Settings as SettingsIcon, Music, User, LogOut, Shield, Save, Eye, EyeOff, AlertCircle, CloudUpload, LogIn, Monitor, Smartphone, Tablet, Loader2, CheckCircle, Globe, Info } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
-import { API_URL } from "../../config/apiConfig";
+import { getUserSessions } from "../../services/userService";
+import { NORMALIZED_API_URL } from "../../config/apiConfig";
 
 type SettingsModalProps = {
   isOpen: boolean;
@@ -19,6 +20,23 @@ type SettingsModalProps = {
   onLogout?: () => void;
   onShowAuthModal?: () => void;
 };
+
+interface Session {
+  id: string;
+  ipAddress: string;
+  device: {
+    type: 'mobile' | 'desktop' | 'tablet' | 'unknown';
+    browser: string;
+    os: string;
+  };
+  location?: {
+    country?: string;
+    city?: string;
+  };
+  lastActive: Date | string;
+  createdAt: Date | string;
+  isCurrent: boolean;
+}
 
 interface ProfileSettings {
   visibility: 'public' | 'private';
@@ -45,119 +63,154 @@ export default function SettingsModal({
   const authContext = useAuth();
   const user = propUser || authContext.user;
   const isAuthenticated = propIsAuthenticated !== undefined ? propIsAuthenticated : authContext.isAuthenticated;
-  const isGuest = user?.isGuest || authContext.isGuest;
+  const isGuest = user?.isGuest;
   const logout = authContext.logout;
-  const [activeTab, setActiveTab] = useState<'game' | 'account' | 'profile'>('game');
-  const [username, setUsername] = useState(user?.username || '');
-  const [activeSessions, setActiveSessions] = useState<number>(0);
-  const [settings, setSettings] = useState(user?.settings || {
-    notifications: true,
-    sound: true,
-    music: true,
-    darkMode: false,
-    language: 'en'
-  });
-  const [lastLoginDate, setLastLoginDate] = useState<Date | null>(null);
-  const [lastSaveDate, setLastSaveDate] = useState<Date | null>(null);
-  const [isLoadingUserData, setIsLoadingUserData] = useState(false);
 
-  const [profileVisibility, setProfileVisibility] = useState<'public' | 'private'>('public');
-  const [showBio, setShowBio] = useState(true);
-  const [showStats, setShowStats] = useState(true);
-  const [showActivity, setShowActivity] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState<boolean | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [loadingSessions, setLoadingSessions] = useState(false);
+  const [revokingSession, setRevokingSession] = useState<string | null>(null);
+  const [revokingAll, setRevokingAll] = useState(false);
+  const [showRevokeAllConfirm, setShowRevokeAllConfirm] = useState(false);
+  const [sessionError, setSessionError] = useState<string | null>(null);
+  const [sessionSuccess, setSessionSuccess] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (isGuest) {
-      setActiveTab('game');
-    }
-  }, [isGuest]);
+  const fetchSessions = async () => {
+    setLoadingSessions(true);
+    setSessionError(null);
+    try {
+      const sessions = await getUserSessions();
+      if (Array.isArray(sessions)) {
+        const enhancedSessions = sessions.map((session: any) => {
+          const userAgent = session.clientInfo?.userAgent || '';
+          let deviceType: 'mobile' | 'desktop' | 'tablet' | 'unknown' = 'unknown';
+          let browser = 'Unknown';
+          let os = 'Unknown';
 
-  useEffect(() => {
-    if (user && isOpen) {
-      setUsername(user.username);
-      setSettings(user.settings || {});
-      
-      if (user.profileSettings) {
-        setProfileVisibility(user.profileSettings.visibility || 'public');
-        setShowBio(user.profileSettings.showBio !== undefined ? user.profileSettings.showBio : true);
-        setShowStats(user.profileSettings.showStats !== undefined ? user.profileSettings.showStats : true);
-        setShowActivity(user.profileSettings.showActivity !== undefined ? user.profileSettings.showActivity : true);
-      }
-      
-      if (isGuest) {
-        setActiveSessions(1);
-        setLastLoginDate(new Date());
-        setLastSaveDate(null);
-        return;
-      }
-      
-      const fetchUserData = async () => {
-        setIsLoadingUserData(true);
-        try {
-          const response = await fetch(`${API_URL}/api/user/profile`, {
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            credentials: 'include'
-          });
-          
-          if (response.ok) {
-            const data = await response.json();
-            if (data.success && data.user) {
-              setLastLoginDate(data.user.lastLogin ? new Date(data.user.lastLogin) : null);
-              setLastSaveDate(data.user.lastSave ? new Date(data.user.lastSave) : null);
-              
-              if (data.user.profileSettings) {
-                setProfileVisibility(data.user.profileSettings.visibility || 'public');
-                setShowBio(data.user.profileSettings.showBio !== undefined ? data.user.profileSettings.showBio : true);
-                setShowStats(data.user.profileSettings.showStats !== undefined ? data.user.profileSettings.showStats : true);
-                setShowActivity(data.user.profileSettings.showActivity !== undefined ? data.user.profileSettings.showActivity : true);
-              }
-            }
+          if (userAgent.includes('Mobile') || userAgent.includes('Android') || userAgent.includes('iPhone')) {
+            deviceType = 'mobile';
+          } else if (userAgent.includes('Tablet') || userAgent.includes('iPad')) {
+            deviceType = 'tablet';
+          } else if (userAgent.includes('Chrome') || userAgent.includes('Firefox') || userAgent.includes('Safari') || userAgent.includes('Edge')) {
+            deviceType = 'desktop';
           }
-          
-          const sessionsResponse = await fetch(`${API_URL}/api/user/sessions`, {
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            credentials: 'include'
-          });
-          
-          if (sessionsResponse.ok) {
-            const sessionsData = await sessionsResponse.json();
-            if (sessionsData.success && sessionsData.sessions) {
-              setActiveSessions(sessionsData.sessions.length);
-            }
-          }
-        } catch (error) {
-        } finally {
-          setIsLoadingUserData(false);
-        }
-      };
-      
-      fetchUserData();
-    }
-  }, [user, isOpen, isGuest]);
 
-  useEffect(() => {
-    const savedSettings = localStorage.getItem('profile_settings');
-    if (savedSettings) {
-      try {
-        const settings = JSON.parse(savedSettings);
-        setProfileVisibility(settings.visibility || 'public');
-        setShowBio(settings.showBio !== undefined ? settings.showBio : true);
-        setShowStats(settings.showStats !== undefined ? settings.showStats : true);
-        setShowActivity(settings.showActivity !== undefined ? settings.showActivity : true);
-      } catch (error) {
-        console.error('Failed to parse profile settings', error);
+          if (userAgent.includes('Chrome')) browser = 'Chrome';
+          else if (userAgent.includes('Firefox')) browser = 'Firefox';
+          else if (userAgent.includes('Safari')) browser = 'Safari';
+          else if (userAgent.includes('Edge')) browser = 'Edge';
+
+          if (userAgent.includes('Windows')) os = 'Windows';
+          else if (userAgent.includes('Mac')) os = 'macOS';
+          else if (userAgent.includes('Linux')) os = 'Linux';
+          else if (userAgent.includes('Android')) os = 'Android';
+          else if (userAgent.includes('iOS')) os = 'iOS';
+
+          return {
+            id: session.id,
+            ipAddress: session.clientInfo?.ip || 'Unknown',
+            device: {
+              type: deviceType,
+              browser,
+              os
+            },
+            lastActive: new Date(session.lastActive),
+            createdAt: new Date(session.createdAt),
+            isCurrent: session.current === true
+          };
+        });
+        setSessions(enhancedSessions);
       }
+    } catch (error) {
+      console.error('Error fetching sessions:', error);
+      setSessionError('Failed to load sessions. Please try again later.');
+    } finally {
+      setLoadingSessions(false);
     }
-  }, [isOpen]);
+  };
+
+  const revokeSession = async (sessionId: string) => {
+    setRevokingSession(sessionId);
+    setSessionError(null);
+    setSessionSuccess(null);
+
+    try {
+      const API_BASE = NORMALIZED_API_URL || 'http://localhost:3001';
+      const response = await fetch(`${API_BASE}/api/user/sessions/${sessionId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
+      });
+
+      if (response.ok) {
+        setSessions(sessions.filter(session => session.id !== sessionId));
+        setSessionSuccess('Session revoked successfully');
+        setTimeout(() => setSessionSuccess(null), 3000);
+      } else {
+        setSessionError('Failed to revoke session. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error revoking session:', error);
+      setSessionError('Error revoking session. Please try again later.');
+    } finally {
+      setRevokingSession(null);
+    }
+  };
+
+  const revokeAllOtherSessions = async () => {
+    setRevokingAll(true);
+    setSessionError(null);
+    setSessionSuccess(null);
+
+    try {
+      const API_BASE = NORMALIZED_API_URL || 'http://localhost:3001';
+      const response = await fetch(`${API_BASE}/api/user/sessions`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
+      });
+
+      if (response.ok) {
+        setSessions(sessions.filter(session => session.isCurrent));
+        setSessionSuccess('All other sessions revoked successfully');
+        setShowRevokeAllConfirm(false);
+        setTimeout(() => setSessionSuccess(null), 3000);
+      } else {
+        setSessionError('Failed to revoke all sessions. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error revoking all sessions:', error);
+      setSessionError('Error revoking all sessions. Please try again later.');
+    } finally {
+      setRevokingAll(false);
+    }
+  };
+
+  const getDeviceIcon = (type: string) => {
+    switch (type) {
+      case 'mobile': return <Smartphone className="text-blue-500" size={16} />;
+      case 'tablet': return <Tablet className="text-green-500" size={16} />;
+      case 'desktop': return <Monitor className="text-purple-500" size={16} />;
+      default: return <Monitor className="text-gray-500" size={16} />;
+    }
+  };
+
+  const formatSessionDate = (date: Date | string) => {
+    const d = new Date(date);
+    return d.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const getSessionName = (session: Session) => {
+    return `${session.device.browser} on ${session.device.os}`;
+  };
 
   const handleMusicToggle = () => {
     onToggleMusic();
@@ -172,79 +225,6 @@ export default function SettingsModal({
     }
   };
 
-  const handleUpdateUsername = async () => {
-    if (!user || !username.trim()) return;
-    
-    if (user.isGuest) {
-      alert('Please create an account to change your username');
-      return;
-    }
-    
-    try {
-      await fetch(`${API_URL}/api/user/profile`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include',
-        body: JSON.stringify({ username })
-      });
-      
-      alert('Username updated successfully!');
-    } catch (error) {
-      alert('Failed to update username');
-    }
-  };
-
-  const handleSaveSettings = async () => {
-    if (!user) return;
-    
-    if (user.isGuest) {
-      alert('Please create an account to save settings');
-      return;
-    }
-    
-    try {
-      await fetch(`${API_URL}/api/user/settings`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include',
-        body: JSON.stringify({ settings })
-      });
-      
-      alert('Settings saved successfully!');
-    } catch (error) {
-      alert('Failed to save settings');
-    }
-  };
-
-  const handleEndOtherSessions = async () => {
-    if (!user) return;
-    
-    if (user.isGuest) {
-      alert('Please create an account to manage sessions');
-      return;
-    }
-    
-    try {
-      await fetch(`${API_URL}/api/user/sessions`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include'
-      });
-      
-      setActiveSessions(1);
-      
-      alert('All other sessions have been logged out.');
-    } catch (error) {
-      alert('Failed to end other sessions');
-    }
-  };
-
   const handleLogout = () => {
     if (propOnLogout) {
       propOnLogout();
@@ -254,52 +234,11 @@ export default function SettingsModal({
     onClose();
   };
 
-  const handleSaveProfileSettings = async () => {
-    setIsSaving(true);
-    setErrorMessage(null);
-    
-    if (user?.isGuest) {
-      setIsSaving(false);
-      setSaveSuccess(false);
-      setErrorMessage('Please create an account to save profile settings');
-      return;
+  useEffect(() => {
+    if (isOpen && isAuthenticated && !isGuest) {
+      fetchSessions();
     }
-    
-    try {
-      const profileSettings = {
-        visibility: profileVisibility,
-        showBio,
-        showStats,
-        showActivity
-      };
-      
-      localStorage.setItem('profile_settings', JSON.stringify(profileSettings));
-      
-      const response = await fetch(`${API_URL}/api/user/profile/settings`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include',
-        body: JSON.stringify({ profileSettings })
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to save profile settings');
-      }
-      
-      setIsSaving(false);
-      setSaveSuccess(true);
-      
-      setTimeout(() => {
-        setSaveSuccess(null);
-      }, 3000);
-    } catch (error) {
-      setIsSaving(false);
-      setSaveSuccess(false);
-      setErrorMessage('Failed to save settings. Please try again.');
-    }
-  };
+  }, [isOpen, isAuthenticated, isGuest]);
 
   return (
     <AnimatePresence>
@@ -316,399 +255,343 @@ export default function SettingsModal({
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.95, opacity: 0 }}
-            className="bg-white max-w-md w-full rounded-xl shadow-xl overflow-hidden"
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden"
             onClick={e => e.stopPropagation()}
           >
-            <div className="bg-emerald-500 text-white p-4 flex justify-between items-center">
-              <h2 className="text-lg font-medium lowercase flex items-center gap-2">
-                <SettingsIcon size={18} />
-                settings
-              </h2>
-              <button
-                onClick={onClose}
-                className="text-white/80 hover:text-white"
-              >
-                <X size={20} />
-              </button>
+            <div className="bg-gradient-to-r from-emerald-50 to-teal-50 p-6 border-b border-gray-100">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center mr-4">
+                    <SettingsIcon size={24} className="text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-bold text-gray-800">Settings</h3>
+                    <p className="text-gray-600">Manage your account and game preferences</p>
+                  </div>
+                </div>
+                <button
+                  onClick={onClose}
+                  className="p-2 hover:bg-gray-100 rounded-xl transition-colors"
+                >
+                  <X size={24} className="text-gray-600" />
+                </button>
+              </div>
+              
+              {isAuthenticated && user && !isGuest && (
+                <div className="mt-4 bg-white/60 rounded-2xl p-4">
+                  <div className="flex items-center">
+                    <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center mr-3">
+                      <User size={20} className="text-white" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-800">{user?.username}</p>
+                      <p className="text-sm text-gray-600">{user?.email}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {isGuest && (
+                <div className="mt-4 bg-blue-50 rounded-2xl p-4 border border-blue-200">
+                  <div className="flex items-center">
+                    <div className="w-10 h-10 bg-blue-500 rounded-xl flex items-center justify-center mr-3">
+                      <CloudUpload size={20} className="text-white" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-medium text-blue-800">Playing as Guest</p>
+                      <p className="text-sm text-blue-600">Create an account to save progress</p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        if (onShowAuthModal) {
+                          onShowAuthModal();
+                        } else {
+                          onShowLogin?.();
+                        }
+                        onClose();
+                      }}
+                      className="bg-blue-500 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-blue-600 transition-colors flex items-center gap-1"
+                    >
+                      <LogIn size={14} />
+                      Sign In
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
             
-            {isGuest && (
-              <div className="bg-blue-50 border-b border-blue-100 p-4">
-                <div className="flex items-start">
-                  <div className="bg-blue-100 rounded-full p-2 mr-3">
-                    <CloudUpload className="text-blue-600" size={20} />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-sm font-medium text-blue-800">Playing as Guest</h3>
-                    <p className="text-xs text-blue-600 mt-1">
-                      Create an account to save your progress to the cloud and access your city from any device.
-                    </p>
-                    <div className="mt-2">
-                      <button 
-                        onClick={() => {
-                          if (onShowAuthModal) {
-                            onShowAuthModal();
-                          } else {
-                            onShowLogin?.();
-                          }
-                          onClose();
-                        }}
-                        className="bg-blue-500 text-white text-xs px-3 py-1.5 rounded flex items-center gap-1.5 hover:bg-blue-600 transition-colors"
+            <div className="p-6 max-h-[60vh] overflow-y-auto">
+              <div className="space-y-6">
+                <div>
+                  <h4 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                    <Music size={20} className="mr-2 text-emerald-600" />
+                    Game Settings
+                  </h4>
+                  <div className="bg-gray-50 rounded-xl p-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center">
+                        {musicEnabled ? <Music size={18} className="mr-2 text-emerald-500" /> : <VolumeX size={18} className="mr-2 text-gray-400" />}
+                        <span className="font-medium">Background Music</span>
+                      </div>
+                      <button
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${musicEnabled ? 'bg-emerald-500' : 'bg-gray-200'}`}
+                        onClick={handleMusicToggle}
                       >
-                        <LogIn size={14} />
-                        Sign Up / Log In
+                        <span
+                          className={`${
+                            musicEnabled ? 'translate-x-6' : 'translate-x-1'
+                          } inline-block h-4 w-4 transform rounded-full bg-white transition`}
+                        />
                       </button>
                     </div>
+                    
+                    {musicEnabled && (
+                      <div>
+                        <label className="block text-sm text-gray-600 mb-2">Volume</label>
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.01"
+                          defaultValue="0.5"
+                          className="w-full accent-emerald-500"
+                          onChange={handleVolumeChange}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {isAuthenticated && !isGuest && (
+                  <div>
+                    <h4 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                      <User size={20} className="mr-2 text-emerald-600" />
+                      Account Information
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Username</label>
+                        <input
+                          type="text"
+                          value={user?.username || ''}
+                          className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50"
+                          readOnly
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                        <input
+                          type="email"
+                          value={user?.email || ''}
+                          className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50"
+                          readOnly
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {isAuthenticated && !isGuest && (
+                  <div>
+                    <h4 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                      <Shield size={20} className="mr-2 text-emerald-600" />
+                      Security & Sessions
+                    </h4>
+                    
+                    <div className="space-y-3 mb-4">
+                      <div className="flex items-center justify-between p-4 bg-green-50 rounded-xl border border-green-100">
+                        <div className="flex items-center">
+                          <div className="w-3 h-3 bg-green-500 rounded-full mr-3"></div>
+                          <div>
+                            <p className="font-medium text-green-800">Email Verified</p>
+                            <p className="text-sm text-green-600">Your account is secure</p>
+                          </div>
+                        </div>
+                        <CheckCircle size={20} className="text-green-600" />
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <div className="flex justify-between items-center mb-4">
+                        <h5 className="font-medium text-gray-800">Active Sessions</h5>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={fetchSessions}
+                            disabled={loadingSessions}
+                            className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 text-sm"
+                          >
+                            {loadingSessions ? (
+                              <Loader2 size={14} className="animate-spin" />
+                            ) : (
+                              <Shield size={14} />
+                            )}
+                            {loadingSessions ? 'Loading...' : 'Refresh'}
+                          </button>
+                          
+                          {sessions.length > 1 && (
+                            <div>
+                              {!showRevokeAllConfirm ? (
+                                <button
+                                  onClick={() => setShowRevokeAllConfirm(true)}
+                                  className="bg-red-100 text-red-700 hover:bg-red-200 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 text-sm"
+                                >
+                                  <LogOut size={14} />
+                                  Revoke All
+                                </button>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    onClick={() => setShowRevokeAllConfirm(false)}
+                                    disabled={revokingAll}
+                                    className="bg-gray-100 text-gray-700 hover:bg-gray-200 px-2 py-1 rounded text-xs"
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    onClick={revokeAllOtherSessions}
+                                    disabled={revokingAll}
+                                    className="bg-red-600 text-white hover:bg-red-700 px-2 py-1 rounded text-xs flex items-center gap-1"
+                                  >
+                                    {revokingAll ? (
+                                      <Loader2 size={12} className="animate-spin" />
+                                    ) : (
+                                      <CheckCircle size={12} />
+                                    )}
+                                    {revokingAll ? 'Revoking...' : 'Confirm'}
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {sessionError && (
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+                          <p className="text-red-700 text-sm">{sessionError}</p>
+                        </div>
+                      )}
+                      
+                      {sessionSuccess && (
+                        <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
+                          <p className="text-green-700 text-sm">{sessionSuccess}</p>
+                        </div>
+                      )}
+                      
+                      {loadingSessions ? (
+                        <div className="bg-gray-50 rounded-lg p-6 text-center">
+                          <Loader2 size={24} className="animate-spin mx-auto mb-2 text-gray-400" />
+                          <p className="text-gray-600">Loading sessions...</p>
+                        </div>
+                      ) : sessions.length > 0 ? (
+                        <div className="space-y-2">
+                          {sessions.map(session => (
+                            <div key={session.id} className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  {getDeviceIcon(session.device.type)}
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <p className="font-medium text-gray-800 text-sm">{getSessionName(session)}</p>
+                                      {session.isCurrent && (
+                                        <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs font-medium">
+                                          Current
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="text-xs text-gray-600">
+                                      <p>IP: {session.ipAddress}</p>
+                                      <p>Last active: {formatSessionDate(session.lastActive)}</p>
+                                    </div>
+                                  </div>
+                                </div>
+                                
+                                {!session.isCurrent && (
+                                  <button
+                                    onClick={() => revokeSession(session.id)}
+                                    disabled={revokingSession === session.id}
+                                    className="text-red-600 hover:text-red-800 p-1.5 rounded-md hover:bg-red-50 flex items-center gap-1 text-xs"
+                                  >
+                                    {revokingSession === session.id ? (
+                                      <Loader2 size={12} className="animate-spin" />
+                                    ) : (
+                                      <LogOut size={12} />
+                                    )}
+                                    {revokingSession === session.id ? 'Revoking...' : 'Revoke'}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="bg-gray-50 rounded-lg p-4 text-center">
+                          <Monitor size={20} className="mx-auto mb-2 text-gray-400" />
+                          <p className="text-gray-600 text-sm">No sessions found</p>
+                          <p className="text-xs text-gray-500">Click "Refresh" to load your active sessions</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <h4 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                    <HelpCircle size={20} className="mr-2 text-emerald-600" />
+                    Help & Support
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <button
+                      onClick={() => {
+                        onShowTutorial();
+                        onClose();
+                      }}
+                      className="flex items-center p-4 bg-blue-50 hover:bg-blue-100 rounded-xl transition-colors text-left"
+                    >
+                      <Info size={20} className="text-blue-600 mr-3" />
+                      <div>
+                        <p className="font-medium text-blue-800">Tutorial</p>
+                        <p className="text-sm text-blue-600">Learn how to play</p>
+                      </div>
+                    </button>
+                    
+                    <button
+                      onClick={() => {
+                        onShowStats();
+                        onClose();
+                      }}
+                      className="flex items-center p-4 bg-purple-50 hover:bg-purple-100 rounded-xl transition-colors text-left"
+                    >
+                      <User size={20} className="text-purple-600 mr-3" />
+                      <div>
+                        <p className="font-medium text-purple-800">Player Stats</p>
+                        <p className="text-sm text-purple-600">View your progress</p>
+                      </div>
+                    </button>
                   </div>
                 </div>
               </div>
-            )}
-            
-            <div className="border-b border-gray-200">
-              <nav className="flex">
-                <button
-                  onClick={() => setActiveTab('game')}
-                  className={`px-4 py-3 font-medium text-sm ${
-                    activeTab === 'game'
-                      ? 'text-emerald-600 border-b-2 border-emerald-500'
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  Game
-                </button>
-                
-                {user && !isGuest && (
-                  <>
-                    <button
-                      onClick={() => setActiveTab('profile')}
-                      className={`px-4 py-3 font-medium text-sm ${
-                        activeTab === 'profile'
-                          ? 'text-emerald-600 border-b-2 border-emerald-500'
-                          : 'text-gray-500 hover:text-gray-700'
-                      }`}
-                    >
-                      Profile
-                    </button>
-                    <button
-                      onClick={() => setActiveTab('account')}
-                      className={`px-4 py-3 font-medium text-sm ${
-                        activeTab === 'account'
-                          ? 'text-emerald-600 border-b-2 border-emerald-500'
-                          : 'text-gray-500 hover:text-gray-700'
-                      }`}
-                    >
-                      Account
-                    </button>
-                  </>
-                )}
-              </nav>
             </div>
             
-            <div className="p-4">
-              {activeTab === 'game' && (
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <h3 className="text-sm font-medium text-gray-700">sound & music</h3>
-                    <div className="bg-gray-50 rounded-lg p-4 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center">
-                          {musicEnabled ? <Music size={18} className="mr-2 text-emerald-500" /> : <Music size={18} className="mr-2 text-gray-400" />}
-                          <span>Background Music</span>
-                        </div>
-                        <button
-                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${musicEnabled ? 'bg-emerald-500' : 'bg-gray-200'}`}
-                          onClick={handleMusicToggle}
-                        >
-                          <span
-                            className={`${
-                              musicEnabled ? 'translate-x-6' : 'translate-x-1'
-                            } inline-block h-4 w-4 transform rounded-full bg-white transition`}
-                          />
-                        </button>
-                      </div>
-                      
-                      {musicEnabled && (
-                        <div className="pt-2">
-                          <label className="block text-sm text-gray-600 mb-1">Volume</label>
-                          <input
-                            type="range"
-                            min="0"
-                            max="1"
-                            step="0.01"
-                            defaultValue="0.5"
-                            className="w-full accent-emerald-500"
-                            onChange={handleVolumeChange}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <h3 className="text-sm font-medium text-gray-700">help & tutorial</h3>
-                    <div className="bg-gray-50 rounded-lg p-4">
-                      <div className="flex items-center justify-between">
-                        <button
-                          onClick={() => {
-                            onShowTutorial();
-                            onClose();
-                          }}
-                          className="px-3 py-1.5 bg-emerald-100 text-emerald-700 rounded flex items-center hover:bg-emerald-200 transition-colors"
-                        >
-                          <HelpCircle size={16} className="mr-2" />
-                          Show Tutorial
-                        </button>
-                        
-                        <button
-                          onClick={() => {
-                            onShowStats();
-                            onClose();
-                          }}
-                          className="px-3 py-1.5 bg-amber-100 text-amber-700 rounded flex items-center hover:bg-amber-200 transition-colors"
-                        >
-                          <User size={16} className="mr-2" />
-                          Player Stats
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {isGuest && (
-                    <div className="border-t border-gray-200 pt-4 mt-4">
-                      <div className="bg-blue-50 rounded-lg p-4">
-                        <h3 className="text-sm font-medium text-blue-800 mb-2">
-                          Unlock all features
-                        </h3>
-                        <p className="text-xs text-blue-600 mb-3">
-                          Create an account to unlock cloud saves, access the leaderboard, and customize your profile.
-                        </p>
-                        <button
-                          onClick={() => {
-                            if (onShowAuthModal) {
-                              onShowAuthModal();
-                            } else {
-                              onShowLogin?.();
-                            }
-                            onClose();
-                          }}
-                          className="w-full bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600 transition-colors flex items-center justify-center gap-2"
-                        >
-                          <LogIn size={16} />
-                          Sign Up / Log In
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-              
-              {activeTab === 'profile' && !isGuest && user && (
-                <div className="space-y-4">
-                  <div className="flex items-center gap-4">
-                    <div className="w-16 h-16 rounded-full bg-blue-500 flex items-center justify-center text-white text-2xl font-bold">
-                      {user?.username ? user.username[0].toUpperCase() : 'U'}
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-semibold text-gray-900">{user?.username || 'User'}</h3>
-                      <p className="text-gray-500">Username cannot be changed</p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <h4 className="font-medium text-gray-900 flex items-center gap-2">
-                      <Shield size={18} />
-                      Privacy Settings
-                    </h4>
-                    
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          {profileVisibility === 'public' ? (
-                            <Eye size={18} className="text-green-600" />
-                          ) : (
-                            <EyeOff size={18} className="text-gray-600" />
-                          )}
-                          <span>Profile Visibility</span>
-                        </div>
-                        <div>
-                          <select
-                            value={profileVisibility}
-                            onChange={(e) => setProfileVisibility(e.target.value as 'public' | 'private')}
-                            className="p-2 border border-gray-300 rounded-md"
-                          >
-                            <option value="public">Public</option>
-                            <option value="private">Private</option>
-                          </select>
-                        </div>
-                      </div>
-                      
-                      {profileVisibility === 'public' && (
-                        <div className="pl-6 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm text-gray-600">Show Bio</span>
-                            <label className="relative inline-flex items-center cursor-pointer">
-                              <input 
-                                type="checkbox" 
-                                checked={showBio}
-                                onChange={() => setShowBio(!showBio)}
-                                className="sr-only peer" 
-                              />
-                              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                            </label>
-                          </div>
-                          
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm text-gray-600">Show Stats</span>
-                            <label className="relative inline-flex items-center cursor-pointer">
-                              <input 
-                                type="checkbox" 
-                                checked={showStats}
-                                onChange={() => setShowStats(!showStats)}
-                                className="sr-only peer" 
-                              />
-                              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                            </label>
-                          </div>
-                          
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm text-gray-600">Show Activity</span>
-                            <label className="relative inline-flex items-center cursor-pointer">
-                              <input 
-                                type="checkbox" 
-                                checked={showActivity}
-                                onChange={() => setShowActivity(!showActivity)}
-                                className="sr-only peer" 
-                              />
-                              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                            </label>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {saveSuccess === true && (
-                    <div className="p-3 bg-green-50 rounded-lg text-green-700 text-sm">
-                      Settings saved successfully!
-                    </div>
-                  )}
-                  
-                  {saveSuccess === false && errorMessage && (
-                    <div className="p-3 bg-red-50 rounded-lg flex items-center gap-2 text-red-700 text-sm">
-                      <AlertCircle size={16} />
-                      {errorMessage}
-                    </div>
-                  )}
-
-                  <button
-                    onClick={handleSaveProfileSettings}
-                    disabled={isSaving}
-                    className={`w-full py-2 px-4 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center justify-center gap-2 ${
-                      isSaving ? 'opacity-70 cursor-not-allowed' : ''
-                    }`}
-                  >
-                    {isSaving ? (
-                      <>
-                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Saving...
-                      </>
-                    ) : (
-                      <>
-                        <Save size={18} />
-                        Save Settings
-                      </>
-                    )}
-                  </button>
-                </div>
-              )}
-              
-              {activeTab === 'account' && !isGuest && user && (
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="text-sm font-medium text-gray-700 lowercase mb-3">account info</h3>
-                    <div className="bg-gray-50 rounded-lg p-4">
-                      <div className="flex items-center mb-4">
-                        <div className="w-12 h-12 bg-emerald-200 rounded-full flex items-center justify-center">
-                          <User size={24} className="text-emerald-800" />
-                        </div>
-                        <div className="ml-3">
-                          <p className="text-gray-900 font-medium">{user.username}</p>
-                          <p className="text-sm text-gray-500">
-                            {user.isGuest ? 'Guest Account' : user.email}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="border-t border-gray-200 pt-4">
-                        <div className="flex justify-between text-sm mb-1">
-                          <span className="text-gray-600">Account created</span>
-                          <span className="text-gray-800">
-                            {user.createdAt 
-                              ? new Date(user.createdAt).toLocaleDateString() 
-                              : isLoadingUserData ? 'Loading...' : 'Unknown'}
-                          </span>
-                        </div>
-                        <div className="flex justify-between text-sm mb-1">
-                          <span className="text-gray-600">Last login</span>
-                          <span className="text-gray-800">
-                            {isLoadingUserData 
-                              ? 'Loading...' 
-                              : lastLoginDate 
-                                ? lastLoginDate.toLocaleString() 
-                                : 'Never'}
-                          </span>
-                        </div>
-                        {(lastSaveDate || isLoadingUserData) && (
-                          <div className="flex justify-between text-sm">
-                            <span className="text-gray-600">Last game save</span>
-                            <span className="text-gray-800">
-                              {isLoadingUserData 
-                                ? 'Loading...' 
-                                : lastSaveDate 
-                                  ? lastSaveDate.toLocaleString() 
-                                  : 'Never'}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <h3 className="text-sm font-medium text-gray-700 lowercase mb-3">
-                      <div className="flex items-center">
-                        <Shield size={16} className="text-gray-500 mr-2" />
-                        security
-                      </div>
-                    </h3>
-                    <div className="bg-gray-50 rounded-lg p-4">
-                      <p className="text-sm text-gray-700 mb-3">
-                        You currently have {activeSessions} active session(s).
-                      </p>
-                      
-                      {activeSessions > 1 && (
-                        <button
-                          onClick={handleEndOtherSessions}
-                          className="w-full py-2 px-4 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm"
-                        >
-                          Log out other sessions
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
+            <div className="bg-gray-50 p-6 border-t border-gray-100">
+              <div className="flex justify-between items-center">
+                <button
+                  onClick={onClose}
+                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                >
+                  Close
+                </button>
+                
+                {isAuthenticated && !isGuest && (
                   <button
                     onClick={handleLogout}
-                    className="w-full py-2 flex items-center justify-center bg-red-100 text-red-600 rounded-lg hover:bg-red-200"
+                    className="flex items-center text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg transition-colors"
                   >
-                    <LogOut size={16} className="mr-2" />
-                    Log Out
+                    <LogOut size={18} className="mr-2" />
+                    <span>Sign Out</span>
                   </button>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </motion.div>
         </motion.div>

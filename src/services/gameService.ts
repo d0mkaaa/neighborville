@@ -145,6 +145,63 @@ export const loadGameFromServer = async (): Promise<{gameData: GameProgress | nu
   }
 };
 
+export const loadSpecificSaveFromServer = async (saveId: string): Promise<{gameData: GameProgress | null, lastSave: Date | null}> => {
+  try {
+    const token = getAuthToken();
+    
+    if (!token) {
+      console.warn('No auth token found, user must be logged in to load game');
+      return { gameData: null, lastSave: null };
+    }
+
+    console.log(`Attempting to load specific save from server at ${API_URL}/api/user/game/save/${encodeURIComponent(saveId)}`);
+    
+    const response = await fetch(`${API_URL}/api/user/game/save/${encodeURIComponent(saveId)}`, {
+      method: 'GET',
+      headers: getAuthHeaders(),
+      credentials: 'include',
+    });
+
+    console.log('Load specific save request completed with status:', response.status);
+
+    if (!response.ok) {
+      throw new Error(`Failed to load save: ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log('Load specific save result:', result);
+    
+    if (result.success && result.gameData) {
+      const gameData = result.gameData;
+      
+      if (gameData.happiness !== undefined) {
+        delete gameData.happiness;
+      }
+      
+      if (gameData.grid && Array.isArray(gameData.grid)) {
+        gameData.grid = gameData.grid.map(building => {
+          if (building && building.happiness !== undefined) {
+            const newBuilding = {...building};
+            delete newBuilding.happiness;
+            return newBuilding;
+          }
+          return building;
+        });
+      }
+      
+      return {
+        gameData,
+        lastSave: result.lastSave ? new Date(result.lastSave) : null
+      };
+    }
+    
+    return { gameData: null, lastSave: null };
+  } catch (error) {
+    console.error('Error loading specific save from server:', error);
+    return { gameData: null, lastSave: null };
+  }
+};
+
 export const getAllSavesFromServer = async (): Promise<{id: string, playerName: string, timestamp: number, data: GameProgress}[]> => {
   try {
     const token = getAuthToken();

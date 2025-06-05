@@ -67,9 +67,8 @@ export const CITY_EVENTS: GameEvent[] = [
         coins: 0,
         communitySatisfaction: -20,
         serviceBudgetImpact: [{ serviceId: 'water_system', efficiencyChange: -10 }],
-        publicTrustChange: -15,
-        mediaAttention: 'negative',
-        infraRepairCost: 350 // it will cost more later
+        publicTrustChange: -15,        mediaAttention: 'negative',
+        infraRepairCost: 350
       }
     ],
     weight: 1,

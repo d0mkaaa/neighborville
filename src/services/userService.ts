@@ -20,6 +20,25 @@ export interface User {
     showActivity: boolean;
     bio?: string;
   };
+  legalAcceptance?: {
+    termsOfService?: {
+      accepted: boolean;
+      version?: string;
+      acceptedAt?: string | Date;
+      ipAddress?: string;
+    };
+    privacyPolicy?: {
+      accepted: boolean;
+      version?: string;
+      acceptedAt?: string | Date;
+      ipAddress?: string;
+    };
+    marketingConsent?: {
+      accepted: boolean;
+      acceptedAt?: string | Date;
+      ipAddress?: string;
+    };
+  };
   isGuest?: boolean;
   createdAt?: string | Date;
   lastLogin?: string | Date;
@@ -33,17 +52,35 @@ export interface AuthResponse {
   message?: string;
 }
 
-export const saveAuthToken = (token: string): void => {
+export const saveAuthToken = (token: string, rememberMe: boolean = false): void => {
   if (!token) {
     console.warn('Attempted to save null/empty token');
     return;
   }
   try {
     const expiryDate = new Date();
-    expiryDate.setDate(expiryDate.getDate() + 7);
+    if (rememberMe) {
+      expiryDate.setDate(expiryDate.getDate() + 30);
+    } else {
+      expiryDate.setDate(expiryDate.getDate() + 7);
+    }
     
-    document.cookie = `neighborville_auth=${token}; expires=${expiryDate.toUTCString()}; path=/; SameSite=Lax`;
+    const isSecure = window.location.protocol === 'https:';
+    const cookieFlags = `expires=${expiryDate.toUTCString()}; path=/; SameSite=Lax${isSecure ? '; Secure' : ''}`;
+    document.cookie = `neighborville_auth=${token}; ${cookieFlags}`;
+    
+    if (rememberMe) {
+      localStorage.setItem('neighborville_auth_token', token);
+      localStorage.setItem('neighborville_auth_expiry', expiryDate.toISOString());
+      localStorage.setItem('neighborville_remember_me', 'true');
+    } else {
+      localStorage.removeItem('neighborville_auth_token');
+      localStorage.removeItem('neighborville_auth_expiry');
+      localStorage.removeItem('neighborville_remember_me');
+    }
+    
     sessionStorage.setItem('neighborville_auth_token', token);
+    sessionStorage.setItem('neighborville_auth_expiry', expiryDate.toISOString());
   } catch (error) {
     console.error('Error saving auth token:', error);
   }
@@ -51,10 +88,9 @@ export const saveAuthToken = (token: string): void => {
 
 export const getAuthToken = (): string | null => {
   try {
-    const cookies = document.cookie.split(';');
-    
     let token = null;
     
+    const cookies = document.cookie.split(';');
     for (const cookie of cookies) {
       const [name, value] = cookie.trim().split('=');
       if (name === 'neighborville_auth' && value) {
@@ -64,7 +100,36 @@ export const getAuthToken = (): string | null => {
     }
     
     if (!token) {
-      token = sessionStorage.getItem('neighborville_auth_token');
+      const storedToken = localStorage.getItem('neighborville_auth_token');
+      const storedExpiry = localStorage.getItem('neighborville_auth_expiry');
+      const rememberMe = localStorage.getItem('neighborville_remember_me') === 'true';
+      
+      if (storedToken && storedExpiry && rememberMe) {
+        const expiryDate = new Date(storedExpiry);
+        if (expiryDate > new Date()) {
+          token = storedToken;
+          saveAuthToken(token, true);
+        } else {
+          localStorage.removeItem('neighborville_auth_token');
+          localStorage.removeItem('neighborville_auth_expiry');
+          localStorage.removeItem('neighborville_remember_me');
+        }
+      }
+    }
+
+    if (!token) {
+      const sessionToken = sessionStorage.getItem('neighborville_auth_token');
+      const sessionExpiry = sessionStorage.getItem('neighborville_auth_expiry');
+      
+      if (sessionToken && sessionExpiry) {
+        const expiryDate = new Date(sessionExpiry);
+        if (expiryDate > new Date()) {
+          token = sessionToken;
+        } else {
+          sessionStorage.removeItem('neighborville_auth_token');
+          sessionStorage.removeItem('neighborville_auth_expiry');
+        }
+      }
     }
     
     if (!token || token === 'undefined' || token === 'null') {
@@ -80,8 +145,16 @@ export const getAuthToken = (): string | null => {
 
 const clearAuthToken = (): void => {
   try {
-    document.cookie = 'neighborville_auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax';
+    const isSecure = window.location.protocol === 'https:';
+    const cookieFlags = `expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax${isSecure ? '; Secure' : ''}`;
+    document.cookie = `neighborville_auth=; ${cookieFlags}`;
+    
+    localStorage.removeItem('neighborville_auth_token');
+    localStorage.removeItem('neighborville_auth_expiry');
+    localStorage.removeItem('neighborville_remember_me');
+    
     sessionStorage.removeItem('neighborville_auth_token');
+    sessionStorage.removeItem('neighborville_auth_expiry');
   } catch (error) {
     console.error('Error clearing auth token:', error);
   }
@@ -552,4 +625,126 @@ export const checkAuthenticationStatus = async (): Promise<{
       message: 'Error checking authentication status'
     };
   }
+};
+
+export interface LegalAcceptanceRequest {
+  termsOfService?: boolean;
+  privacyPolicy?: boolean;
+  marketingConsent?: boolean;
+  version?: string;
+}
+
+export interface LegalAcceptanceResponse {
+  success: boolean;
+  message?: string;
+  legalAcceptance?: {
+    termsOfService?: {
+      accepted: boolean;
+      version?: string;
+      acceptedAt?: string | Date;
+      ipAddress?: string;
+    };
+    privacyPolicy?: {
+      accepted: boolean;
+      version?: string;
+      acceptedAt?: string | Date;
+      ipAddress?: string;
+    };
+    marketingConsent?: {
+      accepted: boolean;
+      acceptedAt?: string | Date;
+      ipAddress?: string;
+    };
+  };
+}
+
+export const updateLegalAcceptance = async (acceptance: LegalAcceptanceRequest): Promise<LegalAcceptanceResponse> => {
+  try {
+    const response = await fetch(`${NORMALIZED_API_URL}/api/user/legal-acceptance`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      credentials: 'include',
+      body: JSON.stringify(acceptance)
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return {
+        success: false,
+        message: data.message || 'Failed to update legal acceptance'
+      };
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Error updating legal acceptance:', error);
+    return {
+      success: false,
+      message: typeof error === 'string' ? error : error instanceof Error ? error.message : 'Failed to update legal acceptance'
+    };
+  }
+};
+
+export const getLegalAcceptance = async (): Promise<LegalAcceptanceResponse> => {
+  try {
+    const response = await fetch(`${NORMALIZED_API_URL}/api/user/legal-acceptance`, {
+      method: 'GET',
+      headers: getAuthHeaders(),
+      credentials: 'include'
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return {
+        success: false,
+        message: data.message || 'Failed to fetch legal acceptance'
+      };
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Error fetching legal acceptance:', error);
+    return {
+      success: false,
+      message: typeof error === 'string' ? error : error instanceof Error ? error.message : 'Failed to fetch legal acceptance'
+    };
+  }
+};
+
+export const checkLegalAcceptanceRequired = (user: User | null): boolean => {
+  if (!user) return false;
+  
+  const legalAcceptance = user.legalAcceptance;
+  
+  if (!legalAcceptance) return true;
+  
+  const termsAccepted = legalAcceptance.termsOfService?.accepted === true;
+  const privacyAccepted = legalAcceptance.privacyPolicy?.accepted === true;
+  
+  return !(termsAccepted && privacyAccepted);
+};
+
+export const isRememberMeEnabled = (): boolean => {
+  try {
+    return localStorage.getItem('neighborville_remember_me') === 'true';
+  } catch (error) {
+    return false;
+  }
+};
+
+export const getTokenExpiryDate = (): Date | null => {
+  try {
+    const expiry = localStorage.getItem('neighborville_auth_expiry') || 
+                   sessionStorage.getItem('neighborville_auth_expiry');
+    return expiry ? new Date(expiry) : null;
+  } catch (error) {
+    return null;
+  }
+};
+
+export const isTokenExpired = (): boolean => {
+  const expiryDate = getTokenExpiryDate();
+  return expiryDate ? expiryDate <= new Date() : true;
 };

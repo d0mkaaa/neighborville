@@ -10,6 +10,7 @@ import {
   markUserVerified,
   createSession,
   deleteSession,
+  deleteSessionById,
   validateSession,
   refreshSession,
   getUserSessions,
@@ -310,6 +311,36 @@ router.delete('/sessions', auth, async (req, res) => {
   }
 });
 
+router.delete('/sessions/:sessionId', auth, async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+
+    if (req.session._id.toString() === sessionId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Cannot delete current session. Use logout instead.' 
+      });
+    }
+    
+    const success = await deleteSessionById(sessionId, req.user._id);
+    
+    if (!success) {
+      return res.status(404).json({
+        success: false,
+        message: 'Session not found or unauthorized'
+      });
+    }
+    
+    res.status(200).json({
+      success: true,
+      message: 'Session deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error in DELETE /sessions/:sessionId route:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 router.put('/profile', auth, [
   body('username').optional().isLength({ min: 3 }).withMessage('Username must be at least 3 characters')
 ], async (req, res) => {
@@ -526,6 +557,59 @@ router.delete('/game/save/:id', auth, async (req, res) => {
     });
   } catch (error) {
     console.error('Error in DELETE /game/save/:id route:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+router.get('/game/save/:id', auth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    if (!id) {
+      return res.status(400).json({ success: false, message: 'No save ID provided' });
+    }
+    
+    const user = await findUserById(req.user._id);
+    
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    
+    if (user._id.toString() !== req.user._id.toString()) {
+      console.error(`Security violation: User ${req.user._id} attempted to access save for user ${user._id}`);
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Unauthorized access to user saves'
+      });
+    }
+    
+    if (!user.gameSaves) {
+      user.gameSaves = [];
+    }
+    
+    const save = user.gameSaves.find(save => save.id === id);
+    
+    if (!save) {
+      console.log(`Save ID ${id} not found in user's saves collection`);
+      return res.status(404).json({
+        success: false,
+        message: 'Save not found'
+      });
+    }
+    
+    user.lastLogin = new Date();
+    await user.save();
+    
+    console.log(`Server successfully loaded save ${id} for user ${user._id}`);
+    
+    res.status(200).json({
+      success: true,
+      gameData: save.data,
+      lastSave: new Date(save.timestamp),
+      message: 'Game save loaded successfully'
+    });
+  } catch (error) {
+    console.error('Error in GET /game/save/:id route:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -925,6 +1009,96 @@ router.get('/auth-check', async (req, res) => {
     });
   } catch (error) {
     console.error('Error in /auth-check route:', error);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+});
+
+router.post('/legal-acceptance', auth, [
+  body('termsOfService').optional().isBoolean().withMessage('Terms of Service acceptance must be boolean'),
+  body('privacyPolicy').optional().isBoolean().withMessage('Privacy Policy acceptance must be boolean'),
+  body('marketingConsent').optional().isBoolean().withMessage('Marketing consent must be boolean'),
+  body('version').optional().isString().withMessage('Version must be a string')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
+    const { termsOfService, privacyPolicy, marketingConsent, version = '1.0.0' } = req.body;
+    const userId = req.user.id;
+    const ipAddress = req.ip || req.connection.remoteAddress || 'unknown';
+
+    const user = await findUserById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const updateFields = {};
+    const currentTime = new Date();
+
+    if (termsOfService !== undefined) {
+      updateFields['legalAcceptance.termsOfService.accepted'] = termsOfService;
+      updateFields['legalAcceptance.termsOfService.version'] = version;
+      updateFields['legalAcceptance.termsOfService.acceptedAt'] = termsOfService ? currentTime : null;
+      updateFields['legalAcceptance.termsOfService.ipAddress'] = termsOfService ? ipAddress : null;
+    }
+
+    if (privacyPolicy !== undefined) {
+      updateFields['legalAcceptance.privacyPolicy.accepted'] = privacyPolicy;
+      updateFields['legalAcceptance.privacyPolicy.version'] = version;
+      updateFields['legalAcceptance.privacyPolicy.acceptedAt'] = privacyPolicy ? currentTime : null;
+      updateFields['legalAcceptance.privacyPolicy.ipAddress'] = privacyPolicy ? ipAddress : null;
+    }
+
+    if (marketingConsent !== undefined) {
+      updateFields['legalAcceptance.marketingConsent.accepted'] = marketingConsent;
+      updateFields['legalAcceptance.marketingConsent.acceptedAt'] = marketingConsent ? currentTime : null;
+      updateFields['legalAcceptance.marketingConsent.ipAddress'] = marketingConsent ? ipAddress : null;
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { $set: updateFields },
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedUser) {
+      return res.status(404).json({ success: false, message: 'Failed to update user' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Legal acceptance updated successfully',
+      legalAcceptance: updatedUser.legalAcceptance
+    });
+
+  } catch (error) {
+    console.error('Error updating legal acceptance:', error);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+});
+
+router.get('/legal-acceptance', auth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const user = await findUserById(userId);
+    
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    res.json({
+      success: true,
+      legalAcceptance: user.legalAcceptance || {
+        termsOfService: { accepted: false },
+        privacyPolicy: { accepted: false },
+        marketingConsent: { accepted: false }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching legal acceptance:', error);
     res.status(500).json({ success: false, message: 'Server error', error: error.message });
   }
 });

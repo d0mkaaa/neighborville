@@ -11,14 +11,14 @@ import {
 } from "lucide-react";
 import type {
   Building,
-  PowerGridState,
-  WaterGridState,
+  PowerGrid,
+  WaterGrid,
 } from "../../types/game";
 
 type UtilityGridProps = {
   grid: (Building | null)[];
-  powerGrid: PowerGridState;
-  waterGrid: WaterGridState;
+  powerGrid: PowerGrid;
+  waterGrid: WaterGrid;
   onConnectUtility: (
     fromIndex: number,
     toIndex: number,

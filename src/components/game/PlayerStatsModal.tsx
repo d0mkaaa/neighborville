@@ -1,15 +1,17 @@
 import { useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, User, TrendingUp, Calendar, Home, Coins, Trophy, Zap, Droplets, Users, Building, Award, Activity, ChevronRight, Settings, Eye, EyeOff, Save, Shield, AlertCircle, LogIn } from "lucide-react";
-import type { GameProgress, Achievement, Neighbor, Building as BuildingType } from "../../types/game";
+import { X, User, TrendingUp, Calendar, Home, Coins, Trophy, Zap, Droplets, Users, Building, Award, Activity, ChevronRight, Settings, Eye, EyeOff, Save, Shield, AlertCircle, LogIn, Star, History } from "lucide-react";
+import type { GameProgress, Achievement, Neighbor, Building as BuildingType, XPLogEntry } from "../../types/game";
 import { useAuth } from "../../context/AuthContext";
 import { useState } from "react";
+import XPHistory from "./XPHistory";
 
 type PlayerStatsModalProps = {
   gameData: GameProgress;
   achievements: Achievement[];
   neighbors: Neighbor[];
   grid: (BuildingType | null)[];
+  xpHistory: XPLogEntry[];
   onClose: () => void;
   onShowLogin?: () => void;
 };
@@ -21,9 +23,10 @@ interface ProfileSettings {
   showActivity: boolean;
 }
 
-export default function PlayerStatsModal({ gameData, achievements, neighbors, grid, onClose, onShowLogin }: PlayerStatsModalProps) {
+export default function PlayerStatsModal({ gameData, achievements, neighbors, grid, xpHistory, onClose, onShowLogin }: PlayerStatsModalProps) {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'stats' | 'profile'>('stats');
+  const [showXPHistory, setShowXPHistory] = useState(false);
   const [profileVisibility, setProfileVisibility] = useState<'public' | 'private'>('public');
   const [showBio, setShowBio] = useState(true);
   const [showStats, setShowStats] = useState(true);
@@ -296,9 +299,44 @@ export default function PlayerStatsModal({ gameData, achievements, neighbors, gr
                     {gameData.level * 100 - gameData.experience} XP to go
                   </div>
                 </div>
+              </div>            )}
+            
+            <div className="mt-6 pt-6 border-t border-gray-200">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-medium text-gray-700 lowercase">experience tracking</h3>
+                <button
+                  onClick={() => setShowXPHistory(true)}
+                  className="inline-flex items-center px-3 py-2 text-xs font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors"
+                >
+                  <History size={14} className="mr-1" />
+                  View XP History
+                </button>
               </div>
-            )}
+              <div className="bg-indigo-50 rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <div className="w-8 h-8 bg-indigo-500 rounded-full flex items-center justify-center mr-3">
+                      <Star size={16} className="text-white" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-indigo-800">Total XP Earned</div>
+                      <div className="text-xs text-indigo-600">{totalXP} experience points from {xpHistory.length} sources</div>
+                    </div>
+                  </div>
+                  <div className="text-lg font-bold text-indigo-800">
+                    {totalXP} XP
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
+        )}
+        
+        {showXPHistory && (
+          <XPHistory 
+            history={xpHistory} 
+            onClose={() => setShowXPHistory(false)} 
+          />
         )}
 
         {!isGuest && activeTab === 'profile' && (

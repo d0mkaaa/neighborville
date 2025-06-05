@@ -115,6 +115,16 @@ export const deleteSession = async (token) => {
   }
 };
 
+export const deleteSessionById = async (sessionId, userId) => {
+  try {
+    const result = await Session.deleteOne({ _id: sessionId, userId });
+    return result.deletedCount > 0;
+  } catch (error) {
+    console.error('Error deleting session by ID:', error);
+    return false;
+  }
+};
+
 export const deleteOtherSessions = async (userId, currentToken) => {
   try {
     await Session.deleteMany({ 

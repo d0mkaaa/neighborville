@@ -44,7 +44,7 @@ export default function HappinessAnalytics({
     const buildingCounts: Record<string, number> = {};
     
     grid.forEach(building => {
-      if (building && building.happiness) {
+      if (building && building.communitySatisfaction) {
         buildingCounts[building.id] = (buildingCounts[building.id] || 0) + 1;
       }
     });
@@ -56,7 +56,7 @@ export default function HappinessAnalytics({
       const count = buildingCounts[buildingId];
       return {
         name: `${count} × ${building.name}`,
-        value: building.happiness * count,
+        value: (building.communitySatisfaction || 0) * count,
         type: 'building' as const,
       };
     }).filter(Boolean) as HappinessContributor[];

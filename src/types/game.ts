@@ -45,6 +45,15 @@ export type Building = {
   culturalValue?: number;
   entertainmentValue?: number;
   touristAttraction?: boolean;
+  productionType?: 'extraction' | 'processing' | 'crafting' | 'manufacturing' | 'agricultural' | 'storage' | 'trading';
+  produces?: { resourceId: string; quantity: number; timeMinutes: number }[];
+  processesRecipes?: string[];
+  lastProductionCheck?: number;
+  nextProductionTime?: number;
+  storageCapacity?: number;
+  currentProduction?: string[];
+  productionQueue?: string[];
+  storedResources?: { [resourceId: string]: number };
 };
 
 export type ServiceCoverage = {
@@ -193,6 +202,20 @@ export interface Bill {
   icon: string;
 };
 
+export interface PowerGrid {
+  totalPowerProduction: number;
+  totalPowerConsumption: number;
+  connectedBuildings: number[];
+  powerOutages: number[];
+}
+
+export interface WaterGrid {
+  totalWaterProduction: number;
+  totalWaterConsumption: number;
+  connectedBuildings: number[];
+  waterShortages: number[];
+}
+
 export type TimeOfDay = 'morning' | 'day' | 'evening' | 'night';
 
 export type WeatherType = 'sunny' | 'rainy' | 'cloudy' | 'stormy' | 'snowy';
@@ -272,83 +295,83 @@ export interface CoinHistoryEntry {
   timestamp: number;
 };
 
+export interface XPLogEntry {
+  id: string;
+  day: number;
+  amount: number;
+  source: 'achievement' | 'building' | 'event' | 'bonus' | 'other';
+  description: string;
+  timestamp: number;
+  achievementId?: string;
+  buildingId?: string;
+  eventId?: string;
+};
+
+export interface PlayerResources {
+  [resourceId: string]: number;
+}
+
+export interface ProductionStats {
+  totalProduced: { [resourceId: string]: number };
+  totalConsumed: { [resourceId: string]: number };
+  productionValue: number;
+  consumptionValue: number;
+}
+
+export interface ProductionQueueItem {
+  id: string;
+  recipeId: string;
+  buildingIndex: number;
+  startTime: number;
+  endTime: number;
+  status: 'queued' | 'active' | 'completed';
+  progress: number;
+}
+
 export interface GameProgress {
   playerName: string;
   coins: number;
-  communitySatisfaction?: number;
   day: number;
   level: number;
   experience: number;
   grid: (Building | null)[];
   gridSize: number;
-  neighbors: Neighbor[];
-  achievements: Achievement[];
-  events: ScheduledEvent[];
-  unlockedNeighborIds?: (number | string)[];
-  gameTime?: number;
+  neighborProgress: {
+    [neighborId: string]: {
+      unlocked: boolean;
+      hasHome: boolean;
+      houseIndex?: number;
+      satisfaction?: number;
+    };
+  };
+  completedAchievements: string[];
+  seenAchievements?: string[];
+  gameTime: number;
   gameMinutes?: number;
-  timeOfDay?: TimeOfDay;
-  recentEvents?: RecentEvent[];
-  bills?: Bill[];
+  timeOfDay: TimeOfDay;
+  recentEvents?: any[];
+  bills?: any[];
   energyRate?: number;
   totalEnergyUsage?: number;
   lastBillDay?: number;
-  coinHistory?: CoinHistoryEntry[];
+  coinHistory?: any[];
   weather?: WeatherType;
-  powerGrid?: PowerGridState;
-  waterGrid?: WaterGridState;
-  currentSeason?: Season;
-  activeSeasonalEvents?: SeasonalEvent[];
-  reputation?: number;
-  saveName?: string;
-  saveTimestamp?: number;
-  saveId?: string;
-  version?: string;
-  landValue?: number;
-  education?: number;
-  health?: number;
-  pollution?: number;
-  trafficFlow?: number;
-  services?: ServiceCoverage;
+  powerGrid?: PowerGrid;
+  waterGrid?: WaterGrid;
+  xpHistory?: XPLogEntry[];
   taxPolicies?: TaxPolicy[];
   cityBudget?: CityBudget;
-  maintenanceCosts?: MaintenanceCost[];
-  cityBudgetSystem?: CityBudgetSystem;
-  serviceBudgets?: ServiceBudget[];
-  infrastructureUpgrades?: string[];
-  activeInfrastructureProjects?: { upgradeId: string; startDay: number; }[];
-  publicTrust?: number;
-  mediaReputation?: number;
-};
-
-export interface PowerGridState {
-  totalPowerProduction: number;
-  totalPowerConsumption: number;
-  connectedBuildings: number[];
-  powerOutages: number[];
-};
-
-export interface WaterGridState {
-  totalWaterProduction: number;
-  totalWaterConsumption: number;
-  connectedBuildings: number[];
-  waterShortages: number[];
-}
-
-export interface MaintenanceCost {
-  id: string;
-  buildingId?: string;
-  name: string;
-  baseCost: number;
-  frequency: 'daily' | 'weekly' | 'monthly';
-  priority: 'low' | 'medium' | 'high' | 'critical';
-  deferralPenalty: number;
-  maxDeferrals: number;
-  currentDeferrals: number;
-  lastPaid: number;
-  nextDue: number;
-  category: 'infrastructure' | 'services' | 'utilities' | 'environmental';
-  description: string;
+  playerResources?: PlayerResources;
+  productionStats?: ProductionStats;
+  productionQueues?: { [buildingIndex: string]: ProductionQueueItem[] };
+  
+  saveName?: string;
+  saveId?: string;
+  saveTimestamp?: number;
+  
+  neighbors?: Neighbor[];
+  achievements?: Achievement[];
+  events?: any[];
 }
 
 export interface TaxPolicy {
@@ -360,6 +383,30 @@ export interface TaxPolicy {
   happinessImpact: number;
   revenueMultiplier: number;
   enabled: boolean;
+  unlockLevel: number;
+}
+
+export interface ServiceBudget {
+  id: string;
+  name: string;
+  category: 'utilities' | 'services' | 'environment';
+  baseCost: number;
+  currentBudget: number;
+  efficiency: number;
+  coverage: number;
+  description: string;
+  effects: {
+    energyEfficiency?: number;
+    waterEfficiency?: number;
+    communitySatisfaction?: number;
+    landValue?: number;
+    income?: number;
+    pollution?: number;
+    happiness?: number;
+  };
+  maintenanceMultiplier: number;
+  qualityMultiplier: number;
+  unlockLevel: number;
 }
 
 export interface CityBudget {
@@ -372,44 +419,6 @@ export interface CityBudget {
   dailyBalance: number;
   emergencyFund: number;
   budgetHealth: 'excellent' | 'good' | 'fair' | 'poor' | 'critical';
-}
-
-export interface MaintenanceEvent {
-  id: string;
-  title: string;
-  description: string;
-  buildingId?: string;
-  cost: number;
-  urgency: 'low' | 'medium' | 'high' | 'emergency';
-  consequences: string;
-  dayTriggered: number;
-  daysUntilCritical?: number;
-  effects: {
-    happinessChange?: number;
-    incomeChange?: number;
-    buildingDisabled?: boolean;
-  };
-}
-
-export interface ServiceBudget {
-  id: string;
-  name: string;
-  category: 'utilities' | 'services' | 'infrastructure' | 'environment';
-  baseCost: number;
-  currentBudget: number;
-  efficiency: number;
-  coverage: number;
-  description: string;
-  effects: {
-    communitySatisfaction?: number;
-    income?: number;
-    pollution?: number;
-    landValue?: number;
-    energyEfficiency?: number;
-    waterEfficiency?: number;
-  };
-  maintenanceMultiplier: number;
-  qualityMultiplier: number;
 }
 
 export interface CityBudgetSystem {
@@ -428,14 +437,14 @@ export interface CityBudgetSystem {
 export interface InfrastructureUpgrade {
   id: string;
   name: string;
-  category: 'power' | 'water' | 'transport' | 'waste' | 'telecom';
+  category: 'power' | 'water' | 'transport' | 'telecom' | 'waste';
   cost: number;
   maintenanceCost: number;
   description: string;
   effects: {
-    efficiency: number;
-    capacity: number;
-    communitySatisfaction: number;
+    efficiency?: number;
+    capacity?: number;
+    communitySatisfaction?: number;
     pollution?: number;
   };
   prerequisite?: string;

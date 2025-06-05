@@ -1,4 +1,4 @@
-import type { Building, PowerGridState, WaterGridState } from "../../types/game";
+import type { Building, PowerGrid, WaterGrid } from "../../types/game";
 import { Plus, Trash2, Home, Smile, Coffee, Book, Music, Zap, Lock, Sun, Droplets, AlertCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState } from "react";
@@ -12,8 +12,8 @@ type GameGridProps = {
   onTileClick: (index: number) => void;
   onDeleteBuilding: (index: number) => void;
   onBuildingManage: (building: Building, index: number) => void;
-  powerGrid?: PowerGridState;
-  waterGrid?: WaterGridState;
+  powerGrid?: PowerGrid;
+  waterGrid?: WaterGrid;
   onConnectUtility?: (fromIndex: number, toIndex: number, utilityType: "power" | "water") => void;
   showUtilityMode?: boolean;
 };

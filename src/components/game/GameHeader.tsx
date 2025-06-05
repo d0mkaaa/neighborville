@@ -1,11 +1,12 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { User, Save, Award, AlertCircle, Calendar, Clock, Settings, Play, Pause, TrendingUp, Volume2, VolumeX } from 'lucide-react';
+import { User, Save, Award, AlertCircle, Calendar, Clock, Settings, Play, Pause, TrendingUp, Volume2, VolumeX, Package, Factory, Wrench } from 'lucide-react';
 import ProgressBar from './ProgressBar';
 import Button from '../ui/Button';
 import WeatherForecast from './WeatherForecast';
 import Tooltip from '../ui/Tooltip';
 import type { TimeOfDay, WeatherType } from '../../types/game';
+import { getResourceById } from '../../data/resources';
 
 interface GameHeaderProps {
   playerName: string;
@@ -23,6 +24,7 @@ interface GameHeaderProps {
   achievements: { completed: boolean }[];
   weatherForecast: WeatherType[];
   showWeatherForecast: boolean;
+  playerResources?: { [resourceId: string]: number };
   onEndDay: () => void;
   onOpenSaveManager: () => void;
   onShowSettings: () => void;
@@ -43,6 +45,7 @@ interface GameHeaderProps {
   isMusicPlaying: boolean;
   onToggleMusic: () => void;
   onSaveGame?: () => void;
+  onShowProductionManager?: () => void;
 }
 
 export default function GameHeader({
@@ -61,6 +64,7 @@ export default function GameHeader({
   achievements,
   weatherForecast,
   showWeatherForecast,
+  playerResources = {},
   onEndDay,
   onOpenSaveManager,
   onShowSettings,
@@ -80,7 +84,8 @@ export default function GameHeader({
   isMusicPlaying,
   onToggleMusic,
   onLogout,
-  onSaveGame
+  onSaveGame,
+  onShowProductionManager
 }: GameHeaderProps) {
   const getTimeOfDayColor = () => {
     switch(timeOfDay) {
@@ -119,13 +124,74 @@ export default function GameHeader({
             >
               <motion.div 
                 whileHover={{ scale: 1.05 }}
-                onClick={onShowBudgetModal}
                 className="cursor-pointer flex items-center rounded-lg bg-white/10 backdrop-blur-sm px-3 py-1.5 border border-white/20"
+                onClick={onShowBudgetModal}
               >
                 <span className="mr-2 text-xl">💰</span>
                 <span className="font-medium lowercase text-base">{coins} coins</span>
-                <TrendingUp size={14} className="ml-1 text-white/80" />
               </motion.div>
+            </motion.div>
+
+            <motion.div 
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className="flex items-center"
+            >
+              <Tooltip content="Resource Inventory - Click to manage your materials">
+                <motion.div 
+                  whileHover={{ scale: 1.05 }}
+                  onClick={onShowProductionManager}
+                  className="cursor-pointer flex items-center rounded-lg bg-white/10 backdrop-blur-sm px-3 py-1.5 border border-white/20 gap-2 min-w-[180px]"
+                >
+                  <Package size={16} className="text-white/80" />
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-1">
+                      <span className="text-sm">🪵</span>
+                      <span className="text-xs font-medium text-white">{playerResources['wood'] || 0}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-sm">🪨</span>
+                      <span className="text-xs font-medium text-white">{playerResources['stone'] || 0}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-sm">⛏️</span>
+                      <span className="text-xs font-medium text-white">{playerResources['iron_ore'] || 0}</span>
+                    </div>
+                    
+                    {Object.entries(playerResources)
+                      .filter(([resourceId, quantity]) => 
+                        quantity > 0 && 
+                        !['wood', 'stone', 'iron_ore'].includes(resourceId)
+                      )
+                      .slice(0, 2)
+                      .map(([resourceId, quantity]) => {
+                        const resource = getResourceById(resourceId);
+                        if (resource) {
+                          return (
+                            <div key={resourceId} className="flex items-center gap-1">
+                              <span className="text-sm">{resource.icon}</span>
+                              <span className="text-xs font-medium text-white">{quantity}</span>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })}
+                    
+                    {Object.keys(playerResources).filter(id => 
+                      playerResources[id] > 0 && 
+                      !['wood', 'stone', 'iron_ore'].includes(id)
+                    ).length > 2 && (
+                      <span className="text-xs text-white/70">
+                        +{Object.keys(playerResources).filter(id => 
+                          playerResources[id] > 0 && 
+                          !['wood', 'stone', 'iron_ore'].includes(id)
+                        ).length - 2}
+                      </span>
+                    )}
+                  </div>
+                </motion.div>
+              </Tooltip>
             </motion.div>
             
             <motion.div 
@@ -223,6 +289,8 @@ export default function GameHeader({
                 textPosition="inside"
               />
             </motion.div>
+            
+
             
             <motion.div
               whileHover={{ scale: 1.05 }}

@@ -57,10 +57,9 @@ export default function SaveCard({ saveData, onClick }: SaveCardProps) {
             <Coins size={18} className="text-amber-600 mb-1" />
             <span className="text-gray-900 font-medium">{saveData.data.coins} coins</span>
           </div>
-          
-          <div className="bg-white bg-opacity-60 rounded-lg p-3 flex flex-col items-center backdrop-filter backdrop-blur-sm shadow-sm border border-white border-opacity-50">
-            <span className="text-2xl mb-1">😊</span>
-            <span className="text-gray-900 font-medium">{saveData.data.happiness}% happy</span>
+            <div className="bg-white bg-opacity-60 rounded-lg p-3 flex flex-col items-center backdrop-filter backdrop-blur-sm shadow-sm border border-white border-opacity-50">
+            <span className="text-2xl mb-1">⭐</span>
+            <span className="text-gray-900 font-medium">Level {saveData.data.level}</span>
           </div>
         </div>
       </div>
