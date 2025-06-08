@@ -323,9 +323,19 @@ export interface ProductionQueueItem {
   recipeId: string;
   buildingIndex: number;
   startTime: number;
-  endTime: number;
+  completionTime: number;
   status: 'queued' | 'active' | 'completed';
   progress: number;
+}
+
+export interface ActiveProduction {
+  id: string;
+  recipeId: string;
+  buildingIndex: number;
+  startTime: number;
+  lastCompletionTime: number;
+  isActive: boolean;
+  cycleCount: number;
 }
 
 export interface GameProgress {
@@ -364,6 +374,7 @@ export interface GameProgress {
   playerResources?: PlayerResources;
   productionStats?: ProductionStats;
   productionQueues?: { [buildingIndex: string]: ProductionQueueItem[] };
+  activeProductions?: { [buildingIndex: string]: ActiveProduction };
   
   saveName?: string;
   saveId?: string;

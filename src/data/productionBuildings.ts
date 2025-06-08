@@ -19,7 +19,7 @@ export const PRODUCTION_BUILDINGS: Building[] = [
     jobCapacity: 2,
     pollution: 5,
     productionType: 'extraction',
-    produces: [{ resourceId: 'wood', quantity: 2, timeMinutes: 60 }]
+    produces: [{ resourceId: 'wood', quantity: 2, timeMinutes: 2 }]
   },
   {
     id: 'quarry',
@@ -40,8 +40,8 @@ export const PRODUCTION_BUILDINGS: Building[] = [
     pollution: 15,
     productionType: 'extraction',
     produces: [
-      { resourceId: 'stone', quantity: 2, timeMinutes: 8 },
-      { resourceId: 'clay', quantity: 1, timeMinutes: 12 }
+      { resourceId: 'stone', quantity: 2, timeMinutes: 3 },
+      { resourceId: 'clay', quantity: 1, timeMinutes: 4 }
     ]
   },
   {
@@ -63,8 +63,8 @@ export const PRODUCTION_BUILDINGS: Building[] = [
     pollution: 25,
     productionType: 'extraction',
     produces: [
-      { resourceId: 'iron_ore', quantity: 1, timeMinutes: 15 },
-      { resourceId: 'coal', quantity: 1, timeMinutes: 10 }
+      { resourceId: 'iron_ore', quantity: 1, timeMinutes: 5 },
+      { resourceId: 'coal', quantity: 1, timeMinutes: 4 }
     ]
   },
   {
@@ -86,7 +86,7 @@ export const PRODUCTION_BUILDINGS: Building[] = [
     pollution: -5,
     ecoFriendly: true,
     productionType: 'agricultural',
-    produces: [{ resourceId: 'cotton', quantity: 3, timeMinutes: 20 }]
+    produces: [{ resourceId: 'cotton', quantity: 3, timeMinutes: 6 }]
   },
   {
     id: 'oil_derrick',
@@ -106,7 +106,8 @@ export const PRODUCTION_BUILDINGS: Building[] = [
     jobCapacity: 5,
     pollution: 40,
     productionType: 'extraction',
-    produces: [{ resourceId: 'oil', quantity: 1, timeMinutes: 30 }]  },
+    produces: [{ resourceId: 'oil', quantity: 1, timeMinutes: 10 }]
+  },
   {
     id: 'sawmill',
     name: 'Sawmill',

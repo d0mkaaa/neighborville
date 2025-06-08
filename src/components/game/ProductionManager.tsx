@@ -30,54 +30,7 @@ import {
   calculateProductionCost,
   calculateProductionValue
 } from '../../data/resources';
-
-const getCurrentGameTimeInMinutes = (hours: number, minutes: number): number => {
-  return hours * 60 + minutes;
-};
-
-const addMinutesToGameTime = (currentHours: number, currentMinutes: number, minutesToAdd: number): { hours: number; minutes: number } => {
-  const totalMinutes = currentHours * 60 + currentMinutes + minutesToAdd;  return {
-    hours: Math.floor(totalMinutes / 60) % 24,
-    minutes: totalMinutes % 60
-  };
-};
-
-const calculateProductionTimeInMinutes = (recipeMinutes: number, timeSpeed: number): number => {
-  return recipeMinutes / timeSpeed;
-};
-
-const formatGameTimeRemaining = (remainingMinutes: number): string => {
-  const hours = Math.floor(remainingMinutes / 60);
-  const mins = Math.ceil(remainingMinutes % 60);
-  
-  if (hours > 0) {
-    return `${hours}h ${mins}m`;
-  }
-  return `${mins}m`;
-};
-
-const getCompletionTime = (currentHours: number, currentMinutes: number, minutesToAdd: number): string => {
-  const totalCurrentMinutes = currentHours * 60 + currentMinutes;
-  const totalCompletionMinutes = totalCurrentMinutes + minutesToAdd;
-    const completionHours = Math.floor(totalCompletionMinutes / 60) % 24;
-  const completionMinutes = totalCompletionMinutes % 60;
-  
-  const displayHours = completionHours % 12 || 12;
-  const ampm = completionHours >= 12 ? 'PM' : 'AM';
-  
-  return `${displayHours}:${completionMinutes.toString().padStart(2, '0')} ${ampm}`;
-};
-
-const formatProductionTime = (recipeMinutes: number, timeSpeed: number): string => {
-  const adjustedMinutes = calculateProductionTimeInMinutes(recipeMinutes, timeSpeed);
-  const hours = Math.floor(adjustedMinutes / 60);
-  const mins = Math.ceil(adjustedMinutes % 60);
-  
-  if (hours > 0) {
-    return `${hours}h ${mins}m (${timeSpeed}x speed)`;
-  }
-  return `${mins}m (${timeSpeed}x speed)`;
-};
+import { TimeService, type GameTime, type TimeCalculation } from '../../services/timeService';
 
 interface ProductionManagerProps {
   grid?: (Building | null)[];
@@ -141,13 +94,13 @@ export default function ProductionManager({
       const updatedQueues = new Map(internalProductionQueues);
       let resourcesChanged = false;
       const newResources = { ...playerResources };
-      const currentGameTime = getCurrentGameTimeInMinutes(gameTime, gameMinutes);
+      const currentTime = TimeService.getCurrentTime(gameTime, gameMinutes);
 
       updatedQueues.forEach((queue, buildingIndex) => {
         const completedItems: string[] = [];
         
         queue.forEach((item, itemIndex) => {
-          if (item.status === 'active' && currentGameTime >= item.completionTime) {
+          if (item.status === 'active' && currentTime.totalMinutes >= item.completionTime) {
             const recipe = getRecipeById(item.recipeId);            if (recipe) {
               recipe.outputs.forEach(output => {
                 newResources[output.resourceId] = (newResources[output.resourceId] || 0) + output.quantity;
@@ -174,11 +127,11 @@ export default function ProductionManager({
           const nextItem = updatedQueue.find(item => item.status === 'queued');
           if (nextItem) {
             nextItem.status = 'active';
-            nextItem.startTime = currentGameTime;
+            nextItem.startTime = currentTime.totalMinutes;
             const recipe = getRecipeById(nextItem.recipeId);
             if (recipe) {
-              const productionDuration = calculateProductionTimeInMinutes(recipe.productionTime, timeSpeed);
-              nextItem.completionTime = currentGameTime + productionDuration;
+              const productionDuration = TimeService.calculateProductionTime(recipe.productionTime, timeSpeed);
+              nextItem.completionTime = currentTime.totalMinutes + productionDuration;
             }
           }
           
@@ -262,14 +215,14 @@ export default function ProductionManager({
     });    onUpdateResources?.(newResources);
 
     const currentQueue = internalProductionQueues.get(buildingIndex) || [];
-    const currentGameTime = getCurrentGameTimeInMinutes(gameTime, gameMinutes);
-    const productionDuration = calculateProductionTimeInMinutes(recipe.productionTime, timeSpeed);
+    const currentTime = TimeService.getCurrentTime(gameTime, gameMinutes);
+    const productionDuration = TimeService.calculateProductionTime(recipe.productionTime, timeSpeed);
     
     const newItem: ProductionQueue = {
       id: `${buildingIndex}-${Date.now()}`,
       recipeId: recipe.id,
-      startTime: currentQueue.length === 0 ? currentGameTime : 0,
-      completionTime: currentQueue.length === 0 ? currentGameTime + productionDuration : 0,
+      startTime: currentQueue.length === 0 ? currentTime.totalMinutes : 0,
+      completionTime: currentQueue.length === 0 ? currentTime.totalMinutes + productionDuration : 0,
       buildingIndex,
       status: currentQueue.length === 0 ? 'active' : 'queued'
     };
@@ -299,10 +252,10 @@ export default function ProductionManager({
 
   const getProductionProgress = (item: ProductionQueue): number => {
     if (item.status !== 'active') return 0;
-    const currentGameTime = getCurrentGameTimeInMinutes(gameTime, gameMinutes);
-    const elapsed = currentGameTime - item.startTime;
-    const total = item.completionTime - item.startTime;
-    return Math.min(100, Math.max(0, (elapsed / total) * 100));  };
+    const currentTime = TimeService.getCurrentTime(gameTime, gameMinutes);
+    const calculation = TimeService.calculateProgress(item.startTime, item.completionTime, currentTime.totalMinutes);
+    return calculation.progress;
+  };
 
   const getAvailableProductions = (building: Building): { id: string; name: string; time: number; outputs: any[] }[] => {    const productions = [];
     
@@ -443,10 +396,20 @@ export default function ProductionManager({
                                 </div>                                <div>
                                   <div className="font-semibold text-gray-900">{recipe?.name}</div>                                  <div className="text-sm text-gray-600">
                                     {Math.round(progress)}% complete • {(() => {
-                                      const currentGameTime = getCurrentGameTimeInMinutes(gameTime, gameMinutes);
-                                      const remaining = Math.max(0, item.completionTime - currentGameTime);
-                                      const remainingText = remaining <= 0 ? 'Ready now!' : formatGameTimeRemaining(remaining);
-                                      const completionTime = remaining > 0 ? getCompletionTime(gameTime, gameMinutes, remaining) : '';
+                                      const currentTime = TimeService.getCurrentTime(gameTime, gameMinutes);
+                                      const remaining = Math.max(0, item.completionTime - currentTime.totalMinutes);
+                                      
+                                      if (remaining > 60) {
+                                        console.log(`🐛 ProductionManager: Long remaining time detected!`);
+                                        console.log(`  Current time: ${currentTime.totalMinutes} minutes (${gameTime}:${gameMinutes})`);
+                                        console.log(`  Completion time: ${item.completionTime} minutes`);
+                                        console.log(`  Calculated remaining: ${remaining} minutes`);
+                                        console.log(`  Recipe ID: ${item.recipeId}`);
+                                        console.log(`  Item:`, item);
+                                      }
+                                      
+                                      const remainingText = remaining <= 0 ? 'Ready now!' : TimeService.formatDuration(remaining);
+                                      const completionTime = remaining > 0 ? TimeService.formatCompletionTime(gameTime, gameMinutes, remaining) : '';
                                       return remaining <= 0 ? remainingText : `${remainingText} (finishes at ${completionTime})`;
                                     })()}
                                   </div>
@@ -543,7 +506,7 @@ export default function ProductionManager({
                             <div className="flex items-center justify-between mb-2">
                               <span className="font-medium text-gray-900">{production.name}</span>
                               <span className="text-sm text-gray-500">
-                                {formatProductionTime(production.time, timeSpeed)}
+                                {TimeService.formatDuration(TimeService.calculateProductionTime(production.time, timeSpeed))} ({timeSpeed}x speed)
                               </span>
                             </div>
                             
@@ -696,10 +659,20 @@ export default function ProductionManager({
                                               <div>
                                                 <div className="font-semibold text-gray-900">{recipe?.name}</div>                                                <div className="text-sm text-gray-600">
                                                   {Math.round(progress)}% complete • {(() => {
-                                                    const currentGameTime = getCurrentGameTimeInMinutes(gameTime, gameMinutes);
-                                                    const remaining = Math.max(0, item.completionTime - currentGameTime);
-                                                    const remainingText = remaining <= 0 ? 'Ready now!' : formatGameTimeRemaining(remaining);
-                                                    const completionTime = remaining > 0 ? getCompletionTime(gameTime, gameMinutes, remaining) : '';
+                                                    const currentTime = TimeService.getCurrentTime(gameTime, gameMinutes);
+                                                    const remaining = Math.max(0, item.completionTime - currentTime.totalMinutes);
+                                                    
+                                                    if (remaining > 60) {
+                                                      console.log(`🐛 ProductionManager: Long remaining time detected!`);
+                                                      console.log(`  Current time: ${currentTime.totalMinutes} minutes (${gameTime}:${gameMinutes})`);
+                                                      console.log(`  Completion time: ${item.completionTime} minutes`);
+                                                      console.log(`  Calculated remaining: ${remaining} minutes`);
+                                                      console.log(`  Recipe ID: ${item.recipeId}`);
+                                                      console.log(`  Item:`, item);
+                                                    }
+                                                    
+                                                    const remainingText = remaining <= 0 ? 'Ready now!' : TimeService.formatDuration(remaining);
+                                                    const completionTime = remaining > 0 ? TimeService.formatCompletionTime(gameTime, gameMinutes, remaining) : '';
                                                     return remaining <= 0 ? remainingText : `${remainingText} (finishes at ${completionTime})`;
                                                   })()}
                                                 </div>
@@ -780,7 +753,7 @@ export default function ProductionManager({
                                             <div className="flex items-center justify-between mb-2">
                                               <span className="font-medium text-gray-900">{production.name}</span>
                                               <span className="text-sm text-gray-500">
-                                                {formatProductionTime(production.time, timeSpeed)}
+                                                {TimeService.formatDuration(TimeService.calculateProductionTime(production.time, timeSpeed))} ({timeSpeed}x speed)
                                               </span>
                                             </div>
                                             

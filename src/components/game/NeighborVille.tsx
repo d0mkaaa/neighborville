@@ -71,7 +71,8 @@ import type {
   TaxPolicy,
   CityBudget,
   PlayerResources,
-  ProductionQueueItem
+  ProductionQueueItem,
+  ActiveProduction
 } from "../../types/game";
 import { ALL_BUILDINGS as initialBuildings, getBuildingsByCategory } from "../../data/buildings";
 import { neighborProfiles } from "../../data/neighbors";
@@ -79,8 +80,10 @@ import { ACHIEVEMENTS } from "../../data/achievements";
 import { createDefaultPlayerResources, getResourceById, getRecipeById } from "../../data/resources";
 import { useAuth } from "../../context/AuthContext";
 import AppLayout from "../ui/AppLayout";
+import { TimeService } from "../../services/timeService";
 
 type ProductionQueues = Map<number, ProductionQueueItem[]>;
+type ActiveProductions = Map<number, ActiveProduction>;
 
 interface NeighborVilleProps {
   initialGameState?: GameProgress | null;
@@ -115,6 +118,7 @@ export default function NeighborVille({
   const [grid, setGrid] = useState<(Building | null)[]>(Array(64).fill(null)); 
 
   const [productionQueues, setProductionQueues] = useState<ProductionQueues>(new Map());
+  const [activeProductions, setActiveProductions] = useState<ActiveProductions>(new Map());
 
   const [gameTime, setGameTime] = useState<number>(8);
   const [gameMinutes, setGameMinutes] = useState<number>(0);
@@ -164,6 +168,7 @@ export default function NeighborVille({
   const [soundVolume, setSoundVolume] = useState(0.5);
   const [isTabVisible, setIsTabVisible] = useState(true);
   const [wasManuallyPaused, setWasManuallyPaused] = useState(false);
+  const [lastActiveTime, setLastActiveTime] = useState<number | null>(null);
 
   const audioRef = useRef<HTMLAudioElement | HTMLIFrameElement | null>(null);
 
@@ -735,127 +740,6 @@ export default function NeighborVille({
     }
   }, [timePaused, gameTime, onTimeChange, timeSpeed]);
 
-  useEffect(() => {
-    if (!timePaused) {
-      const autoProductionTimer = setInterval(() => {
-        const currentGameTime = gameTime * 60 + gameMinutes;
-
-        setProductionQueues(prevQueues => {
-          const updatedQueues = new Map(prevQueues);
-          let hasUpdates = false;
-
-          updatedQueues.forEach((queue, buildingIndex) => {
-            const updatedQueue = queue.map(item => {
-              if (item.status === 'queued') {
-                const activeItems = queue.filter(q => q.status === 'active');
-                if (activeItems.length === 0) {
-                  const newItem = {
-                    ...item,
-                    status: 'active' as const,
-                    startTime: currentGameTime,
-                    endTime: currentGameTime + (item.endTime - item.startTime)
-                  };
-                  hasUpdates = true;
-                  return newItem;
-                }
-                return item;
-              } else if (item.status === 'active') {
-                const totalDuration = item.endTime - item.startTime;
-                const elapsed = currentGameTime - item.startTime;
-                const progress = Math.min(100, (elapsed / totalDuration) * 100);
-
-                if (progress >= 100) {
-                  hasUpdates = true;
-
-                  addNotification(`Production completed at building ${buildingIndex}!`, 'success', true);
-
-                  return {
-                    ...item,
-                    status: 'completed' as const,
-                    progress: 100
-                  };
-                } else if (Math.abs(progress - item.progress) > 1) {
-                  hasUpdates = true;
-                  return {
-                    ...item,
-                    progress
-                  };
-                }
-                return item;
-              }
-              return item;
-            });
-
-            const filteredQueue = updatedQueue.filter(item => {
-              if (item.status === 'completed') {
-                const completionTime = item.endTime;
-                if (currentGameTime - completionTime > 5) {
-                  hasUpdates = true;
-                  return false;
-                }
-              }
-              return true;
-            });
-
-            if (hasUpdates) {
-              updatedQueues.set(buildingIndex, filteredQueue);
-            }
-          });
-
-          return hasUpdates ? updatedQueues : prevQueues;
-        });
-
-        setGrid(prevGrid => {
-          const updatedGrid = [...prevGrid];
-          let hasProduction = false;
-
-          updatedGrid.forEach((building, index) => {
-            if (!building || !building.produces || building.produces.length === 0) return;
-
-            if (!building.nextProductionTime) {
-              const fastestProduction = Math.min(...building.produces.map(p => p.timeMinutes));
-              building.nextProductionTime = currentGameTime + fastestProduction;
-              building.lastProductionCheck = currentGameTime;
-              hasProduction = true;
-              return;
-            }
-
-            if (currentGameTime >= building.nextProductionTime) {
-              building.produces.forEach(production => {
-                const resourceAmount = production.quantity;
-
-                setPlayerResources(prevResources => {
-                  const newResources = { ...prevResources };
-                  if (newResources[production.resourceId] !== undefined) {
-                    newResources[production.resourceId] += resourceAmount;
-                  } else {
-                    newResources[production.resourceId] = resourceAmount;
-                  }
-                  return newResources;
-                });
-
-                addNotification(`${building.name} produced ${resourceAmount} ${production.resourceId}`, 'success', true);
-              });
-
-              const nextProductionDelay = Math.min(...building.produces.map(p => p.timeMinutes));
-              updatedGrid[index] = {
-                ...building,
-                lastProductionCheck: currentGameTime,
-                nextProductionTime: currentGameTime + nextProductionDelay
-              };
-
-              hasProduction = true;
-            }
-          });
-
-          return hasProduction ? updatedGrid : prevGrid;
-        });
-      }, 1000);
-
-      return () => clearInterval(autoProductionTimer);
-    }
-  }, [timePaused, gameTime, gameMinutes, addNotification, setPlayerResources]);
-
   const calculateUtilityGrids = useCallback(() => {
     let powerProduction = 0;
     let powerConsumption = 0;
@@ -1157,45 +1041,33 @@ export default function NeighborVille({
     });
   }, [day, coins]);
 
-  const addToProductionQueue = useCallback((buildingIndex: number, recipeId: string, duration: number) => {
-    const currentGameTime = gameTime * 60 + gameMinutes;
-    const adjustedDuration = Math.ceil(duration / timeSpeed);
+  const startProduction = useCallback((buildingIndex: number, recipeId: string) => {
+    const currentTime = TimeService.getCurrentTime(gameTime, gameMinutes);
 
-    const newItem: ProductionQueueItem = {
+    const existingProduction = activeProductions.get(buildingIndex);
+    if (existingProduction?.isActive) {
+      addNotification('Production already running on this building', 'warning');
+      return;
+    }
+
+    const newProduction: ActiveProduction = {
       id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       recipeId,
       buildingIndex,
-      startTime: currentGameTime,
-      endTime: currentGameTime + adjustedDuration,
-      status: 'active',
-      progress: 0
+      startTime: currentTime.totalMinutes,
+      lastCompletionTime: currentTime.totalMinutes,
+      isActive: true,
+      cycleCount: 0
     };
 
-    console.log(`🚀 ADDING TO PRODUCTION QUEUE:`);
+    console.log(`🚀 STARTING CONTINUOUS PRODUCTION:`);
     console.log(`   Building: ${buildingIndex}`);
     console.log(`   Recipe: ${recipeId}`);
-    console.log(`   Duration: ${duration} minutes (${adjustedDuration} at ${timeSpeed}x speed)`);
-    console.log(`   Start time: ${currentGameTime} (${gameTime}:${gameMinutes.toString().padStart(2, '0')})`);
-    console.log(`   End time: ${currentGameTime + adjustedDuration}`);
-    console.log(`   Item:`, newItem);
+    console.log(`   Start time: ${currentTime.totalMinutes} (${currentTime.formattedTime})`);
 
-    setProductionQueues(prev => {
+    setActiveProductions(prev => {
       const updated = new Map(prev);
-      const currentQueue = updated.get(buildingIndex) || [];
-
-      const hasActiveProduction = currentQueue.some(item => item.status === 'active');
-      if (hasActiveProduction) {
-        newItem.status = 'queued';
-        console.log(`   📋 Setting status to 'queued' because building ${buildingIndex} already has active production`);
-      } else {
-        console.log(`   ▶️ Setting status to 'active' - building ${buildingIndex} is available`);
-      }
-
-      updated.set(buildingIndex, [...currentQueue, newItem]);
-
-      console.log(`📋 Updated queue for building ${buildingIndex}:`, updated.get(buildingIndex));
-      console.log(`🏭 Total production queues:`, Array.from(updated.entries()));
-
+      updated.set(buildingIndex, newProduction);
       return updated;
     });
 
@@ -1208,35 +1080,39 @@ export default function NeighborVille({
       const recipe = getRecipeById(recipeId);
       productionName = recipe?.name || recipeId;
     }
+    
+    addNotification(`Started continuous production: ${productionName}`, 'success', true);
+  }, [gameTime, gameMinutes, activeProductions, addNotification]);
 
-    addNotification(
-      `Started production: ${productionName} (${adjustedDuration}m at ${timeSpeed}x speed)`, 
-      'success', 
-      true
-    );
-  }, [gameTime, gameMinutes, timeSpeed, addNotification]);
+  const stopProduction = useCallback((buildingIndex: number) => {
+    const production = activeProductions.get(buildingIndex);
+    if (!production || !production.isActive) {
+      addNotification('No active production to stop', 'warning');
+      return;
+    }
 
-  const cancelProductionItem = useCallback((buildingIndex: number, itemId: string) => {
-    setProductionQueues(prev => {
+    setActiveProductions(prev => {
       const updated = new Map(prev);
-      const currentQueue = updated.get(buildingIndex) || [];
-      const filteredQueue = currentQueue.filter(item => item.id !== itemId);
-
-      if (filteredQueue.length === 0) {
-        updated.delete(buildingIndex);
-      } else {
-        updated.set(buildingIndex, filteredQueue);
-      }
-
+      updated.delete(buildingIndex);
       return updated;
     });
 
-    addNotification(`Canceled production item`, 'info', true);
-  }, [addNotification]);
+    let productionName: string;
+    if (production.recipeId.startsWith('extract_')) {
+      const resourceId = production.recipeId.replace('extract_', '');
+      const resource = getResourceById(resourceId);
+      productionName = `Extract ${resource?.name || resourceId}`;
+    } else {
+      const recipe = getRecipeById(production.recipeId);
+      productionName = recipe?.name || production.recipeId;
+    }
 
-  const getProductionQueueForBuilding = useCallback((buildingIndex: number) => {
-    return productionQueues.get(buildingIndex) || [];
-  }, [productionQueues]);
+    addNotification(`Stopped production: ${productionName} (${production.cycleCount} cycles completed)`, 'info', true);
+  }, [activeProductions, addNotification]);
+
+  const getActiveProductionForBuilding = useCallback((buildingIndex: number) => {
+    return activeProductions.get(buildingIndex) || null;
+  }, [activeProductions]);
 
   const handleBuildingSelect = useCallback((building: Building) => {
     console.log('Building selected:', building);
@@ -1287,6 +1163,14 @@ export default function NeighborVille({
         buildingWithProductionState.lastProductionCheck = currentGameTime;
         buildingWithProductionState.nextProductionTime = currentGameTime + fastestProduction;
         console.log(`Initialized production for ${building.name}. Current time:`, currentGameTime, 'Next production at:', currentGameTime + fastestProduction);
+
+        const firstProduction = building.produces[0];
+        const recipeId = `extract_${firstProduction.resourceId}`;
+        console.log(`🚀 Auto-starting production for ${building.name}: ${recipeId}`);
+        
+        setTimeout(() => {
+          startProduction(index, recipeId);
+        }, 100);
       }
 
       newGrid[index] = buildingWithProductionState;
@@ -2201,208 +2085,189 @@ export default function NeighborVille({
   }, [coins, level, gridSize, grid, neighbors, day]);
 
   useEffect(() => {
-    if (timePaused) return;
+    if (!isTabVisible) {
+      setLastActiveTime(Date.now());
+      return;
+    }
 
-    const interval = setInterval(() => {
-      const currentGameTime = gameTime * 60 + gameMinutes;
+    if (lastActiveTime && !timePaused) {
+      const timeMissed = Math.floor((Date.now() - lastActiveTime) / 1000);
+      if (timeMissed > 5) {
+        console.log(`⏰ Tab became visible after ${timeMissed} seconds. Processing missed production...`);
+        
+        const timeSteps = Math.min(timeMissed, 60);
+        
+        for (let step = 0; step < timeSteps; step++) {
+          setTimeout(() => {
+            const currentTime = TimeService.getCurrentTime(gameTime, gameMinutes);
+            const updatedQueues = new Map(productionQueues);
+            let resourcesChanged = false;
+            let queuesChanged = false;
+            const newResources = { ...playerResources };
 
-      const updatedGrid = [...grid];
-      let resourcesChanged = false;
-      const newResources = { ...playerResources };
+            updatedQueues.forEach((queue, buildingIndex) => {
+              const completedItems: string[] = [];
 
-      updatedGrid.forEach((building, index) => {
-        if (building && building.produces && building.produces.length > 0) {
-          const nextProductionTime = building.nextProductionTime || 0;
+              queue.forEach((item) => {
+                if (item.status === 'active' && currentTime.totalMinutes >= item.completionTime) {
+                  let outputs: { resourceId: string; quantity: number }[] = [];
+                  let xpReward = 0;
+                  const building = grid[buildingIndex];
 
-          if (currentGameTime >= nextProductionTime) {
-            building.produces.forEach(production => {
-              const resourceId = production.resourceId;
-              const quantity = production.quantity;
+                  if (item.recipeId.startsWith('extract_')) {
+                    const resourceId = item.recipeId.replace('extract_', '');
+                    if (building?.produces) {
+                      const production = building.produces.find(p => p.resourceId === resourceId);
+                      if (production) {
+                        outputs = [{ resourceId: production.resourceId, quantity: production.quantity }];
+                        xpReward = Math.ceil(production.quantity / 2);
+                      }
+                    }
+                  } else {
+                    const recipe = getRecipeById(item.recipeId);
+                    if (recipe) {
+                      outputs = recipe.outputs;
+                      xpReward = recipe.xpReward;
+                    }
+                  }
 
-              newResources[resourceId] = (newResources[resourceId] || 0) + quantity;
-              resourcesChanged = true;
+                  if (outputs.length > 0) {
+                    outputs.forEach(output => {
+                      const oldAmount = newResources[output.resourceId] || 0;
+                      newResources[output.resourceId] = oldAmount + output.quantity;
+                      resourcesChanged = true;
+                    });
 
-              const resource = getResourceById(resourceId);
-              addNotification(
-                `${building.name} produced ${quantity} ${resource?.name || resourceId}!`,
-                'success'
-              );
-            });
-
-            const productionTime = building.produces[0].timeMinutes;
-            const adjustedProductionTime = Math.ceil(productionTime / timeSpeed);
-            updatedGrid[index] = {
-              ...building,
-              lastProductionCheck: currentGameTime,
-              nextProductionTime: currentGameTime + adjustedProductionTime
-            };
-
-            console.log(`Production completed at building ${index}!`);
-          }
-        }
-      });
-
-      if (resourcesChanged) {        setPlayerResources(newResources);
-        setGrid(updatedGrid);
-      }
-
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [timePaused, gameTime, gameMinutes, grid, playerResources, timeSpeed, addNotification]);
-
-  useEffect(() => {
-    if (timePaused) return;
-
-    const interval = setInterval(() => {
-      const currentGameTime = gameTime * 60 + gameMinutes;
-      console.log(`🏭 PRODUCTION CHECK: Current game time: ${currentGameTime} minutes (${gameTime}:${gameMinutes.toString().padStart(2, '0')})`);
-
-      const updatedQueues = new Map(productionQueues);
-      let resourcesChanged = false;
-      let queuesChanged = false;
-      const newResources = { ...playerResources };
-
-      let totalActiveProductions = 0;
-      productionQueues.forEach((queue, buildingIndex) => {
-        const activeItems = queue.filter(item => item.status === 'active');
-        if (activeItems.length > 0) {
-          totalActiveProductions += activeItems.length;
-          activeItems.forEach(item => {
-            const timeRemaining = item.endTime - currentGameTime;
-            const progress = Math.min(100, ((currentGameTime - item.startTime) / (item.endTime - item.startTime)) * 100);
-            console.log(`🔧 Building ${buildingIndex}: ${item.recipeId} - ${progress.toFixed(1)}% complete, ${timeRemaining.toFixed(1)} minutes remaining`);
-          });
-        }
-      });
-
-      if (totalActiveProductions > 0) {
-        console.log(`🏭 Total active productions: ${totalActiveProductions}`);
-      }
-
-      updatedQueues.forEach((queue, buildingIndex) => {
-        const completedItems: string[] = [];
-
-        queue.forEach((item) => {
-          if (item.status === 'active' && currentGameTime >= item.endTime) {
-            console.log(`✅ PRODUCTION COMPLETING: Building ${buildingIndex}, Recipe ${item.recipeId}`);
-
-            let outputs: { resourceId: string; quantity: number }[] = [];
-            let xpReward = 0;
-            let productionName = '';
-
-            if (item.recipeId.startsWith('extract_')) {
-              const resourceId = item.recipeId.replace('extract_', '');
-              const building = grid[buildingIndex];
-              if (building?.produces) {
-                const production = building.produces.find(p => p.resourceId === resourceId);
-                if (production) {
-                  outputs = [{ resourceId: production.resourceId, quantity: production.quantity }];
-                  xpReward = Math.ceil(production.quantity / 2);
-                  const resource = getResourceById(resourceId);
-                  productionName = `Extract ${resource?.name || resourceId}`;
-                  console.log(`🌲 Found auto-production:`, production);
-                } else {
-                  console.error(`❌ Auto-production not found for resourceId: ${resourceId}`);
+                    handleXPGain(xpReward, 'production', `Background production completed`);
+                    completedItems.push(item.id);
+                  }
                 }
-              } else {
-                console.error(`❌ Building has no produces array: ${building?.name}`);
-              }
-            } else {
-              const recipe = getRecipeById(item.recipeId);
-              if (recipe) {
-                outputs = recipe.outputs;
-                xpReward = recipe.xpReward;
-                productionName = recipe.name;
-                console.log(`📦 Found recipe:`, recipe);
-              } else {
-                console.error(`❌ Recipe not found: ${item.recipeId}`);
-              }
-            }
-
-            if (outputs.length > 0) {
-              outputs.forEach(output => {
-                const oldAmount = newResources[output.resourceId] || 0;
-                newResources[output.resourceId] = oldAmount + output.quantity;
-                resourcesChanged = true;
-                console.log(`💰 Added ${output.quantity} ${output.resourceId} (${oldAmount} -> ${newResources[output.resourceId]})`);
               });
 
-              handleXPGain(xpReward, 'production', `Completed ${productionName}`);
-              console.log(`⭐ Awarded ${xpReward} XP for completing ${productionName}`);
+              if (completedItems.length > 0) {
+                const updatedQueue = queue.filter(item => !completedItems.includes(item.id));
 
-              addNotification(
-                `Production completed! Received ${outputs.map(o => `${o.quantity} ${getResourceById(o.resourceId)?.name || o.resourceId}`).join(', ')}`,
-                'success'
-              );
-
-              completedItems.push(item.id);
-              console.log(`🗑️ Marking item ${item.id} for removal`);
-            }
-          }
-        });
-
-        if (completedItems.length > 0) {
-          console.log(`🧹 Removing ${completedItems.length} completed items from building ${buildingIndex}`);
-          const updatedQueue = queue.filter(item => !completedItems.includes(item.id));
-
-          const nextItem = updatedQueue.find(item => item.status === 'queued');
-          if (nextItem) {
-            nextItem.status = 'active';
-            nextItem.startTime = currentGameTime;
-
-            let productionDuration = 0;
-            let productionName = '';
-
-            if (nextItem.recipeId.startsWith('extract_')) {
-              const resourceId = nextItem.recipeId.replace('extract_', '');
-              const building = grid[buildingIndex];
-              if (building?.produces) {
-                const production = building.produces.find(p => p.resourceId === resourceId);
-                if (production) {
-                  productionDuration = Math.ceil(production.timeMinutes / timeSpeed);
-                  const resource = getResourceById(resourceId);
-                  productionName = `Extract ${resource?.name || resourceId}`;
+                const building = grid[buildingIndex];
+                if (building?.produces && building.produces.length > 0 && updatedQueue.length === 0) {
+                  const firstProduction = building.produces[0];
+                  const recipeId = `extract_${firstProduction.resourceId}`;
+                  
+                  const newItem: ProductionQueueItem = {
+                    id: `${Date.now()}-${step}-${Math.random().toString(36).substr(2, 9)}`,
+                    recipeId,
+                    buildingIndex,
+                    startTime: currentTime.totalMinutes,
+                    completionTime: currentTime.totalMinutes + TimeService.calculateProductionTime(firstProduction.timeMinutes, timeSpeed),
+                    status: 'active',
+                    progress: 0
+                  };
+                  
+                  updatedQueue.push(newItem);
                 }
+
+                updatedQueues.set(buildingIndex, updatedQueue);
+                queuesChanged = true;
               }
-            } else {
-              const recipe = getRecipeById(nextItem.recipeId);
-              if (recipe) {
-                productionDuration = Math.ceil(recipe.productionTime / timeSpeed);
-                productionName = recipe.name;
-              }
+            });
+
+            if (resourcesChanged) {
+              setPlayerResources(newResources);
             }
 
-            if (productionDuration > 0) {
-              nextItem.endTime = currentGameTime + productionDuration;
-              console.log(`▶️ Started next production: ${productionName} (${productionDuration} minutes at ${timeSpeed}x speed)`);
+            if (queuesChanged) {
+              setProductionQueues(updatedQueues);
+            }
+
+          }, step * 50);
+        }
+
+        if (timeSteps > 10) {
+          addNotification(`Processed ${timeSteps} seconds of background production`, 'info');
+        }
+      }
+    }
+
+    setLastActiveTime(null);
+  }, [isTabVisible, lastActiveTime, timePaused, gameTime, gameMinutes, productionQueues, playerResources, grid, timeSpeed, handleXPGain, addNotification]);
+
+  useEffect(() => {
+    if (activeProductions.size === 0) return;
+
+    const syncInterval = setInterval(() => {
+      const currentTime = TimeService.getCurrentTime(gameTime, gameMinutes);
+      let hasChanges = false;
+      let newResources = { ...playerResources };
+      const updatedProductions = new Map(activeProductions);
+
+      updatedProductions.forEach((production, buildingIndex) => {
+        if (!production.isActive) return;
+
+        const building = grid[buildingIndex];
+        if (!building) return;
+
+        let cycleDuration = 0;
+        let outputs: { resourceId: string; quantity: number }[] = [];
+        let xpReward = 0;
+        let productionName = '';
+
+        if (production.recipeId.startsWith('extract_')) {
+          const resourceId = production.recipeId.replace('extract_', '');
+          if (building.produces) {
+            const productionData = building.produces.find(p => p.resourceId === resourceId);
+            if (productionData) {
+              cycleDuration = TimeService.calculateProductionTime(productionData.timeMinutes, timeSpeed);
+              outputs = [{ resourceId: productionData.resourceId, quantity: productionData.quantity }];
+              xpReward = Math.ceil(productionData.quantity / 2);
+              const resource = getResourceById(resourceId);
+              productionName = `${resource?.name || resourceId}`;
             }
           }
+        } else {
+          const recipe = getRecipeById(production.recipeId);
+          if (recipe) {
+            cycleDuration = TimeService.calculateProductionTime(recipe.productionTime, timeSpeed);
+            outputs = recipe.outputs;
+            xpReward = recipe.xpReward;
+            productionName = recipe.name;
+          }
+        }
 
-          updatedQueues.set(buildingIndex, updatedQueue);
-          queuesChanged = true;
+        const nextCompletionTime = production.lastCompletionTime + cycleDuration;
+        if (currentTime.totalMinutes >= nextCompletionTime && cycleDuration > 0) {
+          outputs.forEach(output => {
+            const oldAmount = newResources[output.resourceId] || 0;
+            newResources[output.resourceId] = oldAmount + output.quantity;
+            console.log(`🔄 Continuous production: +${output.quantity} ${output.resourceId} (${oldAmount} -> ${newResources[output.resourceId]})`);
+          });
+
+          handleXPGain(xpReward, 'production', `Produced ${productionName}`);
+
+          production.lastCompletionTime = nextCompletionTime;
+          production.cycleCount += 1;
+
+          if (production.cycleCount % 5 === 0) {
+            addNotification(
+              `🔄 ${productionName}: ${production.cycleCount} cycles completed`, 
+              'info'
+            );
+          }
+
+          hasChanges = true;
         }
       });
 
-      if (resourcesChanged) {
-        console.log(`💾 Updating resources:`, newResources);
+      if (hasChanges) {
         setPlayerResources(newResources);
-      }
-
-      if (queuesChanged) {
-        console.log(`🔄 Updating production queues`);
-        setProductionQueues(updatedQueues);
-      }      if (resourcesChanged || queuesChanged) {
-        console.log(`🎯 Production state updated - Resources changed: ${resourcesChanged}, Queues changed: ${queuesChanged}`);
+        setActiveProductions(updatedProductions);
       }
 
     }, 1000);
 
-    return () => clearInterval(interval);
-  }, [timePaused, gameTime, gameMinutes, productionQueues, playerResources, grid, timeSpeed, addNotification, handleXPGain]);
+    return () => clearInterval(syncInterval);
+  }, [activeProductions, playerResources, grid, gameTime, gameMinutes, timeSpeed, addNotification, handleXPGain]);
 
   const handleShowProductionManager = () => {
-    console.log(`🏭 OPENING PRODUCTION MODAL - Current production queues:`, Array.from(productionQueues.entries()));
+    console.log(`🏭 OPENING PRODUCTION MODAL - Active productions:`, Array.from(activeProductions.entries()));
 
     const availableProductionBuildings = initialBuildings.filter(b => 
       b.productionType || (b.produces && b.produces.length > 0)
@@ -3050,10 +2915,10 @@ export default function NeighborVille({
               currentGameTimeMinutes={gameTime * 60 + (gameMinutes || 0)}
               timeSpeed={timeSpeed}
               addNotification={addNotification}
-              productionQueues={productionQueues}
-              onAddToProductionQueue={addToProductionQueue}
-              onCancelProductionItem={cancelProductionItem}
-              getProductionQueueForBuilding={getProductionQueueForBuilding}
+              activeProductions={activeProductions}
+              onStartProduction={startProduction}
+              onStopProduction={stopProduction}
+              getActiveProductionForBuilding={getActiveProductionForBuilding}
             />
           )}
         </AnimatePresence>
