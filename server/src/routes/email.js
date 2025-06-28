@@ -1,6 +1,7 @@
 import express from 'express';
 import { sendVerificationEmail, generateVerificationCode } from '../services/email.js';
 import { storeVerificationCode, findUserByEmail, createUser, findUserByUsername, getStoredVerificationCode } from '../services/userService.js';
+import { logger } from '../utils/logger.js';
 
 const router = express.Router();
 
@@ -15,7 +16,7 @@ router.post('/send-verification', async (req, res) => {
     const normalizedEmail = email.toLowerCase().trim();
     
     const existingUser = await findUserByEmail(normalizedEmail);
-    console.log(`✅ Checking if user exists: ${normalizedEmail}, exists: ${!!existingUser}`);
+    logger.debug(`✅ Checking if user exists: ${normalizedEmail}, exists: ${!!existingUser}`);
 
     if (!existingUser && username) {
       try {
@@ -26,9 +27,9 @@ router.post('/send-verification', async (req, res) => {
         
         const tempPassword = Math.random().toString(36).slice(-8);
         await createUser(normalizedEmail, username, tempPassword);
-        console.log(`📝 Pre-created user for ${normalizedEmail} with username ${username}`);
+        logger.debug(`📝 Pre-created user for ${normalizedEmail} with username ${username}`);
       } catch (error) {
-        console.error(`❌ Error pre-creating user for ${normalizedEmail}:`, error);
+        logger.error(`Error pre-creating user for ${normalizedEmail}:`, error);
         if (error.code === 11000) {
           return res.status(409).json({ 
             success: false, 
@@ -44,16 +45,16 @@ router.post('/send-verification', async (req, res) => {
     
     if (existingCode) {
       verificationCode = existingCode;
-      console.log(`♻️ REUSING existing verification code for ${normalizedEmail}`);
+      logger.debug(`♻️ REUSING existing verification code for ${normalizedEmail}`);
     } else {
       verificationCode = generateVerificationCode();
       isNewCode = true;
-      console.log(`🆕 GENERATING new verification code for ${normalizedEmail}: ${verificationCode}`);
+      logger.debug(`🆕 GENERATING new verification code for ${normalizedEmail}: ${verificationCode}`);
       
       const stored = await storeVerificationCode(normalizedEmail, verificationCode, 15);
       
       if (!stored) {
-        console.error(`❌ Failed to store verification code for ${normalizedEmail}`);
+        logger.error(`Failed to store verification code for ${normalizedEmail}`);
         return res.status(500).json({ 
           success: false, 
           message: 'Failed to store verification code. Please try again.' 
@@ -63,7 +64,7 @@ router.post('/send-verification', async (req, res) => {
     
     try {
       const result = await sendVerificationEmail(normalizedEmail, verificationCode, username);
-      console.log(`📧 Email sending result for ${normalizedEmail}:`, result.messageId ? 'Success' : 'Failed');
+      logger.info(`📧 Email sending result for ${normalizedEmail}:`, result.messageId ? 'Success' : 'Failed');
       
       const response = {
         success: true,
@@ -86,7 +87,7 @@ router.post('/send-verification', async (req, res) => {
       res.status(200).json(response);
       
     } catch (emailError) {
-      console.error(`❌ Email sending failed for ${normalizedEmail}:`, emailError);
+      logger.error(`Email sending failed for ${normalizedEmail}:`, emailError);
       return res.status(500).json({ 
         success: false, 
         message: 'Failed to send verification email. Please try again.' 
@@ -94,7 +95,7 @@ router.post('/send-verification', async (req, res) => {
     }
     
   } catch (error) {
-    console.error('❌ Error in /send-verification route:', error);
+    logger.error('Error in /send-verification route:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Server error. Please try again later.' 

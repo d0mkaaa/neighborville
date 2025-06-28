@@ -26,6 +26,7 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import speakeasy from 'speakeasy';
 import QRCode from 'qrcode';
+import { logger } from '../utils/logger.js';
 
 
 
@@ -668,9 +669,9 @@ router.post('/verify-login', [
         });
       }
 
-        console.log(`🔍 STARTING verification for ${email} with code ${verificationCode}`);
-      const codeVerification = await verifyCode(email, verificationCode);
-      console.log(`📋 VERIFICATION result:`, codeVerification);
+            logger.debug(`🔍 STARTING verification for ${email} with code ${verificationCode}`);
+    const codeVerification = await verifyCode(email, verificationCode);
+    logger.debug(`📋 VERIFICATION result:`, codeVerification);
       
       if (!codeVerification.valid) {
         return res.status(400).json({
@@ -686,25 +687,25 @@ router.post('/verify-login', [
     const ip = req.ip;
 
     try {
-    if (user.trackIP) {
-      await user.trackIP(ip, userAgent);
-    }
+      try {
+        if (user.trackIP) {
+          await user.trackIP(ip, userAgent);
+        }
+      } catch (trackError) {
+        console.error('Non-critical IP tracking error:', trackError.message);
+      }
 
-    if (user.updateActivityStats) {
-      await user.updateActivityStats();
-    }
+      try {
+        if (user.updateActivityStats) {
+          await user.updateActivityStats();
+        }
+      } catch (statsError) {
+        console.error('Non-critical activity stats error:', statsError.message);
+      }
 
-      console.log('Creating session for user:', user.username);
     const session = await createSession(user, userAgent, ip);
-      console.log('Session created successfully');
-      
-      console.log('Setting auth cookie');
     const token = setAuthCookie(res, user._id);
-      console.log('Auth cookie set');
-
-      console.log('Getting user profile');
       const userProfile = user.toProfile();
-      console.log('User profile retrieved successfully');
 
     res.status(200).json({
       success: true,
