@@ -53,6 +53,10 @@ const logAdminAction = async (adminId, action, details, targetUserId = null) => 
 
 router.post('/make-admin', auth, async (req, res) => {
   try {
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(404).json({ success: false, message: 'Endpoint not available in production' });
+    }
+    
     const { userId, secretKey } = req.body;
     
     if (req.user.role === 'admin') {
@@ -78,7 +82,8 @@ router.post('/make-admin', auth, async (req, res) => {
       });
     }
     
-    if (secretKey !== 'neighborville_admin_2024') {
+    // SECURITY: Development-only self-promotion with secret key
+    if (secretKey !== process.env.ADMIN_SECRET_KEY) {
       return res.status(403).json({ success: false, message: 'Invalid secret key' });
     }
     
@@ -86,11 +91,11 @@ router.post('/make-admin', auth, async (req, res) => {
     req.user.permissions = ['manage_users', 'moderate_content', 'view_admin_panel', 'manage_reports'];
     await req.user.save();
     
-    await logAdminAction(req.user._id, 'self_promoted', 'Used secret key to become admin', req.user._id);
+    await logAdminAction(req.user._id, 'self_promoted', 'Used secret key to become admin (DEV ONLY)', req.user._id);
     
     res.status(200).json({
       success: true,
-      message: 'You are now an admin',
+      message: 'You are now an admin (development mode)',
       user: req.user.toProfile()
     });
   } catch (error) {
