@@ -97,11 +97,8 @@ class ContentModerationService {
       
       if (this.ALLOWED_WORDS.includes(lowerWord)) continue;
       
-      let wordRegex;
-      if (word.length <= 3) {
-        word
-        wordRegex = new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
-      }
+      // Create regex for the prohibited word
+      const wordRegex = new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
       
       if (wordRegex.test(lowerText)) {
         const matches = Array.from(lowerText.matchAll(wordRegex));
@@ -131,15 +128,21 @@ class ContentModerationService {
     }
 
     for (const pattern of this.SUSPICIOUS_PATTERNS) {
-      const matches = Array.from(originalText.matchAll(new RegExp(pattern.source, pattern.flags + 'g')));
-      
-      if (matches.length > 0) {
-        matches.forEach(match => {
-          flaggedPatterns.push(match[0]);
-          detectedItems.push(`suspicious pattern: "${match[0]}"`);
-          
-          cleanedText = cleanedText.replace(match[0], '*'.repeat(match[0].length));
-        });
+      try {
+        if (!pattern || !pattern.source) continue; // Skip invalid patterns
+        const matches = Array.from(originalText.matchAll(new RegExp(pattern.source, pattern.flags + 'g')));
+        
+        if (matches.length > 0) {
+          matches.forEach(match => {
+            flaggedPatterns.push(match[0]);
+            detectedItems.push(`suspicious pattern: "${match[0]}"`);
+            
+            cleanedText = cleanedText.replace(match[0], '*'.repeat(match[0].length));
+          });
+        }
+      } catch (error) {
+        console.error('Error processing suspicious pattern:', pattern, error);
+        continue; // Skip problematic patterns
       }
     }
 
