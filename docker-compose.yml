@@ -1,6 +1,13 @@
 services:
   neighborville:
-    build: .
+    build:
+      context: .
+      args:
+        - VITE_API_URL=${VITE_API_URL}
+        - VITE_WS_URL=${VITE_WS_URL}
+        - VITE_EMAIL_FROM=${VITE_EMAIL_FROM}
+        - VITE_EMAIL_FROM_NAME=${VITE_EMAIL_FROM_NAME}
+        - VITE_SESSION_TIMEOUT=${VITE_SESSION_TIMEOUT}
     container_name: neighborville
     ports:
       - "80:80"
