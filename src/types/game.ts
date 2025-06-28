@@ -340,6 +340,7 @@ export interface ActiveProduction {
 
 export interface GameProgress {
   playerName: string;
+  neighborhoodName: string;
   coins: number;
   day: number;
   level: number;
@@ -376,7 +377,10 @@ export interface GameProgress {
   productionQueues?: { [buildingIndex: string]: ProductionQueueItem[] };
   activeProductions?: { [buildingIndex: string]: ActiveProduction };
   
-  saveName?: string;
+  neighborhoodFoundedDate?: number;
+  neighborhoodMilestones?: NeighborhoodMilestone[];
+  cityEra?: string;
+  lastAutoSave?: number;
   saveId?: string;
   saveTimestamp?: number;
   
@@ -461,4 +465,20 @@ export interface InfrastructureUpgrade {
   prerequisite?: string;
   unlockLevel: number;
   buildTime: number;
+}
+
+export interface NeighborhoodMilestone {
+  id: string;
+  title: string;
+  description: string;
+  achievedAt: number;
+  day: number;
+  type: 'population' | 'economic' | 'infrastructure' | 'environmental' | 'social';
+  icon: string;
+  stats?: {
+    population?: number;
+    buildings?: number;
+    happiness?: number;
+    coins?: number;
+  };
 }

@@ -5,7 +5,7 @@ import type { Neighbor, Building } from "../../types/game";
 
 type SocialPost = {
   id: string;
-  neighborId: number;
+  neighborId: string | number;
   message: string;
   time: string;
   type: 'complaint' | 'praise' | 'observation' | 'concern';
@@ -41,7 +41,7 @@ export default function NeighborSocialFeed({ neighbors, grid, onClose, currentDa
     if (activeNeighbors.length === 0) return;
 
     const neighbor = activeNeighbors[Math.floor(Math.random() * activeNeighbors.length)];
-    const happiness = neighbor.happiness || 70;
+    const happiness = 70;
     
     let postType: 'complaint' | 'praise' | 'observation' | 'concern';
     let icon: React.ReactNode;
@@ -194,12 +194,12 @@ export default function NeighborSocialFeed({ neighbors, grid, onClose, currentDa
     return 'just now';
   };
 
-  const getNeighborAvatar = (neighborId: number) => {
+  const getNeighborAvatar = (neighborId: string | number) => {
     const neighbor = neighbors.find(n => n.id === neighborId);
     return neighbor?.avatar || '👤';
   };
 
-  const getNeighborName = (neighborId: number) => {
+  const getNeighborName = (neighborId: string | number) => {
     const neighbor = neighbors.find(n => n.id === neighborId);
     return neighbor?.name || 'Anonymous';
   };

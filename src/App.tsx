@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import AppLayout from './components/ui/AppLayout';
 import Login from './components/game/Login';
 import NeighborVille from './components/game/NeighborVille';
 import Button from './components/ui/Button';
-import { Play, Save, Settings, Trophy, Users } from 'lucide-react';
+import { Play, Save, Settings, Trophy, Users, Shield } from 'lucide-react';
 import type { GameProgress, TimeOfDay } from './types/game';
 import { useAuth } from './context/AuthContext';
 import AuthModal from './components/auth/AuthModal';
@@ -13,10 +14,27 @@ import ProfileSettings from './components/profile/ProfileSettings';
 import { loadGameFromServer, saveGameToServer } from './services/gameService';
 import Leaderboard from './components/profile/Leaderboard';
 import PublicProfileModal from './components/profile/PublicProfileModal';
+import SuspensionModal from './components/SuspensionModal';
+import { useSuspensionCheck } from './hooks/useSuspensionCheck';
+import TermsOfService from './components/legal/TermsOfService';
+import PrivacyPolicy from './components/legal/PrivacyPolicy';
+import GameWiki from './components/game/GameWiki';
 
 const AUTO_SAVE_INTERVAL = 5 * 60 * 1000;
 
 function App() {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/tos" element={<TermsOfService />} />
+        <Route path="/privacy" element={<PrivacyPolicy />} />
+        <Route path="/" element={<GameApp />} />
+      </Routes>
+    </Router>
+  );
+}
+
+function GameApp() {
   const [gameStarted, setGameStarted] = useState<boolean>(false);
   const [gameProgress, setGameProgress] = useState<GameProgress | null>(null);
   const [gameLoaded, setGameLoaded] = useState<boolean>(false);
@@ -27,10 +45,26 @@ function App() {
   const [showLeaderboard, setShowLeaderboard] = useState<boolean>(false);
   const [showPublicProfileModal, setShowPublicProfileModal] = useState<boolean>(false);
   const [profileToView, setProfileToView] = useState<string | null>(null);
+  const [showWiki, setShowWiki] = useState<boolean>(false);
   
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>('day');
   
-  const { user, isAuthenticated, login, isLoading } = useAuth();
+  const { user, isAuthenticated, login, logout, isLoading } = useAuth();
+  const { isSuspended, suspensionData, isLoading: suspensionLoading, checkStatus } = useSuspensionCheck();
+  const [forcedSuspensionData, setForcedSuspensionData] = useState<any>(null);
+  
+  useEffect(() => {
+    const handleSuspension = (event: CustomEvent) => {
+      console.log('Suspension event detected:', event.detail);
+      setForcedSuspensionData(event.detail.suspensionData);
+    };
+    
+    window.addEventListener('user:suspended', handleSuspension as EventListener);
+    
+    return () => {
+      window.removeEventListener('user:suspended', handleSuspension as EventListener);
+    };
+  }, []);
   
   useEffect(() => {
     if (!isLoading) {
@@ -73,9 +107,15 @@ function App() {
     }, 500);
   };
   
-  const handleStartGame = (playerName: string) => {
+  const handleStartGame = (playerName: string, neighborhoodName?: string) => {
+    if (isSuspended) {
+      console.warn('Attempted to start game while suspended');
+      return;
+    }
+    
     const newGameProgress: GameProgress = {
       playerName,
+      neighborhoodName: neighborhoodName || 'Unnamed City',
       coins: 2000,
       day: 1,
       level: 1,
@@ -142,6 +182,11 @@ function App() {
       return;
     }
     
+    if (isSuspended) {
+      console.warn('Attempted to load game while suspended');
+      return;
+    }
+    
     setGameLoading(true);
     
     setTimeout(() => {
@@ -205,87 +250,115 @@ function App() {
   };
   
   const handleShowTutorial = () => {
-    console.log('Show tutorial');
+    console.log('Tutorial function called - redirecting to Wiki');
+    handleShowWiki();
+  };
+
+  const handleShowWiki = () => {
+    console.log('Opening Wiki from quick actions');
+    setShowWiki(true);
+  };
+
+  const handleReturnToMenu = async () => {
+    console.log('Returning to main menu from game');
+    setGameStarted(false);
+    setGameProgress(null);
+  };
+  
+  const handleDeleteAccount = async () => {
+    try {
+      const response = await fetch('http://localhost:3001/api/user/delete-account', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
+      });
+
+      if (response.ok) {
+        logout();
+      } else {
+        const data = await response.json();
+        console.error('Failed to delete account:', data.message);
+        alert(`Failed to delete account: ${data.message || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error deleting account:', error);
+      alert('Network error occurred while trying to delete account');
+    }
   };
   
   return (
-    <main className="h-screen w-full overflow-hidden relative bg-gradient-to-b from-sky-100 to-blue-200">
+    <main className="h-screen w-full overflow-hidden relative bg-gradient-to-br from-indigo-100 via-purple-50 to-pink-100">
       <BackgroundBubbles />
       
       <AnimatePresence mode="wait">
-        {!gameStarted && (
+        {!isSuspended && !gameStarted && (
           <motion.div
             key="login"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.5 }}
-            className="h-full w-full flex flex-col"
+            style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%' }}
           >
             <Login 
               onStartGame={handleStartGame} 
               onLoadGame={handleLoadGame}
               onShowTutorial={handleShowTutorial}
+              onShowWiki={handleShowWiki}
             />
           </motion.div>
         )}
         
-        {gameStarted && gameProgress && (
+        {!isSuspended && gameStarted && gameProgress && (
           <motion.div
             key="game"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.5 }}
-            className="h-full w-full flex flex-col"
+            style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%' }}
           >
             <NeighborVille 
               initialGameState={gameProgress}
               onTimeChange={setTimeOfDay}
               onLoadGame={handleLoadGame}
+              onReturnToMenu={handleReturnToMenu}
               showTutorialProp={!gameLoaded}
             />
           </motion.div>
         )}
+        
+        {isSuspended && suspensionLoading && (
+          <motion.div
+            key="loading"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.5 }}
+            style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              height: '100%', 
+              width: '100%',
+              background: 'linear-gradient(to bottom right, #fef2f2, #fef3e2)'
+            }}
+          >
+            <div className="text-center">
+              <Shield size={64} className="mx-auto mb-4 text-red-500 animate-pulse" />
+              <h2 className="text-2xl font-bold mb-2 text-gray-800">Checking Account Status...</h2>
+              <p className="text-gray-600">Please wait while we verify your account</p>
+            </div>
+          </motion.div>
+        )}
       </AnimatePresence>
       
-      {!gameStarted && (
-        <div className="fixed bottom-4 right-4 flex flex-col gap-2">
-          {isAuthenticated ? (
-            <>
-              <Button
-                onClick={() => setShowProfileSettings(true)}
-                variant="glass"
-                size="sm"
-                className="w-12 h-12 rounded-full shadow-md"
-              >
-                <Settings size={20} />
-              </Button>
-              
-              <Button
-                onClick={() => setShowLeaderboard(true)}
-                variant="glass"
-                size="sm"
-                className="w-12 h-12 rounded-full shadow-md"
-              >
-                <Trophy size={20} />
-              </Button>
-            </>
-          ) : (
-            <Button
-              onClick={() => setShowAuth(true)}
-              variant="glass"
-              size="sm"
-              className="w-12 h-12 rounded-full shadow-md"
-            >
-              <Users size={20} />
-            </Button>
-          )}
-        </div>
-      )}
+
       
       <AnimatePresence>
-        {showAuth && (
+        {!isSuspended && showAuth && (
           <AuthModal
             onClose={() => {
               if (isAuthenticated && user?.username && !user.username.includes('@')) {
@@ -296,26 +369,47 @@ function App() {
           />
         )}
         
-        {showProfileSettings && (
+        {!isSuspended && showProfileSettings && (
           <ProfileSettings
             onClose={() => setShowProfileSettings(false)}
           />
         )}
         
-        {showLeaderboard && (
+        {!isSuspended && showLeaderboard && (
           <Leaderboard
             onClose={() => setShowLeaderboard(false)}
             onViewProfile={handleViewProfile}
           />
         )}
         
-        {showPublicProfileModal && profileToView && (
+        {!isSuspended && showPublicProfileModal && profileToView && (
           <PublicProfileModal
             userId={profileToView}
             onClose={() => {
               setShowPublicProfileModal(false);
               setProfileToView(null);
             }}
+          />
+        )}
+        
+        {(isSuspended || forcedSuspensionData) && (suspensionData || forcedSuspensionData) && !suspensionLoading && (
+          <SuspensionModal
+            suspensionData={forcedSuspensionData || suspensionData}
+            onLogout={logout}
+            onDeleteAccount={handleDeleteAccount}
+            onRefreshStatus={() => {
+              if (forcedSuspensionData) {
+                setForcedSuspensionData(null);
+              }
+              checkStatus();
+            }}
+          />
+        )}
+        
+        {!isSuspended && showWiki && (
+          <GameWiki
+            isOpen={showWiki}
+            onClose={() => setShowWiki(false)}
           />
         )}
       </AnimatePresence>

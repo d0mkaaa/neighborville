@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { Trophy, User, Settings, LogOut, Home, PlusCircle, LogIn, CloudUpload, Shield } from 'lucide-react';
+import { Trophy, User, Settings, LogOut, Home, PlusCircle, LogIn, Upload, Shield } from 'lucide-react';
 
 interface NavbarProps {
   onShowLeaderboard: () => void;
@@ -63,7 +63,7 @@ export default function Navbar({
               className="bg-blue-500 hover:bg-blue-600 text-white py-1 px-3 rounded-full text-sm transition-colors flex items-center gap-1"
               title="Sign up to save your progress"
             >
-              <CloudUpload size={16} />
+              <Upload size={16} />
               <span>Save Progress</span>
             </button>
           )}
@@ -108,29 +108,7 @@ export default function Navbar({
                     </button>
                   )}
                   
-                  <button
-                    onClick={() => {
-                      setShowUserMenu(false);
-                      onShowProfileSettings();
-                    }}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
-                  >
-                    <Settings size={16} className="mr-2" />
-                    {isGuest ? 'Game Settings' : 'Profile Settings'}
-                  </button>
-                  
-                  {!isGuest && (
-                    <button
-                      onClick={() => {
-                        setShowUserMenu(false);
-                        onShowSecuritySettings();
-                      }}
-                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
-                    >
-                      <Shield size={16} className="mr-2" />
-                      Security Settings
-                    </button>
-                  )}
+
                   
                   {isGuest && (
                     <button

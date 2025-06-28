@@ -1,57 +1,16 @@
 import type { GameProgress } from '../types/game';
 import { API_URL } from '../config/apiConfig';
 
-const getAuthToken = (): string | null => {
-  try {
-    const cookies = document.cookie.split(';');
-    for (const cookie of cookies) {
-      const [name, value] = cookie.trim().split('=');
-      if (name === 'neighborville_auth' && value) {
-        return value;
-      }
-    }
-    
-    const token = sessionStorage.getItem('neighborville_auth_token');
-    
-    if (!token) {
-      console.warn('No auth token found in cookies or sessionStorage');
-      return null;
-    }
-    
-    return token;
-  } catch (error) {
-    console.error('Error getting auth token:', error);
-    return null;
-  }
-};
-
 const getAuthHeaders = (): HeadersInit => {
-  const headers: HeadersInit = {
+  return {
     'Content-Type': 'application/json'
   };
-  
-  const token = getAuthToken();
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-    console.log('Adding auth token to request headers');
-  } else {
-    console.warn('Missing auth token for request headers');
-  }
-  
-  return headers;
 };
 
 export const saveGameToServer = async (gameData: GameProgress): Promise<boolean> => {
   try {
     if (!gameData.playerName) {
       console.error('Cannot save game without player name');
-      return false;
-    }
-
-    const token = getAuthToken();
-    
-    if (!token) {
-      console.warn('No auth token found, user must be logged in to save');
       return false;
     }
 
@@ -75,8 +34,15 @@ export const saveGameToServer = async (gameData: GameProgress): Promise<boolean>
     console.log('Save request completed with status:', saveResult.status);
 
     if (!saveResult.ok) {
-      const errorText = await saveResult.text();
-      throw new Error(`Failed to save game: ${saveResult.status} - ${errorText}`);
+      const errorData = await saveResult.json().catch(() => null);
+      
+      if (saveResult.status === 403 && errorData?.suspended) {
+        console.warn('Game save blocked: User is suspended');
+        return false;
+      }
+      
+      const errorText = errorData?.message || `HTTP ${saveResult.status}`;
+      throw new Error(`Failed to save game: ${errorText}`);
     }
 
     const result = await saveResult.json();
@@ -90,13 +56,6 @@ export const saveGameToServer = async (gameData: GameProgress): Promise<boolean>
 
 export const loadGameFromServer = async (): Promise<{gameData: GameProgress | null, lastSave: Date | null}> => {
   try {
-    const token = getAuthToken();
-    
-    if (!token) {
-      console.warn('No auth token found, user must be logged in to load game');
-      return { gameData: null, lastSave: null };
-    }
-
     console.log(`Attempting to load game from server at ${API_URL}/api/user/game/load`);
     
     const response = await fetch(`${API_URL}/api/user/game/load`, {
@@ -108,6 +67,13 @@ export const loadGameFromServer = async (): Promise<{gameData: GameProgress | nu
     console.log('Load request completed with status:', response.status);
 
     if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      
+      if (response.status === 403 && errorData?.suspended) {
+        console.warn('Game load blocked: User is suspended');
+        return { gameData: null, lastSave: null };
+      }
+      
       throw new Error(`Failed to load game: ${response.status}`);
     }
 
@@ -147,13 +113,6 @@ export const loadGameFromServer = async (): Promise<{gameData: GameProgress | nu
 
 export const loadSpecificSaveFromServer = async (saveId: string): Promise<{gameData: GameProgress | null, lastSave: Date | null}> => {
   try {
-    const token = getAuthToken();
-    
-    if (!token) {
-      console.warn('No auth token found, user must be logged in to load game');
-      return { gameData: null, lastSave: null };
-    }
-
     console.log(`Attempting to load specific save from server at ${API_URL}/api/user/game/save/${encodeURIComponent(saveId)}`);
     
     const response = await fetch(`${API_URL}/api/user/game/save/${encodeURIComponent(saveId)}`, {
@@ -204,13 +163,6 @@ export const loadSpecificSaveFromServer = async (saveId: string): Promise<{gameD
 
 export const getAllSavesFromServer = async (): Promise<{id: string, playerName: string, timestamp: number, data: GameProgress}[]> => {
   try {
-    const token = getAuthToken();
-    
-    if (!token) {
-      console.warn('No auth token found, user must be logged in to get saves');
-      return [];
-    }
-
     console.log(`Attempting to get saves from server at ${API_URL}/api/user/game/saves`);
     
     const response = await fetch(`${API_URL}/api/user/game/saves`, {
@@ -241,13 +193,6 @@ export const getAllSavesFromServer = async (): Promise<{id: string, playerName: 
 
 export const deleteSaveFromServer = async (saveId: string): Promise<boolean> => {
   try {
-    const token = getAuthToken();
-    
-    if (!token) {
-      console.warn('No auth token found, user must be logged in to delete saves');
-      return false;
-    }
-
     console.log(`Attempting to delete save from server at ${API_URL}/api/user/game/save/${encodeURIComponent(saveId)}`);
     
     const response = await fetch(`${API_URL}/api/user/game/save/${encodeURIComponent(saveId)}`, {

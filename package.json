@@ -11,11 +11,15 @@
     "type-check": "tsc -b"
   },
   "dependencies": {
-    "framer-motion": "^12.10.4",
-    "lucide-react": "^0.508.0",
+    "@types/node": "^20.5.2",
+    "date-fns": "^4.1.0",
+    "framer-motion": "^10.16.4",
+    "lucide-react": "^0.263.1",
     "nodemailer": "^6.9.9",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "qrcode-generator": "^1.5.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^7.6.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.25.0",

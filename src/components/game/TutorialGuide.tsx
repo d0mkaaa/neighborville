@@ -1,831 +1,811 @@
-import { motion, AnimatePresence } from "framer-motion";
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   X, 
   ArrowRight, 
-  Package, 
+  ArrowLeft, 
+  Home, 
+  Users, 
   Coins, 
-  Heart, 
-  Star, 
   Zap, 
-  TrendingUp, 
-  Gift, 
-  Home,
+  Calendar, 
+  Settings, 
+  Trophy,
   Building2,
-  Users,
-  Play,
+  Heart,
+  TrendingUp,
+  Clock,
+  Sun,
+  Moon,
+  Cloud,
+  Droplets,
+  MapPin,
   Target,
   Lightbulb,
-  MapPin,
-  Settings,
-  Trophy,
-  Factory,
-  Sparkles,
   CheckCircle,
-  ArrowDown,
-  Coffee,
-  Recycle,
+  PlayCircle,
+  Book,
+  Star,
+  Hammer,
+  ShoppingCart,
+  BarChart3,
+  Gift,
+  Crown,
   Wrench
-} from "lucide-react";
+} from 'lucide-react';
+
+type TutorialStep = {
+  id: number;
+  title: string;
+  content: React.ReactNode;
+  category: 'basics' | 'building' | 'management' | 'advanced' | 'tips';
+  icon: React.ReactNode;
+  interactive?: boolean;
+  highlight?: string;
+  tasks?: string[];
+  tips?: string[];
+};
 
 type TutorialGuideProps = {
   step: number;
   onNextStep: () => void;
   onClose: () => void;
+  onComplete?: () => void;
 };
 
-export default function TutorialGuide({ step, onNextStep, onClose }: TutorialGuideProps) {
-  const totalSteps = 5;
-
-  const renderStepContent = () => {
-    switch (step) {
-      case 1:
-        return (
-          <div className="space-y-6">
-            <div className="text-center">
-              <motion.div 
-                initial={{ scale: 0, rotate: -180 }}
-                animate={{ scale: 1, rotate: 0 }}
-                transition={{ delay: 0.2, type: "spring", damping: 15 }}
-                className="w-24 h-24 bg-gradient-to-br from-emerald-400 via-green-500 to-emerald-600 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-2xl ring-4 ring-emerald-200"
-              >
-                <span className="text-4xl">🏙️</span>
-              </motion.div>
-              <motion.h3 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4 }}
-                className="text-3xl font-bold mb-3 bg-gradient-to-r from-emerald-600 to-green-600 bg-clip-text text-transparent"
-              >
-                Welcome to NeighborVille!
-              </motion.h3>
-              <motion.p 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5 }}
-                className="text-gray-600 text-lg leading-relaxed mb-6"
-              >
-                Build and manage your own thriving neighborhood! Create a perfect balance of residential, commercial, and production buildings while keeping your residents happy.
-              </motion.p>
-            </div>
-            
-            <motion.div 
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.6 }}
-              className="bg-gradient-to-br from-emerald-50 via-green-50 to-blue-50 p-6 rounded-2xl border-2 border-emerald-200 shadow-lg"
-            >
-              <h4 className="text-xl font-bold mb-4 text-emerald-700 flex items-center gap-3">
-                <Gift className="text-emerald-600" size={24} />
-                Your Starting Resources
-              </h4>
-              <div className="grid grid-cols-3 gap-4">
-                <motion.div 
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  transition={{ delay: 0.8, type: "spring" }}
-                  className="text-center bg-white/80 backdrop-blur-sm p-4 rounded-xl shadow-sm border border-white/50"
-                >
-                  <div className="text-3xl mb-2">🪵</div>
-                  <div className="font-bold text-gray-800 text-lg">Wood × 10</div>
-                  <div className="text-sm text-gray-600">Essential for buildings</div>
-                </motion.div>
-                <motion.div 
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  transition={{ delay: 0.9, type: "spring" }}
-                  className="text-center bg-white/80 backdrop-blur-sm p-4 rounded-xl shadow-sm border border-white/50"
-                >
-                  <div className="text-3xl mb-2">🪨</div>
-                  <div className="font-bold text-gray-800 text-lg">Stone × 10</div>
-                  <div className="text-sm text-gray-600">For construction</div>
-                </motion.div>
-                <motion.div 
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  transition={{ delay: 1.0, type: "spring" }}
-                  className="text-center bg-white/80 backdrop-blur-sm p-4 rounded-xl shadow-sm border border-white/50"
-                >
-                  <div className="text-3xl mb-2">⛏️</div>
-                  <div className="font-bold text-gray-800 text-lg">Iron Ore × 5</div>
-                  <div className="text-sm text-gray-600">For advanced tools</div>
-                </motion.div>
-              </div>
-              
-              <motion.div 
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 1.1 }}
-                className="mt-4 p-3 bg-emerald-100 rounded-xl border border-emerald-200"
-              >
-                <div className="flex items-center gap-2 text-emerald-700 font-medium">
-                  <Coins size={18} />
-                  <span>Starting Budget: 2,000 coins</span>
-                </div>
-              </motion.div>
-            </motion.div>
-
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.7 }}
-              className="bg-blue-50 p-4 rounded-xl border border-blue-200"
-            >
-              <div className="flex items-center gap-3 text-blue-700">
-                <Lightbulb size={20} />
-                <span className="font-semibold">Quick Tip:</span>
-              </div>
-              <p className="text-blue-600 mt-1">
-                Your goal is to create a thriving community where residents are happy and your city generates steady income!
-              </p>
-            </motion.div>
+const tutorialSteps: TutorialStep[] = [
+  {
+    id: 1,
+    title: "Welcome to NeighborVille!",
+    category: 'basics',
+    icon: <Crown className="text-yellow-500" size={24} />,
+    content: (
+      <div className="space-y-4">
+        <div className="text-center">
+          <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Building2 className="text-white" size={32} />
           </div>
-        );
+          <h3 className="text-xl font-bold text-gray-800 mb-2">Welcome, Mayor!</h3>
+          <p className="text-gray-600">
+            You've just been elected as the mayor of a brand new neighborhood. Your job is to build a thriving community that keeps your residents happy and prosperous.
+          </p>
+        </div>
+        
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <h4 className="font-semibold text-blue-800 mb-2">🎯 Your Goals:</h4>
+          <ul className="text-blue-700 space-y-1 text-sm">
+            <li>• Build houses and attract neighbors</li>
+            <li>• Manage your city's budget and resources</li>
+            <li>• Keep residents happy with amenities</li>
+            <li>• Expand your neighborhood as you level up</li>
+            <li>• Unlock achievements and special buildings</li>
+          </ul>
+        </div>
+        
+        <div className="text-center">
+          <p className="text-sm text-gray-500">
+            This tutorial will teach you everything you need to know to become a successful mayor!
+          </p>
+        </div>
+      </div>
+    )
+  },
 
-      case 2:
-        return (
-          <div className="space-y-6">
-            <div className="text-center">
-              <motion.div 
-                initial={{ scale: 0, rotate: -180 }}
-                animate={{ scale: 1, rotate: 0 }}
-                transition={{ delay: 0.2, type: "spring", damping: 15 }}
-                className="w-24 h-24 bg-gradient-to-br from-blue-400 via-indigo-500 to-purple-600 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-2xl ring-4 ring-blue-200"
-              >
-                <TrendingUp className="text-white" size={36} />
-              </motion.div>
-              <motion.h3 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4 }}
-                className="text-3xl font-bold mb-3 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent"
-              >
-                Master Your Economy
-              </motion.h3>
-              <motion.p 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5 }}
-                className="text-gray-600 text-lg leading-relaxed mb-6"
-              >
-                Understanding these core systems will help you build a successful and sustainable neighborhood.
-              </motion.p>
+  {
+    id: 2,
+    title: "Understanding the Interface",
+    category: 'basics',
+    icon: <Settings className="text-gray-500" size={24} />,
+    content: (
+      <div className="space-y-4">
+        <h3 className="text-lg font-bold text-gray-800">Game Interface Overview</h3>
+        
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Coins className="text-green-600" size={16} />
+              <span className="font-semibold text-green-800">Coins</span>
             </div>
-            
-            <div className="space-y-4">
-              <motion.div 
-                initial={{ x: -30, opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                transition={{ delay: 0.6 }}
-                className="bg-gradient-to-r from-yellow-50 via-amber-50 to-orange-50 p-5 rounded-2xl border-2 border-yellow-200 shadow-lg"
-              >
-                <h4 className="text-xl font-bold mb-3 text-amber-700 flex items-center gap-3">
-                  <Coins className="text-amber-600" size={24} />
-                  Coins System
-                </h4>
-                <p className="text-gray-700 mb-3 leading-relaxed">
-                  Your primary currency for purchasing buildings and upgrades. Each building generates daily income, and you'll earn bonus coins from achievements and events.
-                </p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-white/60 p-3 rounded-lg border border-amber-200">
-                    <div className="font-semibold text-amber-800">Income Sources</div>
-                    <div className="text-sm text-gray-600">Houses, shops, cafés</div>
-                  </div>
-                  <div className="bg-white/60 p-3 rounded-lg border border-amber-200">
-                    <div className="font-semibold text-amber-800">Expenses</div>
-                    <div className="text-sm text-gray-600">Buildings, services</div>
-                  </div>
-                </div>
-              </motion.div>
-              
-              <motion.div 
-                initial={{ x: -30, opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                transition={{ delay: 0.7 }}
-                className="bg-gradient-to-r from-emerald-50 via-green-50 to-teal-50 p-5 rounded-2xl border-2 border-emerald-200 shadow-lg"
-              >
-                <h4 className="text-xl font-bold mb-3 text-emerald-700 flex items-center gap-3">
-                  <Package className="text-emerald-600" size={24} />
-                  Resource Management
-                </h4>
-                <p className="text-gray-700 mb-3 leading-relaxed">
-                  Raw materials like wood, stone, and iron ore are essential for building production facilities and crafting advanced items that boost your economy.
-                </p>
-                <div className="flex items-center gap-2 text-emerald-600 bg-emerald-100 px-3 py-2 rounded-lg border border-emerald-200">
-                  <Factory size={16} />
-                  <span className="text-sm font-medium">Build sawmills and quarries to process resources</span>
-                </div>
-              </motion.div>
-              
-              <motion.div 
-                initial={{ x: -30, opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                transition={{ delay: 0.8 }}
-                className="bg-gradient-to-r from-pink-50 via-rose-50 to-red-50 p-5 rounded-2xl border-2 border-pink-200 shadow-lg"
-              >
-                <h4 className="text-xl font-bold mb-3 text-pink-700 flex items-center gap-3">
-                  <Heart className="text-pink-600" size={24} />
-                  Community Happiness
-                </h4>
-                <p className="text-gray-700 mb-3 leading-relaxed">
-                  Happy residents generate more income and unlock special bonuses. Maintain happiness through parks, entertainment, and essential services.
-                </p>
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="bg-white/60 p-2 rounded-lg border border-pink-200 text-center">
-                    <span className="text-lg">🌳</span>
-                    <div className="text-xs text-pink-700 font-medium">Parks</div>
-                  </div>
-                  <div className="bg-white/60 p-2 rounded-lg border border-pink-200 text-center">
-                    <span className="text-lg">🎪</span>
-                    <div className="text-xs text-pink-700 font-medium">Entertainment</div>
-                  </div>
-                  <div className="bg-white/60 p-2 rounded-lg border border-pink-200 text-center">
-                    <span className="text-lg">🏥</span>
-                    <div className="text-xs text-pink-700 font-medium">Services</div>
-                  </div>
-                </div>
-              </motion.div>
+            <p className="text-green-700 text-sm">Your main currency for building and upgrades</p>
+          </div>
+          
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Zap className="text-blue-600" size={16} />
+              <span className="font-semibold text-blue-800">Energy</span>
+            </div>
+            <p className="text-blue-700 text-sm">Powers your buildings - manage it wisely</p>
+          </div>
+          
+
+          
+          <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Calendar className="text-orange-600" size={16} />
+              <span className="font-semibold text-orange-800">Day/Time</span>
+            </div>
+            <p className="text-orange-700 text-sm">Time affects income and events</p>
+          </div>
+        </div>
+        
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+          <h4 className="font-semibold text-gray-800 mb-2">💡 Quick Tip:</h4>
+          <p className="text-gray-700 text-sm">
+            Keep an eye on all these metrics - they work together to determine your city's success!
+          </p>
+        </div>
+      </div>
+    )
+  },
+
+  {
+    id: 3,
+    title: "Building Your First House",
+    category: 'building',
+    icon: <Home className="text-blue-500" size={24} />,
+    interactive: true,
+    tasks: [
+      "Click on an empty tile in the grid",
+      "Select 'Small House' from the building menu",
+      "Complete the mini-game to build it"
+    ],
+    content: (
+      <div className="space-y-4">
+        <h3 className="text-lg font-bold text-gray-800">Let's Build Your First House!</h3>
+        
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <h4 className="font-semibold text-blue-800 mb-2">🏠 Building Process:</h4>
+          <ol className="text-blue-700 space-y-2 text-sm">
+            <li><strong>1.</strong> Click on any empty gray tile in the grid</li>
+            <li><strong>2.</strong> Choose "Small House" from the building options</li>
+            <li><strong>3.</strong> Complete the mini-game to construct it</li>
+            <li><strong>4.</strong> Watch your first house appear!</li>
+          </ol>
+        </div>
+        
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+            <h5 className="font-semibold text-green-800 mb-1">Small House</h5>
+            <p className="text-green-700 text-xs">Cost: 50 coins</p>
+            <p className="text-green-700 text-xs">Income: +5 coins/day</p>
+            <p className="text-green-700 text-xs">Capacity: 1 neighbor</p>
+          </div>
+          
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+            <h5 className="font-semibold text-yellow-800 mb-1">Mini-Games</h5>
+            <p className="text-yellow-700 text-xs">Fun puzzles that make building interactive!</p>
+            <p className="text-yellow-700 text-xs">Different games for different buildings</p>
+          </div>
+        </div>
+        
+        <div className="text-center bg-indigo-50 border border-indigo-200 rounded-lg p-3">
+          <PlayCircle className="text-indigo-600 mx-auto mb-2" size={20} />
+          <p className="text-indigo-800 text-sm font-medium">Try building your first house now!</p>
+        </div>
+      </div>
+    )
+  },
+
+  {
+    id: 4,
+    title: "Attracting Your First Neighbor",
+    category: 'building',
+    icon: <Users className="text-green-500" size={24} />,
+    tasks: [
+      "Open the neighbor panel on the right",
+      "Click on an available neighbor",
+      "Assign them to your house"
+    ],
+    content: (
+      <div className="space-y-4">
+        <h3 className="text-lg font-bold text-gray-800">Welcome Your First Resident!</h3>
+        
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <h4 className="font-semibold text-green-800 mb-2">👥 How Neighbors Work:</h4>
+          <ul className="text-green-700 space-y-1 text-sm">
+            <li>• Each neighbor has unique traits and preferences</li>
+            <li>• Happy neighbors pay more rent</li>
+            <li>• Some neighbors unlock special buildings</li>
+            <li>• Different houses attract different neighbor types</li>
+          </ul>
+        </div>
+        
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Heart className="text-purple-600" size={16} />
+              <span className="font-semibold text-purple-800">Satisfaction</span>
+            </div>
+            <p className="text-purple-700 text-sm">Keep neighbors happy for better income</p>
+          </div>
+          
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <TrendingUp className="text-blue-600" size={16} />
+              <span className="font-semibold text-blue-800">Rent Income</span>
+            </div>
+            <p className="text-blue-700 text-sm">Happy neighbors = more daily income</p>
+          </div>
+        </div>
+        
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <h4 className="font-semibold text-yellow-800 mb-2">💡 Pro Tip:</h4>
+          <p className="text-yellow-700 text-sm">
+            Check neighbor preferences! Some love parks, others prefer shops nearby. Match their needs for better income.
+          </p>
+        </div>
+      </div>
+    )
+  },
+
+  {
+    id: 5,
+    title: "Understanding Time & Weather",
+    category: 'basics',
+    icon: <Clock className="text-orange-500" size={24} />,
+    content: (
+      <div className="space-y-4">
+        <h3 className="text-lg font-bold text-gray-800">Time Affects Everything!</h3>
+        
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Sun className="text-yellow-600" size={16} />
+              <span className="font-semibold text-yellow-800">Day Time</span>
+            </div>
+            <p className="text-yellow-700 text-sm">Shops earn more, construction is faster</p>
+          </div>
+          
+          <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Moon className="text-indigo-600" size={16} />
+              <span className="font-semibold text-indigo-800">Night Time</span>
+            </div>
+            <p className="text-indigo-700 text-sm">Residential income increases, less activity</p>
+          </div>
+          
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Cloud className="text-gray-600" size={16} />
+              <span className="font-semibold text-gray-800">Cloudy</span>
+            </div>
+            <p className="text-gray-700 text-sm">Slower construction, normal income</p>
+          </div>
+          
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Droplets className="text-blue-600" size={16} />
+              <span className="font-semibold text-blue-800">Rainy</span>
+            </div>
+            <p className="text-blue-700 text-sm">Plants grow better in rainy weather</p>
+          </div>
+        </div>
+        
+        <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+          <h4 className="font-semibold text-indigo-800 mb-2">⏰ Time Controls:</h4>
+          <ul className="text-indigo-700 space-y-1 text-sm">
+            <li>• Click the pause button to stop time</li>
+            <li>• Use 1x, 2x, 3x speed controls</li>
+            <li>• "End Day" button skips to next day</li>
+            <li>• Watch for special timed events!</li>
+          </ul>
+        </div>
+      </div>
+    )
+  },
+
+  {
+    id: 6,
+    title: "Managing Energy & Utilities",
+    category: 'management',
+    icon: <Zap className="text-yellow-500" size={24} />,
+    content: (
+      <div className="space-y-4">
+        <h3 className="text-lg font-bold text-gray-800">Power Up Your City!</h3>
+        
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <h4 className="font-semibold text-red-800 mb-2">⚡ Energy Basics:</h4>
+          <ul className="text-red-700 space-y-1 text-sm">
+            <li>• All buildings consume energy</li>
+            <li>• No power = buildings don't work properly</li>
+            <li>• Build power plants to generate electricity</li>
+            <li>• Connect buildings with power lines</li>
+          </ul>
+        </div>
+        
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+            <h5 className="font-semibold text-yellow-800 mb-1">Power Plant</h5>
+            <p className="text-yellow-700 text-xs">Generates electricity for your city</p>
+            <p className="text-yellow-700 text-xs">Higher level = more power</p>
+          </div>
+          
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <h5 className="font-semibold text-blue-800 mb-1">Water Tower</h5>
+            <p className="text-blue-700 text-xs">Provides water to buildings</p>
+            <p className="text-blue-700 text-xs">Essential for city operations</p>
+          </div>
+        </div>
+        
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <h4 className="font-semibold text-green-800 mb-2">💡 Energy Tips:</h4>
+          <ul className="text-green-700 space-y-1 text-sm">
+            <li>• Check the energy panel regularly</li>
+            <li>• Upgrade power plants when needed</li>
+            <li>• Some buildings are more energy-efficient</li>
+            <li>• Solar panels work better during the day</li>
+          </ul>
+        </div>
+      </div>
+    )
+  },
+
+  {
+    id: 7,
+    title: "Managing Your Budget",
+    category: 'management',
+    icon: <BarChart3 className="text-green-500" size={24} />,
+    content: (
+      <div className="space-y-4">
+        <h3 className="text-lg font-bold text-gray-800">Master Your Finances!</h3>
+        
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <h4 className="font-semibold text-green-800 mb-2">💰 Income Sources:</h4>
+          <ul className="text-green-700 space-y-1 text-sm">
+            <li>• <strong>Rent:</strong> Daily income from residents</li>
+            <li>• <strong>Shops:</strong> Earn from commercial buildings</li>
+            <li>• <strong>Taxes:</strong> Set tax policies for extra income</li>
+            <li>• <strong>Events:</strong> Special opportunities for bonus coins</li>
+          </ul>
+        </div>
+        
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <h4 className="font-semibold text-red-800 mb-2">💸 Expenses:</h4>
+          <ul className="text-red-700 space-y-1 text-sm">
+            <li>• <strong>Energy Bills:</strong> Monthly utility costs</li>
+            <li>• <strong>Maintenance:</strong> Keeping buildings in good shape</li>
+            <li>• <strong>Construction:</strong> Building and upgrading costs</li>
+            <li>• <strong>Services:</strong> Police, fire, healthcare budgets</li>
+          </ul>
+        </div>
+        
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <h4 className="font-semibold text-blue-800 mb-2">📊 Budget Tips:</h4>
+          <ul className="text-blue-700 space-y-1 text-sm">
+            <li>• Open the Budget Modal to see detailed finances</li>
+            <li>• Balance income and expenses carefully</li>
+            <li>• Invest in upgrades for long-term profits</li>
+            <li>• Don't overspend - keep an emergency fund!</li>
+          </ul>
+        </div>
+      </div>
+    )
+  },
+
+  {
+    id: 8,
+    title: "Types of Buildings",
+    category: 'building',
+    icon: <Building2 className="text-purple-500" size={24} />,
+    content: (
+      <div className="space-y-4">
+        <h3 className="text-lg font-bold text-gray-800">Building Categories</h3>
+        
+        <div className="space-y-3">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Home className="text-blue-600" size={16} />
+              <span className="font-semibold text-blue-800">Residential</span>
+            </div>
+            <p className="text-blue-700 text-sm mb-2">Houses, apartments, condos for your neighbors</p>
+            <p className="text-blue-600 text-xs">Income: Rent • Quality affects rent amount</p>
+          </div>
+          
+          <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <ShoppingCart className="text-green-600" size={16} />
+              <span className="font-semibold text-green-800">Commercial</span>
+            </div>
+            <p className="text-green-700 text-sm mb-2">Shops, restaurants, entertainment venues</p>
+            <p className="text-green-600 text-xs">Income: High during day • Convenient for residents</p>
+          </div>
+          
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Hammer className="text-yellow-600" size={16} />
+              <span className="font-semibold text-yellow-800">Industrial</span>
+            </div>
+            <p className="text-yellow-700 text-sm mb-2">Factories, production facilities</p>
+            <p className="text-yellow-600 text-xs">Income: Steady • Place away from residential areas</p>
+          </div>
+          
+          <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Heart className="text-purple-600" size={16} />
+              <span className="font-semibold text-purple-800">Community</span>
+            </div>
+            <p className="text-purple-700 text-sm mb-2">Parks, schools, hospitals, police stations</p>
+            <p className="text-purple-600 text-xs">Income: Low/None • Improves city appeal</p>
+          </div>
+        </div>
+        
+        <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+          <h4 className="font-semibold text-indigo-800 mb-2">🏗️ Building Strategy:</h4>
+          <p className="text-indigo-700 text-sm">
+            Mix different building types! Residents need homes, but they also want shops, parks, and services nearby for better income and appeal.
+          </p>
+        </div>
+      </div>
+    )
+  },
+
+  {
+    id: 9,
+    title: "Achievements & Progression",
+    category: 'advanced',
+    icon: <Trophy className="text-yellow-500" size={24} />,
+    content: (
+      <div className="space-y-4">
+        <h3 className="text-lg font-bold text-gray-800">Level Up Your Mayorship!</h3>
+        
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <h4 className="font-semibold text-yellow-800 mb-2">🏆 Achievement System:</h4>
+          <ul className="text-yellow-700 space-y-1 text-sm">
+            <li>• Complete specific goals to earn XP</li>
+            <li>• Unlock new buildings and features</li>
+            <li>• Show off your mayoral skills</li>
+            <li>• Some achievements give permanent bonuses</li>
+          </ul>
+        </div>
+        
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Star className="text-green-600" size={16} />
+              <span className="font-semibold text-green-800">Experience</span>
+            </div>
+            <p className="text-green-700 text-sm">Gain XP from building, events, and achievements</p>
+          </div>
+          
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Crown className="text-blue-600" size={16} />
+              <span className="font-semibold text-blue-800">Mayor Level</span>
+            </div>
+            <p className="text-blue-700 text-sm">Higher levels unlock advanced buildings</p>
+          </div>
+        </div>
+        
+        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+          <h4 className="font-semibold text-purple-800 mb-2">🎯 Example Achievements:</h4>
+          <ul className="text-purple-700 space-y-1 text-sm">
+            <li>• "First Home" - Build your first house</li>
+            <li>• "Thriving Community" - Reach 20 residents</li>
+            <li>• "Big Spender" - Spend 1000 coins in one day</li>
+            <li>• "Green Mayor" - Build 5 parks</li>
+            <li>• "Millionaire" - Accumulate 10,000 coins</li>
+          </ul>
+        </div>
+      </div>
+    )
+  },
+
+  {
+    id: 10,
+    title: "Pro Tips & Strategies",
+    category: 'tips',
+    icon: <Lightbulb className="text-orange-500" size={24} />,
+    content: (
+      <div className="space-y-4">
+        <h3 className="text-lg font-bold text-gray-800">Master Mayor Strategies!</h3>
+        
+        <div className="space-y-3">
+          <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+            <h4 className="font-semibold text-green-800 mb-2">💡 Planning Tips:</h4>
+            <ul className="text-green-700 space-y-1 text-sm">
+              <li>• Plan your layout before building</li>
+              <li>• Group similar buildings together</li>
+              <li>• Leave space for future expansion</li>
+              <li>• Consider neighbor preferences when placing buildings</li>
+            </ul>
+          </div>
+          
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <h4 className="font-semibold text-blue-800 mb-2">💰 Economic Strategies:</h4>
+            <ul className="text-blue-700 space-y-1 text-sm">
+              <li>• Start with small houses, upgrade later</li>
+              <li>• Balance income buildings with community buildings</li>
+              <li>• Upgrade buildings for better efficiency</li>
+              <li>• Watch your energy consumption vs. production</li>
+            </ul>
+          </div>
+          
+          <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+            <h4 className="font-semibold text-purple-800 mb-2">🏘️ Community Tips:</h4>
+            <ul className="text-purple-700 space-y-1 text-sm">
+              <li>• Parks improve overall city appeal</li>
+              <li>• Keep industrial buildings away from homes</li>
+              <li>• Provide utilities to all buildings</li>
+              <li>• Match neighbors to their preferred housing</li>
+            </ul>
+          </div>
+          
+          <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+            <h4 className="font-semibold text-orange-800 mb-2">⚡ Advanced Tips:</h4>
+            <ul className="text-orange-700 space-y-1 text-sm">
+              <li>• Use time controls strategically</li>
+              <li>• Save before making big decisions</li>
+              <li>• Participate in seasonal events</li>
+              <li>• Check the marketplace for special items</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    )
+  },
+
+  {
+    id: 11,
+    title: "You're Ready to Lead!",
+    category: 'basics',
+    icon: <CheckCircle className="text-green-500" size={24} />,
+    content: (
+      <div className="space-y-4">
+        <div className="text-center">
+          <div className="w-20 h-20 bg-gradient-to-br from-green-500 to-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Crown className="text-white" size={32} />
+          </div>
+          <h3 className="text-xl font-bold text-gray-800 mb-2">Congratulations, Mayor!</h3>
+          <p className="text-gray-600">
+            You've completed the NeighborVille tutorial and learned the fundamentals of city management.
+          </p>
+        </div>
+        
+        <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-4">
+          <h4 className="font-semibold text-blue-800 mb-2">🎓 What You've Learned:</h4>
+          <div className="grid grid-cols-2 gap-2 text-sm">
+            <div className="flex items-center gap-2 text-blue-700">
+              <CheckCircle size={14} className="text-green-500" />
+              <span>Game interface</span>
+            </div>
+            <div className="flex items-center gap-2 text-blue-700">
+              <CheckCircle size={14} className="text-green-500" />
+              <span>Building construction</span>
+            </div>
+            <div className="flex items-center gap-2 text-blue-700">
+              <CheckCircle size={14} className="text-green-500" />
+              <span>Neighbor management</span>
+            </div>
+            <div className="flex items-center gap-2 text-blue-700">
+              <CheckCircle size={14} className="text-green-500" />
+              <span>Resource management</span>
+            </div>
+            <div className="flex items-center gap-2 text-blue-700">
+              <CheckCircle size={14} className="text-green-500" />
+              <span>Time and weather</span>
+            </div>
+            <div className="flex items-center gap-2 text-blue-700">
+              <CheckCircle size={14} className="text-green-500" />
+              <span>Advanced strategies</span>
             </div>
           </div>
-        );
-
-      case 3:
-        return (
-          <div className="space-y-6">
-            <div className="text-center">
-              <motion.div 
-                initial={{ scale: 0, rotate: -180 }}
-                animate={{ scale: 1, rotate: 0 }}
-                transition={{ delay: 0.2, type: "spring", damping: 15 }}
-                className="w-24 h-24 bg-gradient-to-br from-purple-400 via-indigo-500 to-blue-600 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-2xl ring-4 ring-purple-200"
-              >
-                <Building2 className="text-white" size={36} />
-              </motion.div>
-              <motion.h3 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4 }}
-                className="text-3xl font-bold mb-3 bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent"
-              >
-                Building Strategy
-              </motion.h3>
-              <motion.p 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5 }}
-                className="text-gray-600 text-lg leading-relaxed mb-6"
-              >
-                Learn about different building types and how to create the perfect neighborhood layout for maximum efficiency.
-              </motion.p>
-            </div>
-            
-            <div className="space-y-4">
-              <motion.div 
-                initial={{ y: 30, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{ delay: 0.6 }}
-                className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 p-5 rounded-2xl border-2 border-blue-200 shadow-lg"
-              >
-                <h4 className="text-xl font-bold text-blue-700 mb-4 flex items-center gap-3">
-                  <Home className="text-blue-600" size={24} />
-                  Residential Buildings
-                </h4>
-                <div className="grid grid-cols-2 gap-4 mb-4">
-                  <div className="bg-white/70 p-4 rounded-xl border border-blue-200">
-                    <div className="text-2xl mb-2">🏠</div>
-                    <div className="font-bold text-blue-800">Houses</div>
-                    <div className="text-sm text-gray-600">Basic income, low cost</div>
-                  </div>
-                  <div className="bg-white/70 p-4 rounded-xl border border-blue-200">
-                    <div className="text-2xl mb-2">🏢</div>
-                    <div className="font-bold text-blue-800">Apartments</div>
-                    <div className="text-sm text-gray-600">Higher income, more residents</div>
-                  </div>
-                </div>
-                <div className="text-sm text-blue-600 bg-blue-100 px-3 py-2 rounded-lg border border-blue-200 flex items-center gap-2">
-                  <Lightbulb size={16} />
-                  <span>💡 Tip: Place residential buildings near parks and services for bonus happiness</span>
-                </div>
-              </motion.div>
-              
-              <motion.div 
-                initial={{ y: 30, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{ delay: 0.7 }}
-                className="bg-gradient-to-r from-green-50 via-emerald-50 to-teal-50 p-5 rounded-2xl border-2 border-green-200 shadow-lg"
-              >
-                <h4 className="text-xl font-bold text-green-700 mb-4 flex items-center gap-3">
-                  <Coffee className="text-green-600" size={24} />
-                  Commercial Buildings
-                </h4>
-                <div className="grid grid-cols-2 gap-4 mb-4">
-                  <div className="bg-white/70 p-4 rounded-xl border border-green-200">
-                    <div className="text-2xl mb-2">☕</div>
-                    <div className="font-bold text-green-800">Café</div>
-                    <div className="text-sm text-gray-600">Steady income, attracts visitors</div>
-                  </div>
-                  <div className="bg-white/70 p-4 rounded-xl border border-green-200">
-                    <div className="text-2xl mb-2">🏪</div>
-                    <div className="font-bold text-green-800">Shop</div>
-                    <div className="text-sm text-gray-600">Higher income, requires foot traffic</div>
-                  </div>
-                </div>
-                <div className="text-sm text-green-600 bg-green-100 px-3 py-2 rounded-lg border border-green-200 flex items-center gap-2">
-                  <Target size={16} />
-                  <span>🎯 Strategy: Place shops near residential areas for maximum profit</span>
-                </div>
-              </motion.div>
-              
-              <motion.div 
-                initial={{ y: 30, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{ delay: 0.8 }}
-                className="bg-gradient-to-r from-orange-50 via-amber-50 to-yellow-50 p-5 rounded-2xl border-2 border-orange-200 shadow-lg"
-              >
-                <h4 className="text-xl font-bold text-orange-700 mb-4 flex items-center gap-3">
-                  <Factory className="text-orange-600" size={24} />
-                  Production Buildings
-                </h4>
-                <p className="text-gray-700 mb-3 leading-relaxed">
-                  Transform raw materials into valuable goods. Production buildings require resources to operate but create items worth more than the input cost.
-                </p>
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="bg-white/70 p-3 rounded-lg border border-orange-200 text-center">
-                    <div className="text-xl mb-1">🪚</div>
-                    <div className="text-xs font-bold text-orange-800">Sawmill</div>
-                    <div className="text-xs text-gray-600">Wood → Lumber</div>
-                  </div>
-                  <div className="bg-white/70 p-3 rounded-lg border border-orange-200 text-center">
-                    <div className="text-xl mb-1">⛏️</div>
-                    <div className="text-xs font-bold text-orange-800">Quarry</div>
-                    <div className="text-xs text-gray-600">Stone → Bricks</div>
-                  </div>
-                  <div className="bg-white/70 p-3 rounded-lg border border-orange-200 text-center">
-                    <div className="text-xl mb-1">🏭</div>
-                    <div className="text-xs font-bold text-orange-800">Factory</div>
-                    <div className="text-xs text-gray-600">Multi-purpose</div>
-                  </div>
-                </div>
-              </motion.div>
-            </div>
+        </div>
+        
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <h4 className="font-semibold text-yellow-800 mb-2">🚀 Next Steps:</h4>
+          <ul className="text-yellow-700 space-y-1 text-sm">
+            <li>• Build your first neighborhood</li>
+            <li>• Experiment with different building layouts</li>
+            <li>• Try to complete your first achievement</li>
+            <li>• Explore the game wiki for more detailed information</li>
+          </ul>
+        </div>
+        
+        <div className="text-center">
+          <div className="bg-gradient-to-r from-green-500 to-blue-600 text-white rounded-lg p-3">
+            <Gift className="mx-auto mb-2" size={20} />
+            <p className="font-semibold">Welcome Bonus: +200 Coins!</p>
+            <p className="text-sm opacity-90">Use these to get started on your first buildings</p>
           </div>
-        );
+        </div>
+      </div>
+    )
+  }
+];
 
-      case 4:
-        return (
-          <div className="space-y-6">
-            <div className="text-center">
-              <motion.div 
-                initial={{ scale: 0, rotate: -180 }}
-                animate={{ scale: 1, rotate: 0 }}
-                transition={{ delay: 0.2, type: "spring", damping: 15 }}
-                className="w-24 h-24 bg-gradient-to-br from-red-400 via-pink-500 to-purple-600 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-2xl ring-4 ring-red-200"
-              >
-                <Zap className="text-white" size={36} />
-              </motion.div>
-              <motion.h3 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4 }}
-                className="text-3xl font-bold mb-3 bg-gradient-to-r from-red-600 to-purple-600 bg-clip-text text-transparent"
-              >
-                Infrastructure & Services
-              </motion.h3>
-              <motion.p 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5 }}
-                className="text-gray-600 text-lg leading-relaxed mb-6"
-              >
-                Essential services and infrastructure keep your city running smoothly and your residents happy.
-              </motion.p>
-            </div>
-            
-            <div className="space-y-4">
-              <motion.div 
-                initial={{ x: -30, opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                transition={{ delay: 0.6 }}
-                className="bg-gradient-to-r from-yellow-50 via-amber-50 to-orange-50 p-5 rounded-2xl border-2 border-yellow-200 shadow-lg"
-              >
-                <h4 className="text-xl font-bold text-amber-700 mb-3 flex items-center gap-3">
-                  <Zap className="text-amber-600" size={24} />
-                  Power & Water Systems
-                </h4>
-                <p className="text-gray-700 mb-4 leading-relaxed">
-                  Larger buildings need electricity and water to function efficiently. Build power plants and water towers to supply your growing city.
-                </p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-white/70 p-3 rounded-lg border border-amber-200">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-lg">⚡</span>
-                      <span className="font-bold text-amber-800">Power Plants</span>
-                    </div>
-                    <div className="text-sm text-gray-600">Supply electricity to buildings</div>
-                  </div>
-                  <div className="bg-white/70 p-3 rounded-lg border border-amber-200">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-lg">💧</span>
-                      <span className="font-bold text-amber-800">Water Towers</span>
-                    </div>
-                    <div className="text-sm text-gray-600">Provide clean water access</div>
-                  </div>
-                </div>
-              </motion.div>
-              
-              <motion.div 
-                initial={{ x: -30, opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                transition={{ delay: 0.7 }}
-                className="bg-gradient-to-r from-green-50 via-emerald-50 to-teal-50 p-5 rounded-2xl border-2 border-green-200 shadow-lg"
-              >
-                <h4 className="text-xl font-bold text-green-700 mb-3 flex items-center gap-3">
-                  <Recycle className="text-green-600" size={24} />
-                  Environmental Services
-                </h4>
-                <p className="text-gray-700 mb-4 leading-relaxed">
-                  Parks and recycling centers improve air quality and resident happiness while reducing the environmental impact of your city.
-                </p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-white/70 p-3 rounded-lg border border-green-200">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-lg">🌳</span>
-                      <span className="font-bold text-green-800">Parks</span>
-                    </div>
-                    <div className="text-sm text-gray-600">Boost happiness significantly</div>
-                  </div>
-                  <div className="bg-white/70 p-3 rounded-lg border border-green-200">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-lg">♻️</span>
-                      <span className="font-bold text-green-800">Recycling Centers</span>
-                    </div>
-                    <div className="text-sm text-gray-600">Reduce pollution, earn resources</div>
-                  </div>
-                </div>
-              </motion.div>
-              
-              <motion.div 
-                initial={{ x: -30, opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                transition={{ delay: 0.8 }}
-                className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 p-5 rounded-2xl border-2 border-blue-200 shadow-lg"
-              >
-                <h4 className="text-xl font-bold text-blue-700 mb-3 flex items-center gap-3">
-                  <Settings className="text-blue-600" size={24} />
-                  Budget Management
-                </h4>
-                <p className="text-gray-700 mb-3 leading-relaxed">
-                  Monitor your city's finances through the Budget & Finance modal. Adjust service spending and tax policies to optimize your economy.
-                </p>
-                <div className="text-sm text-blue-600 bg-blue-100 px-3 py-2 rounded-lg border border-blue-200 flex items-center gap-2">
-                  <Wrench size={16} />
-                  <span>🔧 Access the budget panel from the game header to fine-tune your city</span>
-                </div>
-              </motion.div>
-            </div>
-          </div>
-        );
-
-      case 5:
-        return (
-          <div className="space-y-6">
-            <div className="text-center">
-              <motion.div 
-                initial={{ scale: 0, rotate: -180 }}
-                animate={{ scale: 1, rotate: 0 }}
-                transition={{ delay: 0.2, type: "spring", damping: 15 }}
-                className="w-24 h-24 bg-gradient-to-br from-green-400 via-emerald-500 to-teal-600 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-2xl ring-4 ring-green-200 relative"
-              >
-                <span className="text-4xl">🚀</span>
-                <motion.div
-                  className="absolute inset-0 rounded-3xl border-2 border-green-400"
-                  animate={{
-                    scale: [1, 1.2, 1],
-                    opacity: [0.5, 0, 0.5]
-                  }}
-                  transition={{
-                    duration: 2,
-                    repeat: Infinity
-                  }}
-                />
-              </motion.div>
-              <motion.h3 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4 }}
-                className="text-3xl font-bold mb-3 bg-gradient-to-r from-green-600 to-teal-600 bg-clip-text text-transparent"
-              >
-                Ready to Build Your Dream City!
-              </motion.h3>
-              <motion.p 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5 }}
-                className="text-gray-600 text-lg leading-relaxed mb-6"
-              >
-                You're all set to create your perfect neighborhood! Here's your essential starting strategy to ensure early success.
-              </motion.p>
-            </div>
-            
-            <motion.div 
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.6 }}
-              className="bg-gradient-to-br from-emerald-50 via-green-50 to-teal-50 p-6 rounded-2xl border-2 border-emerald-200 shadow-lg"
-            >
-              <h4 className="text-xl font-bold mb-4 text-emerald-700 flex items-center gap-3">
-                <Trophy className="text-emerald-600" size={24} />
-                Your First 10 Minutes Strategy
-              </h4>
-              <div className="space-y-4">
-                {[
-                  {
-                    step: 1,
-                    title: "Build Income First",
-                    description: "Place 2-3 houses and a café to generate steady coin income",
-                    icon: "🏠",
-                    delay: 0.7
-                  },
-                  {
-                    step: 2,
-                    title: "Process Starting Resources",
-                    description: "Build a sawmill to convert wood into valuable lumber",
-                    icon: "🪚",
-                    delay: 0.8
-                  },
-                  {
-                    step: 3,
-                    title: "Add Happiness Boosters",
-                    description: "Place a park near residential buildings for happiness bonus",
-                    icon: "🌳",
-                    delay: 0.9
-                  },
-                  {
-                    step: 4,
-                    title: "Monitor Your Budget",
-                    description: "Check the Finance panel to track income and plan expansion",
-                    icon: "💰",
-                    delay: 1.0
-                  }
-                ].map((item) => (
-                  <motion.div
-                    key={item.step}
-                    initial={{ x: -20, opacity: 0 }}
-                    animate={{ x: 0, opacity: 1 }}
-                    transition={{ delay: item.delay }}
-                    className="flex items-start gap-4 bg-white/70 p-4 rounded-xl border border-emerald-200"
-                  >
-                    <div className="w-8 h-8 bg-emerald-500 text-white rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">
-                      {item.step}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-1">
-                        <span className="text-xl">{item.icon}</span>
-                        <span className="font-bold text-gray-800">{item.title}</span>
-                      </div>
-                      <div className="text-sm text-gray-600 leading-relaxed">{item.description}</div>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-            </motion.div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <motion.div 
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 1.1 }}
-                className="bg-blue-50 p-4 rounded-xl border-2 border-blue-200"
-              >
-                <div className="flex items-center gap-2 text-blue-700 mb-2">
-                  <Lightbulb size={20} />
-                  <span className="font-bold">Pro Tips</span>
-                </div>
-                <ul className="text-sm text-blue-600 space-y-1">
-                  <li>• Save your game regularly</li>
-                  <li>• Experiment with layouts</li>
-                  <li>• Watch the time - new day brings income!</li>
-                </ul>
-              </motion.div>
-              
-              <motion.div 
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 1.2 }}
-                className="bg-purple-50 p-4 rounded-xl border-2 border-purple-200"
-              >
-                <div className="flex items-center gap-2 text-purple-700 mb-2">
-                  <Star size={20} />
-                  <span className="font-bold">Unlock Goals</span>
-                </div>
-                <ul className="text-sm text-purple-600 space-y-1">
-                  <li>• Reach level 5 for premium buildings</li>
-                  <li>• Complete achievements for XP</li>
-                  <li>• Keep residents happy for bonuses</li>
-                </ul>
-              </motion.div>
-            </div>
-            
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 1.3 }}
-              className="bg-gradient-to-r from-green-100 via-emerald-100 to-teal-100 p-4 rounded-xl border-2 border-green-200"
-            >
-              <div className="text-center">
-                <div className="flex items-center justify-center gap-2 text-green-700 mb-2">
-                  <CheckCircle size={20} />
-                  <span className="font-bold">You're Ready!</span>
-                </div>
-                <p className="text-green-600 text-sm">
-                  Click the <strong>"Start Building!"</strong> button below to begin your NeighborVille journey. 
-                  Remember, you can always access this tutorial again from the settings menu.
-                </p>
-              </div>
-            </motion.div>
-          </div>
-        );
-
-      default:
-        return null;
+export default function TutorialGuide({ step, onNextStep, onClose, onComplete }: TutorialGuideProps) {
+  const [currentStep, setCurrentStep] = useState(step);
+  const [completedTasks, setCompletedTasks] = useState<number[]>([]);
+  
+  const currentTutorialStep = tutorialSteps[currentStep - 1];
+  const isLastStep = currentStep >= tutorialSteps.length;
+  
+  useEffect(() => {
+    setCurrentStep(step);
+  }, [step]);
+  
+  const handleNext = () => {
+    if (isLastStep) {
+      onComplete?.();
+      onClose();
+    } else {
+      setCurrentStep(prev => prev + 1);
+      onNextStep();
     }
   };
-
+  
+  const handlePrevious = () => {
+    if (currentStep > 1) {
+      setCurrentStep(prev => prev - 1);
+    }
+  };
+  
+  const handleSkipToStep = (stepNumber: number) => {
+    setCurrentStep(stepNumber);
+  };
+  
+  const getCategoryColor = (category: string) => {
+    switch (category) {
+      case 'basics': return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'building': return 'bg-green-100 text-green-800 border-green-200';
+      case 'management': return 'bg-orange-100 text-orange-800 border-orange-200';
+      case 'advanced': return 'bg-purple-100 text-purple-800 border-purple-200';
+      case 'tips': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+  
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ backdropFilter: "blur(16px)", backgroundColor: "rgba(0,0,0,0.5)" }}
-    >
+    <AnimatePresence>
       <motion.div
-        initial={{ scale: 0.8, opacity: 0, y: 30, rotateX: -10 }}
-        animate={{ scale: 1, opacity: 1, y: 0, rotateX: 0 }}
-        exit={{ scale: 0.9, opacity: 0, y: 20, rotateX: 5 }}
-        transition={{ 
-          type: "spring", 
-          damping: 20, 
-          stiffness: 300,
-          mass: 0.8
-        }}
-        className="bg-gradient-to-br from-white via-gray-50 to-white backdrop-blur-xl rounded-3xl p-8 max-w-2xl w-full shadow-2xl mx-4 relative border-2 border-white/30 overflow-hidden"
-        style={{ maxHeight: '95vh', overflowY: 'auto' }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-4"
+        onClick={onClose}
       >
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          {[...Array(8)].map((_, i) => (
-            <motion.div
-              key={i}
-              className="absolute w-1 h-1 bg-blue-300 rounded-full opacity-40"
-              initial={{ 
-                x: Math.random() * 600, 
-                y: Math.random() * 800,
-                scale: 0
-              }}
-              animate={{ 
-                y: [null, -20, -40],
-                scale: [0, 1, 0],
-                opacity: [0, 0.6, 0]
-              }}
-              transition={{ 
-                duration: 3,
-                delay: i * 0.3,
-                repeat: Infinity,
-                repeatDelay: 2
-              }}
-            />
-          ))}
-        </div>
-
-        <motion.button
-          whileHover={{ scale: 1.1, rotate: 90 }}
-          whileTap={{ scale: 0.9 }}
-          onClick={onClose}
-          className="absolute top-6 right-6 w-10 h-10 bg-gray-100 hover:bg-red-100 rounded-full flex items-center justify-center text-gray-500 hover:text-red-500 transition-all duration-200 shadow-lg z-10 backdrop-blur-sm border border-gray-200"
+        <motion.div
+          initial={{ scale: 0.8, opacity: 0, y: 50 }}
+          animate={{ scale: 1, opacity: 1, y: 0 }}
+          exit={{ scale: 0.8, opacity: 0, y: 50 }}
+          transition={{ type: "spring", damping: 25, stiffness: 300 }}
+          className="bg-white/95 backdrop-blur-2xl border border-white/30 rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+          onClick={(e) => e.stopPropagation()}
         >
-          <X size={20} />
-        </motion.button>
-        
-        <div className="mb-8">
-          <div className="flex gap-2 mb-3">
-            {[...Array(totalSteps)].map((_, i) => (
-              <motion.div
-                key={i}
-                initial={{ scaleX: 0 }}
-                animate={{ scaleX: i < step ? 1 : 0 }}
-                transition={{ delay: i * 0.1, duration: 0.4, ease: "easeOut" }}
-                className={`h-3 flex-1 rounded-full relative overflow-hidden ${
-                  i < step 
-                    ? 'bg-gradient-to-r from-emerald-400 via-green-500 to-emerald-600 shadow-lg' 
-                    : 'bg-gray-200'
+          <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 text-white p-6 relative overflow-hidden">
+            <div className="absolute inset-0 bg-white/10 bg-opacity-20 bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.1)_0%,transparent_50%)]"></div>
+            
+            <div className="relative z-10">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-white/20 backdrop-blur-xl rounded-2xl flex items-center justify-center border border-white/30">
+                    {currentTutorialStep?.icon}
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold drop-shadow-lg">{currentTutorialStep?.title}</h2>
+                    <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium bg-white/20 backdrop-blur-sm mt-1 border border-white/30`}>
+                      {currentTutorialStep?.category.charAt(0).toUpperCase() + currentTutorialStep?.category.slice(1)}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={onClose}
+                  className="w-10 h-10 bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 flex items-center justify-center text-white/80 hover:text-white hover:bg-white/20 transition-all duration-200"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+            
+            <div className="bg-white/20 backdrop-blur-sm rounded-full h-3 overflow-hidden border border-white/30 shadow-inner">
+              <div 
+                className="bg-gradient-to-r from-green-400 to-emerald-500 h-full transition-all duration-500 ease-out shadow-sm"
+                style={{ width: `${(currentStep / tutorialSteps.length) * 100}%` }}
+              />
+            </div>
+            <div className="flex items-center justify-between mt-3">
+              <p className="text-white/90 text-sm font-medium">
+                Step {currentStep} of {tutorialSteps.length}
+              </p>
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                <p className="text-white/70 text-xs">
+                  {Math.round((currentStep / tutorialSteps.length) * 100)}% Complete
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto">
+            <div className="p-6">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={currentStep}
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  {currentTutorialStep?.content}
+                  
+                  {currentTutorialStep?.tasks && (
+                    <div className="mt-6 bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+                      <h4 className="font-semibold text-indigo-800 mb-3 flex items-center gap-2">
+                        <Target size={16} />
+                        Try This Now:
+                      </h4>
+                      <ul className="space-y-2">
+                        {currentTutorialStep.tasks.map((task, index) => (
+                          <li key={index} className="flex items-center gap-3 text-indigo-700">
+                            <div className="w-6 h-6 bg-indigo-200 rounded-full flex items-center justify-center text-xs font-bold">
+                              {index + 1}
+                            </div>
+                            <span className="text-sm">{task}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </motion.div>
+              </AnimatePresence>
+            </div>
+          </div>
+          
+          <div className="border-t border-white/20 p-6 bg-gradient-to-r from-gray-50 to-blue-50 backdrop-blur-xl">
+            <div className="flex items-center justify-between">
+              <button
+                onClick={handlePrevious}
+                disabled={currentStep === 1}
+                className="flex items-center gap-2 px-5 py-3 text-gray-600 hover:text-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 rounded-xl hover:bg-white/50 backdrop-blur-sm border border-gray-200 font-medium"
+              >
+                <ArrowLeft size={18} />
+                Previous
+              </button>
+              
+              <div className="flex items-center gap-2">
+                {tutorialSteps.slice(0, 5).map((_, index) => (
+                  <button
+                    key={index}
+                    onClick={() => handleSkipToStep(index + 1)}
+                    className={`w-10 h-10 rounded-xl text-sm font-bold transition-all duration-300 shadow-sm ${
+                      currentStep === index + 1
+                        ? 'bg-gradient-to-br from-blue-500 to-purple-600 text-white scale-110 shadow-lg'
+                        : currentStep > index + 1
+                        ? 'bg-gradient-to-br from-green-500 to-emerald-600 text-white shadow-md'
+                        : 'bg-white text-gray-600 hover:bg-gray-50 hover:scale-105 border border-gray-200'
+                    }`}
+                  >
+                    {currentStep > index + 1 ? <CheckCircle size={16} /> : index + 1}
+                  </button>
+                ))}
+                {tutorialSteps.length > 5 && (
+                  <>
+                    <span className="text-gray-400 mx-2 font-bold">•••</span>
+                    <div className="px-3 py-2 bg-white/70 backdrop-blur-sm rounded-lg border border-gray-200">
+                      <span className="text-sm text-gray-600 font-medium">
+                        +{tutorialSteps.length - 5} more
+                      </span>
+                    </div>
+                  </>
+                )}
+              </div>
+              
+              <button
+                onClick={handleNext}
+                className={`flex items-center gap-3 px-8 py-3 rounded-xl transition-all duration-200 font-bold shadow-lg hover:scale-105 ${
+                  isLastStep 
+                    ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white' 
+                    : 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white'
                 }`}
               >
-                {i < step && (
-                  <motion.div
-                    className="absolute inset-0 bg-white/30"
-                    animate={{
-                      x: ['-100%', '100%']
-                    }}
-                    transition={{
-                      duration: 1.5,
-                      repeat: Infinity,
-                      repeatDelay: 2
-                    }}
-                  />
-                )}
-              </motion.div>
-            ))}
+                {isLastStep ? 'Complete Tutorial' : 'Next Step'}
+                {!isLastStep && <ArrowRight size={18} />}
+                {isLastStep && <CheckCircle size={18} />}
+              </button>
+            </div>
           </div>
-          
-          <div className="text-center">
-            <motion.span 
-              key={step}
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              className="inline-flex items-center gap-2 bg-gradient-to-r from-emerald-100 to-green-100 text-emerald-700 px-4 py-2 rounded-full text-sm font-bold shadow-lg border border-emerald-200"
-            >
-              <Sparkles size={16} />
-              Step {step} of {totalSteps}
-            </motion.span>
-          </div>
-        </div>
-        
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={step}
-            initial={{ opacity: 0, x: 50 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -50 }}
-            transition={{ duration: 0.4 }}
-          >
-            {renderStepContent()}
-          </motion.div>
-        </AnimatePresence>
-        
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-          className="flex justify-between items-center mt-8 pt-6 border-t border-gray-200"
-        >
-          <div className="text-sm text-gray-500 flex items-center gap-2">
-            <motion.div
-              animate={{ rotate: [0, 360] }}
-              transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
-            >
-              <Settings size={16} />
-            </motion.div>
-            <span>{step}/{totalSteps} completed</span>
-          </div>
-          
-          <motion.button
-            whileHover={{ scale: 1.05, y: -2 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={onNextStep}
-            className="flex items-center bg-gradient-to-r from-emerald-500 via-green-500 to-emerald-600 text-white py-3 px-8 rounded-2xl font-bold hover:from-emerald-600 hover:to-green-600 transition-all duration-300 shadow-xl hover:shadow-2xl border border-emerald-400"
-          >
-            {step < totalSteps ? (
-              <>
-                Continue
-                <motion.div
-                  animate={{ x: [0, 5, 0] }}
-                  transition={{ duration: 1.5, repeat: Infinity }}
-                  className="ml-2"
-                >
-                  <ArrowRight size={20} />
-                </motion.div>
-              </>
-            ) : (
-              <>
-                <motion.span
-                  animate={{
-                    textShadow: ["0 0 0px rgba(255,255,255,0.5)", "0 0 10px rgba(255,255,255,0.8)", "0 0 0px rgba(255,255,255,0.5)"]
-                  }}
-                  transition={{
-                    duration: 2,
-                    repeat: Infinity
-                  }}
-                >
-                  Start Building!
-                </motion.span>
-                <motion.span 
-                  animate={{ 
-                    scale: [1, 1.3, 1],
-                    rotate: [0, 15, -15, 0]
-                  }}
-                  transition={{ 
-                    duration: 2, 
-                    repeat: Infinity,
-                    delay: 0.5
-                  }}
-                  className="ml-2 text-xl"
-                >
-                  🚀
-                </motion.span>
-              </>
-            )}
-          </motion.button>
         </motion.div>
       </motion.div>
-    </motion.div>
+    </AnimatePresence>
   );
 }

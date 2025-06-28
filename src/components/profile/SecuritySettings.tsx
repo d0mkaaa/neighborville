@@ -6,6 +6,7 @@ import {
   Trash, Lock, Unlock, Info, Calendar
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import TwoFactorSettings from '../settings/TwoFactorSettings';
 
 interface Session {
   id: string;
@@ -264,24 +265,22 @@ export default function SecuritySettings({ onClose }: SecuritySettingsProps) {
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ backdropFilter: "blur(8px)", backgroundColor: "rgba(0,0,0,0.3)" }}
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
       <motion.div
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.9, opacity: 0 }}
-        className="bg-white rounded-xl shadow-xl max-w-lg w-full overflow-hidden"
+        initial={{ scale: 0.9, opacity: 0, y: 20 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.9, opacity: 0, y: 20 }}
+        className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden"
       >
-        <div className="p-4 bg-blue-600 text-white flex justify-between items-center">
-          <h2 className="text-lg font-medium lowercase flex items-center">
-            <Shield size={20} className="mr-2" />
-            Security Settings
-          </h2>
+        <div className="p-6 bg-gradient-to-r from-blue-600 to-purple-600 text-white">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center">
+              <Shield size={24} className="mr-3" />
+              <div>
+                <h2 className="text-xl font-bold">Security Settings</h2>
+                <p className="text-blue-100 text-sm">Manage your account security and active sessions</p>
+              </div>
+            </div>
           <button 
             onClick={onClose}
             className="text-white/80 hover:text-white transition-colors"
@@ -289,68 +288,96 @@ export default function SecuritySettings({ onClose }: SecuritySettingsProps) {
             <X size={20} />
           </button>
         </div>
-        
-        <div className="overflow-y-auto max-h-[70vh]">
-          <div className="p-6">
-            <h3 className="text-lg font-medium text-gray-800 mb-4">Current Sessions</h3>
+        </div>
+
+        <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+          <div className="space-y-8">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">Two-Factor Authentication</h3>
+              <TwoFactorSettings />
+            </div>
+
+            <div>
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">Active Sessions</h3>
+              
+              {error && (
+                <div className="mb-4 flex items-center space-x-2 text-red-600 bg-red-50 p-3 rounded-lg">
+                  <AlertTriangle size={16} />
+                  <span className="text-sm">{error}</span>
+                </div>
+              )}
+
+              {success && (
+                <div className="mb-4 flex items-center space-x-2 text-green-600 bg-green-50 p-3 rounded-lg">
+                  <Check size={16} />
+                  <span className="text-sm">{success}</span>
+                </div>
+              )}
             
             {loading ? (
-              <div className="flex justify-center items-center py-12">
-                <Loader2 className="animate-spin text-blue-500" size={32} />
+                <div className="bg-white rounded-lg shadow-sm border p-6">
+                  <div className="flex items-center justify-center">
+                    <Loader2 size={24} className="animate-spin text-blue-600 mr-2" />
+                    <span className="text-gray-600">Loading active sessions...</span>
               </div>
-            ) : error ? (
-              <div className="bg-red-50 p-4 rounded-md flex items-start">
-                <AlertTriangle className="text-red-500 mr-3 mt-0.5" size={16} />
-                <span className="text-red-700">{error}</span>
               </div>
             ) : (
-              <>
-                {success && (
-                  <div className="bg-green-50 p-3 rounded-md flex items-center mb-4">
-                    <Check className="text-green-500 mr-2" size={16} />
-                    <span className="text-green-700">{success}</span>
+                <div className="bg-white rounded-lg shadow-sm border">
+                  <div className="p-4 border-b bg-gray-50">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <h4 className="font-medium text-gray-800">Active Sessions ({sessions.length})</h4>
+                        <p className="text-sm text-gray-600">Devices currently signed into your account</p>
+                      </div>
+                      {sessions.filter(s => !s.isCurrent).length > 0 && (
+                        <button
+                          onClick={() => setShowConfirmAll(true)}
+                          className="px-3 py-1 text-sm text-red-600 hover:text-red-800 border border-red-300 rounded hover:bg-red-50 transition-colors"
+                        >
+                          Revoke All Others
+                        </button>
+                      )}
+                    </div>
                   </div>
-                )}
-                
-                <div className="space-y-4 mt-2">
-                  {sessions.map(session => (
-                    <div 
-                      key={session.id} 
-                      className={`border rounded-md p-4 ${session.isCurrent ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'}`}
-                    >
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <div className="flex items-center">
+
+                  <div className="divide-y">
+                    {sessions.map((session) => (
+                      <div key={session.id} className="p-4">
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-start space-x-3">
+                            <div className="p-2 bg-gray-100 rounded-lg">
                             {getDeviceIcon(session.device.type)}
-                            <span className="font-medium text-gray-700">
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center space-x-2">
+                                <h4 className="font-medium text-gray-800">
                               {getSessionName(session)}
-                            </span>
+                                </h4>
                             {session.isCurrent && (
-                              <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                                  <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
                                 Current
                               </span>
                             )}
                           </div>
-                          
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2 mt-2">
-                            <div className="flex items-center text-xs text-gray-500">
-                              <Globe size={14} className="mr-1.5" />
+                              <div className="mt-1 space-y-1">
+                                <p className="text-sm text-gray-600">
+                                  {session.device.browser} on {session.device.os}
+                                </p>
+                                <div className="flex items-center space-x-4 text-xs text-gray-500">
+                                  <span className="flex items-center">
+                                    <Globe size={12} className="mr-1" />
                               {session.ipAddress} 
-                              {session.location?.city && (
-                                <span className="ml-1">
-                                  ({session.location.city}, {session.location.country})
+                                  </span>
+                                  {session.location && (
+                                    <span>
+                                      {session.location.city}, {session.location.country}
                                 </span>
                               )}
+                                  <span className="flex items-center">
+                                    <Clock size={12} className="mr-1" />
+                                    Last active {formatDate(session.lastActive)}
+                                  </span>
                             </div>
-                            
-                            <div className="flex items-center text-xs text-gray-500">
-                              <Clock size={14} className="mr-1.5" />
-                              <span>Last active: {formatDate(session.lastActive)}</span>
-                            </div>
-                            
-                            <div className="flex items-center text-xs text-gray-500">
-                              <Calendar size={14} className="mr-1.5" />
-                              <span>First seen: {formatDate(session.createdAt)}</span>
                             </div>
                           </div>
                         </div>
@@ -359,113 +386,67 @@ export default function SecuritySettings({ onClose }: SecuritySettingsProps) {
                           <button
                             onClick={() => revokeSession(session.id)}
                             disabled={revoking === session.id}
-                            className="text-red-600 hover:text-red-800 p-1.5 rounded-md hover:bg-red-50 flex items-center text-xs"
+                              className="ml-4 px-3 py-1 text-sm text-red-600 hover:text-red-800 border border-red-300 rounded hover:bg-red-50 transition-colors disabled:opacity-50"
                           >
                             {revoking === session.id ? (
                               <Loader2 size={14} className="animate-spin" />
                             ) : (
-                              <LogOut size={14} className="mr-1" />
+                                'Revoke'
                             )}
-                            <span>{revoking === session.id ? 'Revoking...' : 'Revoke'}</span>
                           </button>
                         )}
                       </div>
                     </div>
                   ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
                 </div>
                 
-                {sessions.length > 1 && (
-                  <div className="mt-6 flex justify-end">
-                    {!showConfirmAll ? (
-                      <button
-                        onClick={() => setShowConfirmAll(true)}
-                        className="bg-red-100 text-red-700 hover:bg-red-200 py-2 px-4 rounded-md text-sm flex items-center"
-                      >
-                        <Trash size={14} className="mr-1.5" />
-                        Revoke All Other Sessions
-                      </button>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-gray-600">Are you sure?</span>
+        {showConfirmAll && (
+          <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/50">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="bg-white rounded-xl shadow-xl max-w-md w-full p-6"
+            >
+              <div className="flex items-center space-x-3 mb-4">
+                <AlertTriangle size={24} className="text-red-600" />
+                <h3 className="text-lg font-semibold text-gray-800">Revoke All Other Sessions</h3>
+              </div>
+              
+              <p className="text-gray-600 mb-6">
+                This will sign you out of all other devices. You'll need to sign in again on those devices.
+              </p>
+              
+              <div className="flex space-x-3">
                         <button
                           onClick={() => setShowConfirmAll(false)}
-                          disabled={revokingAll}
-                          className="bg-gray-100 text-gray-700 hover:bg-gray-200 py-2 px-4 rounded-md text-sm"
+                  className="flex-1 px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
                         >
                           Cancel
                         </button>
                         <button
                           onClick={revokeAllSessions}
                           disabled={revokingAll}
-                          className="bg-red-600 text-white hover:bg-red-700 py-2 px-4 rounded-md text-sm flex items-center"
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-400 transition-colors"
                         >
                           {revokingAll ? (
                             <>
-                              <Loader2 size={14} className="mr-1.5 animate-spin" />
+                      <Loader2 size={16} className="animate-spin mr-2 inline" />
                               Revoking...
                             </>
                           ) : (
-                            <>
-                              <Check size={14} className="mr-1.5" />
-                              Confirm
-                            </>
+                    'Revoke All'
                           )}
                         </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-
-          <div className="p-6 pt-0">
-            <div className="border-t border-gray-200 pt-6">
-              <h3 className="text-lg font-medium text-gray-800 mb-4">Two-Factor Authentication</h3>
-
-              <div className="bg-gray-50 border border-gray-200 rounded-md p-4">
-                <div className="flex justify-between items-center">
-                  <div className="flex items-start">
-                    {is2FAEnabled ? (
-                      <Lock size={20} className="mr-3 text-green-600 mt-0.5" />
-                    ) : (
-                      <Unlock size={20} className="mr-3 text-amber-600 mt-0.5" />
-                    )}
-                    
-                    <div>
-                      <div className="font-medium text-gray-800">
-                        Two-Factor Authentication
-                      </div>
-                      <div className="text-sm text-gray-600 mt-1">
-                        {is2FAEnabled 
-                          ? 'Your account is protected by two-factor authentication.'
-                          : 'Enable two-factor authentication to improve your account security.'}
-                      </div>
-                    </div>
-                  </div>
-
-                  <button
-                    className={`flex items-center text-xs py-1.5 px-3 rounded-md ${
-                      is2FAEnabled 
-                        ? 'bg-red-100 text-red-700 hover:bg-red-200'
-                        : 'bg-green-100 text-green-700 hover:bg-green-200'
-                    }`}
-                  >
-                    {is2FAEnabled ? 'Disable' : 'Enable'}
-                  </button>
-                </div>
-
-                {!is2FAEnabled && (
-                  <div className="mt-3 bg-amber-50 p-2 rounded text-xs text-amber-800 flex items-center">
-                    <Info size={12} className="mr-1.5" />
-                    Protect your account with an extra layer of security. When enabled, you'll need to enter a code from your phone in addition to your password.
-                  </div>
-                )}
               </div>
-            </div>
+            </motion.div>
           </div>
-        </div>
+        )}
       </motion.div>
-    </motion.div>
+    </div>
   );
 } 

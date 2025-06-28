@@ -1,21 +1,28 @@
-import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
-import { Upload, Info, User, Play, PlusCircle, ArrowRight, Clock, Cloud, Download, Loader2, Calendar, Coins, Home, Smile, CloudOff, Trash2, ChevronDown, ChevronUp, Settings, LogOut, Shield, Bell, Palette, Globe, HelpCircle, X, CheckCircle, Monitor, Smartphone, Tablet } from "lucide-react";
-import BackgroundBubbles from "./BackgroundBubbles";
-import type { GameProgress } from "../../types/game";
-import GlassCard from "../ui/GlassCard";
-import Button from "../ui/Button";
-import { useAuth } from "../../context/AuthContext";
-import { loadGameFromServer, getAllSavesFromServer, deleteSaveFromServer } from "../../services/gameService";
-import { getUserSessions } from "../../services/userService";
-import { NORMALIZED_API_URL } from "../../config/apiConfig";
-import SaveItem from "../ui/SaveItem";
-
-type LoginProps = {
-  onStartGame: (playerName: string) => void;
-  onLoadGame: (gameData: GameProgress) => void;
-  onShowTutorial: () => void;
-};
+import { useState, useEffect } from 'react';
+import { 
+  Play, Plus, BookOpen, Trophy, Search, Settings, Crown, Calendar, Clock, 
+  Trash2, User, Shield, Star, Home, Globe, Users, ChevronRight, Gamepad2,
+  Building, Map, Coffee, Sparkles, Heart, Target, Award, Activity, MapPin,
+  ArrowRight, CheckCircle, Zap, LogOut
+} from 'lucide-react';
+import AuthModal from '../auth/AuthModal';
+import AdminPanel from '../admin/AdminPanel';
+import ProfileSettings from '../profile/ProfileSettings';
+import SecuritySettings from '../profile/SecuritySettings';
+import Leaderboard from '../profile/Leaderboard';
+import UserSearch from '../profile/UserSearch';
+import PublicProfileModal from '../profile/PublicProfileModal';
+import ProfilePreview from '../profile/ProfilePreview';
+import BackgroundBubbles from './BackgroundBubbles';
+import SettingsModal from './SettingsModal';
+import { useAuth } from '../../context/AuthContext';
+import { loadNeighborhoodFromServer } from '../../services/neighborhoodService';
+import { getAllSavesFromServer, deleteSaveFromServer } from '../../services/gameService';
+import { getUserProfile } from '../../services/userService';
+import type { GameProgress } from '../../types/game';
+import { motion, AnimatePresence } from 'framer-motion';
+import ModalWrapper from '../ui/ModalWrapper';
+import Button from '../ui/Button';
 
 interface SaveInfo {
   id: string;
@@ -24,6 +31,14 @@ interface SaveInfo {
   data: GameProgress;
   type: 'cloud';
   timestamp: number;
+}
+
+interface ProfileStats {
+  username: string;
+  email: string;
+  role: 'user' | 'moderator' | 'admin';
+  verified: boolean;
+  memberSince: string;
 }
 
 interface Session {
@@ -43,961 +58,959 @@ interface Session {
   isCurrent: boolean;
 }
 
-export default function Login({ onStartGame, onLoadGame, onShowTutorial }: LoginProps) {
-  const { user, isAuthenticated, checkAuthStatus, setShowLogin, logout } = useAuth();
-  const [playerName, setPlayerName] = useState("");
+type LoginProps = {
+  onStartGame: (playerName: string, neighborhoodName?: string) => void;
+  onLoadGame: (gameData: GameProgress) => void;
+  onShowTutorial: () => void;
+  onShowWiki: () => void;
+};
+
+function NeighborhoodCreationModal({ 
+  isOpen, 
+  onClose, 
+  onCreateNeighborhood, 
+  playerName 
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onCreateNeighborhood: (neighborhoodName: string) => void;
+  playerName: string;
+}) {
+  const [step, setStep] = useState<'naming' | 'creating' | 'complete'>('naming');
+  const [neighborhoodName, setNeighborhoodName] = useState('');
+  const [stamps, setStamps] = useState<string[]>([]);
+
+  const suggestions = [
+    'Sunset Valley', 'Maple Heights', 'Cedar Grove', 'Riverside', 'Oakwood',
+    'Pine Hills', 'Golden Gate', 'Crystal Lake', 'Emerald Bay', 'Silver Springs'
+  ];
+
+  const handleCreate = async () => {
+    if (!neighborhoodName.trim()) return;
+    
+    setStep('creating');
+    
+    const creationStamps = ['🏡 Cozy Homes', '🌳 Green Spaces', '🏪 Local Shops', '👥 Happy Neighbors', '🎯 Bright Future'];
+    
+    for (let i = 0; i < creationStamps.length; i++) {
+      await new Promise(resolve => setTimeout(resolve, 800));
+      setStamps(prev => [...prev, creationStamps[i]]);
+    }
+    
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    setStep('complete');
+    
+    setTimeout(() => {
+      onCreateNeighborhood(neighborhoodName.trim());
+      onClose();
+    }, 2000);
+  };
+
+  const selectSuggestion = (suggestion: string) => {
+    setNeighborhoodName(suggestion);
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <AnimatePresence>
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-3xl p-8 max-w-2xl w-full shadow-2xl">
+          {step === 'naming' && (
+            <div className="space-y-6">
+              <div className="text-center">
+                <div className="w-24 h-24 bg-gradient-to-br from-emerald-400 via-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-2xl">
+                  <MapPin className="text-white" size={36} />
+                </div>
+                
+                <h2 className="text-3xl font-bold mb-3 bg-gradient-to-r from-emerald-600 to-blue-600 bg-clip-text text-transparent">
+                  Create Your Neighborhood
+                </h2>
+                
+                <p className="text-gray-600 text-lg">
+                  Welcome, {playerName}! Let's give your new neighborhood a special name.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={neighborhoodName}
+                    onChange={(e) => setNeighborhoodName(e.target.value)}
+                    placeholder="Enter neighborhood name..."
+                    className="w-full p-4 text-xl border-2 border-gray-200 rounded-2xl focus:border-emerald-500 focus:outline-none transition-colors bg-gray-50 focus:bg-white"
+                    maxLength={30}
+                  />
+                  <div className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400">
+                    {neighborhoodName.length}/30
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={onClose}
+                  className="px-6 py-3 text-gray-600 hover:text-gray-800 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreate}
+                  disabled={!neighborhoodName.trim()}
+                  className="px-8 py-3 bg-gradient-to-r from-emerald-500 to-blue-600 text-white rounded-2xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  Create Neighborhood
+                  <ArrowRight size={18} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {step === 'creating' && (
+            <div className="text-center space-y-8">
+              <div className="w-32 h-32 bg-gradient-to-br from-yellow-400 via-orange-500 to-red-500 rounded-full flex items-center justify-center mx-auto shadow-2xl">
+                <div className="animate-spin">
+                  <Zap className="text-white" size={48} />
+                </div>
+              </div>
+              
+              <div>
+                <h2 className="text-3xl font-bold mb-4 bg-gradient-to-r from-yellow-600 to-orange-600 bg-clip-text text-transparent">
+                  Creating "{neighborhoodName}"
+                </h2>
+                <p className="text-gray-600 text-lg">
+                  Preparing your perfect neighborhood...
+                </p>
+              </div>
+
+              <div className="grid grid-cols-5 gap-4 max-w-md mx-auto">
+                {stamps.map((stamp, index) => (
+                  <div
+                    key={stamp}
+                    className="bg-white rounded-2xl p-4 shadow-lg border-2 border-emerald-200 text-center"
+                  >
+                    <div className="text-3xl mb-2">{stamp.split(' ')[0]}</div>
+                    <div className="text-xs font-medium text-gray-600">{stamp.split(' ')[1]}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {step === 'complete' && (
+            <div className="text-center space-y-6">
+              <div className="w-32 h-32 bg-gradient-to-br from-green-400 via-emerald-500 to-teal-600 rounded-full flex items-center justify-center mx-auto shadow-2xl">
+                <CheckCircle className="text-white" size={48} />
+              </div>
+              
+              <div>
+                <h2 className="text-3xl font-bold mb-3 bg-gradient-to-r from-green-600 to-teal-600 bg-clip-text text-transparent">
+                  Welcome to {neighborhoodName}!
+                </h2>
+                <p className="text-gray-600 text-lg">
+                  Your neighborhood has been created successfully. Let's start building!
+                </p>
+              </div>
+
+              <div className="bg-gradient-to-r from-green-50 to-teal-50 p-6 rounded-2xl border-2 border-green-200">
+                <div className="grid grid-cols-2 gap-4 text-center">
+                  <div>
+                    <div className="text-2xl mb-2">🏗️</div>
+                    <div className="text-sm font-medium text-gray-700">Ready to Build</div>
+                  </div>
+                  <div>
+                    <div className="text-2xl mb-2">💰</div>
+                    <div className="text-sm font-medium text-gray-700">2,000 Starting Coins</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </AnimatePresence>
+  );
+}
+
+function FreshCityWarningModal({
+  isOpen,
+  onClose,
+  onConfirm,
+  currentNeighborhoodName
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  currentNeighborhoodName: string;
+}) {
+  return (
+    <ModalWrapper isOpen={isOpen} onClose={onClose} title="⚠️ Start Fresh City" headerColor="glass">
+      <div className="p-6 text-center">
+        <div className="mb-6">
+          <div className="w-16 h-16 mx-auto mb-4 bg-red-100 rounded-full flex items-center justify-center">
+            <span className="text-2xl">⚠️</span>
+          </div>
+          <h3 className="text-xl font-bold text-gray-800 mb-2">
+            This will delete your current city!
+          </h3>
+          <p className="text-gray-600 mb-4">
+            You currently have a city called <span className="font-semibold text-purple-600">"{currentNeighborhoodName}"</span>
+          </p>
+          <p className="text-red-600 font-medium">
+            Starting fresh will permanently delete all your progress, buildings, and achievements.
+          </p>
+        </div>
+
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+          <div className="flex items-start">
+            <span className="text-yellow-600 mr-2">💡</span>
+            <div className="text-left">
+              <p className="text-sm text-yellow-800 font-medium mb-1">Tip:</p>
+              <p className="text-sm text-yellow-700">
+                Consider saving your current progress first, or rename your existing city instead of starting over.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex gap-3 justify-center">
+          <Button 
+            variant="outline" 
+            onClick={onClose}
+            className="px-6"
+          >
+            Cancel
+          </Button>
+          <Button 
+            variant="danger" 
+            onClick={onConfirm}
+            className="px-6"
+          >
+            Delete & Start Fresh
+          </Button>
+        </div>
+      </div>
+    </ModalWrapper>
+  );
+}
+
+export default function Login({ onStartGame, onLoadGame, onShowTutorial, onShowWiki }: LoginProps) {
+  const { user, isAuthenticated, logout } = useAuth();
   const [cloudSaves, setCloudSaves] = useState<SaveInfo[]>([]);
-  const [showSaves, setShowSaves] = useState(false);
-  const [loadingCloudSaves, setLoadingCloudSaves] = useState(false);
-  const [savesToDelete, setSavesToDelete] = useState<string[]>([]);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [authVerified, setAuthVerified] = useState(false);
-  const [showMoreOptions, setShowMoreOptions] = useState(false);
-  const [loadingServerSave, setLoadingServerSave] = useState(false);  const [latestSave, setLatestSave] = useState<SaveInfo | null>(null);
-  
-  const [showUserMenu, setShowUserMenu] = useState(false);
-  const [showAccountSettings, setShowAccountSettings] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [profileStats, setProfileStats] = useState<ProfileStats | null>(null);
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
+  const [showProfileSettings, setShowProfileSettings] = useState(false);
   const [showSecuritySettings, setShowSecuritySettings] = useState(false);
-  const [showNotificationSettings, setShowNotificationSettings] = useState(false);
-  const [showSettingsModal, setShowSettingsModal] = useState(false);  const [loadingContinue, setLoadingContinue] = useState(false);
-  
-  const [sessions, setSessions] = useState<Session[]>([]);
-  const [loadingSessions, setLoadingSessions] = useState(false);
-  const [revokingSession, setRevokingSession] = useState<string | null>(null);
-  const [revokingAll, setRevokingAll] = useState(false);
-  const [showRevokeAllConfirm, setShowRevokeAllConfirm] = useState(false);
-  const [sessionError, setSessionError] = useState<string | null>(null);
-  const [sessionSuccess, setSessionSuccess] = useState<string | null>(null);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [showUserSearch, setShowUserSearch] = useState(false);
+  const [showPublicProfile, setShowPublicProfile] = useState(false);
+  const [showProfilePreview, setShowProfilePreview] = useState(false);
+  const [selectedProfileUser, setSelectedProfileUser] = useState<string>('');
+  const [selectedSaves, setSelectedSaves] = useState<string[]>([]);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showNeighborhoodCreation, setShowNeighborhoodCreation] = useState(false);
+  const [showFreshWarning, setShowFreshWarning] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [selectedSaveIds, setSelectedSaveIds] = useState<Set<string>>(new Set());
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [profileUsername, setProfileUsername] = useState('');
+  const [showingProfileMenu, setShowingProfileMenu] = useState(false);
   
   useEffect(() => {
-    const authCheckTimer = setTimeout(() => {
-      if (!isAuthenticated) {
-        console.log('Login: User not authenticated, showing login modal');
-        setShowLogin(true);
-        return;
+    if (isAuthenticated) {
+      loadCloudSaves();
+      loadProfileStats();
       }
-      
-      if (user && (!user.username || user.username.includes('@'))) {
-        console.log('Login: User has no username, showing login modal');
-        setShowLogin(true);
-        return;
-      }
-      
-      if (user?.username) {
-        setPlayerName(user.username);
-      }
+  }, [isAuthenticated]);
 
-      async function verifyAuth() {
-        if (isAuthenticated) {
-          try {
-            const status = await checkAuthStatus();
-            setAuthVerified(status);
-            if (status) {
-              console.log('Login: User authenticated, loading cloud saves immediately');
-              await loadCloudSaves();
-            }
-          } catch (error) {
-            console.error("Auth verification failed:", error);
-            setAuthVerified(false);
-          }
-        } else {
-          setAuthVerified(false);
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showingProfileMenu) {
+        const target = event.target as HTMLElement;
+        if (!target.closest('[data-profile-menu]')) {
+          setShowingProfileMenu(false);
         }
       }
-      
-      verifyAuth();
-    }, 100);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && showingProfileMenu) {
+        setShowingProfileMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showingProfileMenu]);
     
     const handleUnauthorized = () => {
-      console.log("Unauthorized event detected in Login page");
-      setAuthVerified(false);
-    };
-    
-    window.addEventListener('auth:unauthorized', handleUnauthorized);
-    
-    return () => {
-      clearTimeout(authCheckTimer);
-      window.removeEventListener('auth:unauthorized', handleUnauthorized);
-    };
-  }, [user, isAuthenticated, checkAuthStatus, setShowLogin]);
-  
-  useEffect(() => {
-    if (authVerified && isAuthenticated) {
-      console.log('Login: Auth verified, loading cloud saves');
-      loadCloudSaves();
+    logout();
+    setIsAuthModalOpen(true);
+  };
+
+  const loadProfileStats = async () => {
+    try {
+      const profile = await getUserProfile();
+      if (profile) {
+          setProfileStats({
+          username: profile.username,
+          email: profile.email,
+          role: profile.role || 'user',
+          verified: profile.verified,
+          memberSince: profile.createdAt?.toString() || ''
+          });
+      }
+    } catch (error) {
+      console.error('Error loading profile stats:', error);
     }
-  }, [authVerified, isAuthenticated]);
+  };
   
   const loadCloudSaves = async () => {
-    if (!authVerified) return;
+    if (!isAuthenticated) return;
     
-    console.log('Login: Loading cloud saves...');
-    setLoadingCloudSaves(true);
     try {
-      const serverSaves = await getAllSavesFromServer();
-      console.log(`Login: Received ${serverSaves.length} saves from server`);
+      setLoading(true);
       
-      const formattedSaves = serverSaves.map(save => ({
-        id: save.id,
-        name: save.data.playerName || 'Cloud Save',
-        date: new Date(save.timestamp).toLocaleDateString('en-US', {
-          month: 'short',
-          day: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit'
-        }),
-        data: save.data,
-        type: 'cloud' as const,
-        timestamp: save.timestamp
-      })).sort((a, b) => b.timestamp - a.timestamp);
+      const gameSaves = await getAllSavesFromServer();
+      let allSaves: SaveInfo[] = [];
       
-      setCloudSaves(formattedSaves);
+      const saveInfos: SaveInfo[] = gameSaves
+        .filter(save => {
+          const data = save.data;
+          if (!data) return false;
+          
+          const isValidSave = 
+            data.neighborhoodName ||
+            data.playerName ||
+            (data.day !== undefined && data.day >= 1) ||
+            (data.coins !== undefined) ||
+            (data.level !== undefined);
+            
+          return isValidSave;
+        })
+        .map((save, index) => {
+          const baseName = save.data?.neighborhoodName || 'Unnamed City';
+          
+          return {
+            id: save.id,
+            name: baseName,
+            date: formatTimeAgo(save.timestamp),
+            data: save.data,
+            type: 'cloud' as const,
+            timestamp: save.timestamp
+          };
+        });
+
+      allSaves = saveInfos;
       
-      if (formattedSaves.length > 0) {
-        const latest = formattedSaves[0];
-        console.log(`Login: Setting latest save: ${latest.name} (ID: ${latest.id})`);
-        setLatestSave(latest);
-      } else {
-        console.log('Login: No saves found on server');
-      }
-    } catch (err) {
-      console.error("Error loading cloud saves:", err);
+      allSaves.sort((a, b) => b.timestamp - a.timestamp);
+      
+      const uniqueSaves = allSaves.filter((save, index, arr) => 
+        index === arr.findIndex(s => s.name === save.name && Math.abs(s.timestamp - save.timestamp) < 1000)
+      ).slice(0, 10);
+      
+      setCloudSaves(uniqueSaves);
+    } catch (error) {
+      console.error('Error loading cloud saves:', error);
+      handleUnauthorized();
     } finally {
-      setLoadingCloudSaves(false);
+      setLoading(false);
     }
   };
   
   const handleStartGame = () => {
-    if (!isAuthenticated) {
-      setShowLogin(true);
-      return;
+    if (isAuthenticated && profileStats) {
+      if (cloudSaves.length > 0) {
+        setShowFreshWarning(true);
+      } else {
+        setShowNeighborhoodCreation(true);
+      }
+    } else {
+      setShowNeighborhoodCreation(true);
     }
-    
-    if (!user?.username || user.username.includes('@')) {
-      setShowLogin(true);
-      return;
-    }
-    
-    if (playerName.trim() === "") {
-      setPlayerName(user.username);
-    }
-    
-    onStartGame(playerName || user.username);
+  };
+
+  const handleCreateNeighborhood = (neighborhoodName: string) => {
+    setShowNeighborhoodCreation(false);
+    onStartGame(user?.username || 'Player', neighborhoodName);
+  };
+
+  const handleConfirmFresh = () => {
+    setShowFreshWarning(false);
+    setShowNeighborhoodCreation(true);
   };
 
   const handleDeleteCloudSave = async (id: string) => {
-    if (!authVerified) {
-      console.warn('Cannot delete cloud save: not authenticated');
-      setShowLogin(true);
-      return;
-    }
-    
     try {
-      setIsDeleting(true);
       const success = await deleteSaveFromServer(id);
-      
       if (success) {
         setCloudSaves(prev => prev.filter(save => save.id !== id));
-        
-        if (latestSave && latestSave.id === id) {
-          const newSaves = cloudSaves.filter(save => save.id !== id);
-          setLatestSave(newSaves.length > 0 ? newSaves[0] : null);
-        }
       }
     } catch (error) {
-      console.error('Error deleting cloud save:', error);
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
-  const handleDeleteSelected = async () => {
-    if (!savesToDelete.length) return;
-    
-    if (!authVerified) {
-      setShowLogin(true);
-      return;
-    }
-    
-    setIsDeleting(true);
-    
-    for (const id of savesToDelete) {
-      try {
-        await deleteSaveFromServer(id);
-      } catch (error) {
-        console.error(`Error deleting save ${id}:`, error);
-      }
-    }
-    
-    loadCloudSaves();
-    setSavesToDelete([]);
-    setIsDeleting(false);
-  };
-
-  const handleToggleDelete = (id: string) => {
-    if (savesToDelete.includes(id)) {
-      setSavesToDelete(prev => prev.filter(saveId => saveId !== id));
-    } else {
-      setSavesToDelete(prev => [...prev, id]);
+      console.error('Error deleting save:', error);
     }
   };
 
   const handleLoadLatestServerSave = async () => {
-    if (!latestSave) return;
-    
-    setLoadingContinue(true);    try {
-      await new Promise(resolve => setTimeout(resolve, 800));
-      onLoadGame(latestSave.data);
-    } catch (error) {
-      console.error('Error loading save:', error);
-    } finally {
-      setLoadingContinue(false);
+    if (cloudSaves.length > 0) {
+      onLoadGame(cloudSaves[0].data);
     }
   };
   
   const formatTimeAgo = (timestamp: number) => {
     const now = Date.now();
-    const diff = now - timestamp;
-    const minutes = Math.floor(diff / (1000 * 60));
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
+    const diffInHours = Math.floor((now - timestamp) / (1000 * 60 * 60));
     
-    if (days > 0) return `${days} day${days > 1 ? 's' : ''} ago`;
-    if (hours > 0) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
-    if (minutes > 0) return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
-    return 'Just now';  };
-
-  const fetchSessions = async () => {
-    setLoadingSessions(true);
-    setSessionError(null);
-    try {
-      const sessions = await getUserSessions();      if (Array.isArray(sessions)) {
-        const enhancedSessions = sessions.map((session: any) => {
-          const userAgent = session.clientInfo?.userAgent || '';
-          let deviceType: 'mobile' | 'desktop' | 'tablet' | 'unknown' = 'unknown';
-          let browser = 'Unknown';          let os = 'Unknown';
-
-          if (userAgent.includes('Mobile') || userAgent.includes('Android') || userAgent.includes('iPhone')) {
-            deviceType = 'mobile';
-          } else if (userAgent.includes('Tablet') || userAgent.includes('iPad')) {
-            deviceType = 'tablet';
-          } else if (userAgent.includes('Chrome') || userAgent.includes('Firefox') || userAgent.includes('Safari') || userAgent.includes('Edge')) {
-            deviceType = 'desktop';
-          }
-
-          if (userAgent.includes('Chrome')) browser = 'Chrome';
-          else if (userAgent.includes('Firefox')) browser = 'Firefox';
-          else if (userAgent.includes('Safari')) browser = 'Safari';
-          else if (userAgent.includes('Edge')) browser = 'Edge';
-
-          if (userAgent.includes('Windows')) os = 'Windows';
-          else if (userAgent.includes('Mac')) os = 'macOS';
-          else if (userAgent.includes('Linux')) os = 'Linux';
-          else if (userAgent.includes('Android')) os = 'Android';
-          else if (userAgent.includes('iOS')) os = 'iOS';
-
-          return {
-            id: session.id,
-            ipAddress: session.clientInfo?.ip || 'Unknown',
-            device: {
-              type: deviceType,
-              browser,
-              os
-            },
-            lastActive: new Date(session.lastActive),
-            createdAt: new Date(session.createdAt),
-            isCurrent: session.current === true
-          };
-        });
-        setSessions(enhancedSessions);
-      }
-    } catch (error) {
-      console.error('Error fetching sessions:', error);
-      setSessionError('Failed to load sessions. Please try again later.');
-    } finally {
-      setLoadingSessions(false);
-    }
+    if (diffInHours < 1) return 'Just now';
+    if (diffInHours < 24) return `${diffInHours}h ago`;
+    const diffInDays = Math.floor(diffInHours / 24);
+    if (diffInDays < 7) return `${diffInDays}d ago`;
+    return `${Math.floor(diffInDays / 7)}w ago`;
   };
 
-  const revokeSession = async (sessionId: string) => {
-    setRevokingSession(sessionId);
-    setSessionError(null);
-    setSessionSuccess(null);
-
-    try {
-      const API_BASE = NORMALIZED_API_URL || 'http://localhost:3001';
-      const response = await fetch(`${API_BASE}/api/user/sessions/${sessionId}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include'
-      });
-
-      if (response.ok) {
-        setSessions(sessions.filter(session => session.id !== sessionId));
-        setSessionSuccess('Session revoked successfully');
-        setTimeout(() => setSessionSuccess(null), 3000);
-      } else {
-        setSessionError('Failed to revoke session. Please try again.');
-      }
-    } catch (error) {
-      console.error('Error revoking session:', error);
-      setSessionError('Error revoking session. Please try again later.');
-    } finally {
-      setRevokingSession(null);
-    }
+  const handleViewProfile = (username: string) => {
+    setSelectedProfileUser(username);
+    setShowPublicProfile(true);
+    setShowLeaderboard(false);
+    setShowUserSearch(false);
   };
 
-  const revokeAllOtherSessions = async () => {
-    setRevokingAll(true);
-    setSessionError(null);
-    setSessionSuccess(null);
-
-    try {
-      const API_BASE = NORMALIZED_API_URL || 'http://localhost:3001';
-      const response = await fetch(`${API_BASE}/api/user/sessions`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include'
-      });
-
-      if (response.ok) {
-        setSessions(sessions.filter(session => session.isCurrent));
-        setSessionSuccess('All other sessions revoked successfully');
-        setShowRevokeAllConfirm(false);
-        setTimeout(() => setSessionSuccess(null), 3000);
-      } else {
-        setSessionError('Failed to revoke all sessions. Please try again.');
-      }
-    } catch (error) {
-      console.error('Error revoking all sessions:', error);
-      setSessionError('Error revoking all sessions. Please try again later.');
-    } finally {
-      setRevokingAll(false);
-    }
-  };
-
-  const getDeviceIcon = (type: string) => {
-    switch (type) {
-      case 'mobile': return <Smartphone className="text-blue-500" size={16} />;
-      case 'tablet': return <Tablet className="text-green-500" size={16} />;
-      case 'desktop': return <Monitor className="text-purple-500" size={16} />;
-      default: return <Monitor className="text-gray-500" size={16} />;
-    }
-  };
-
-  const formatSessionDate = (date: Date | string) => {
-    const d = new Date(date);
-    return d.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
-  const getSessionName = (session: Session) => {
-    return `${session.device.browser} on ${session.device.os}`;
-  };
-
-  useEffect(() => {
-    if (showSettingsModal && isAuthenticated) {
-      fetchSessions();
-    }
-  }, [showSettingsModal, isAuthenticated]);
-
-  return (
-    <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-emerald-600 via-teal-600 to-blue-700">
-      <BackgroundBubbles />
-
-      <div className="absolute inset-0 opacity-10">
-        <div className="absolute top-10 left-10 w-72 h-72 bg-white rounded-full mix-blend-multiply filter blur-xl animate-pulse"></div>
-        <div className="absolute top-0 right-4 w-72 h-72 bg-yellow-300 rounded-full mix-blend-multiply filter blur-xl animate-pulse delay-1000"></div>
-        <div className="absolute -bottom-8 left-20 w-72 h-72 bg-pink-300 rounded-full mix-blend-multiply filter blur-xl animate-pulse delay-2000"></div>
-      </div>
-      
-      <div className="relative z-10 flex flex-col items-center justify-center min-h-screen p-4">
-        <motion.div 
-          initial={{ opacity: 0, y: -30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.2 }}
-          className="text-center mb-8"
-        >
-          <div className="flex items-center justify-center mb-4">
-            <span className="text-8xl mr-4 drop-shadow-lg">🏙️</span>
-            <h1 className="text-7xl font-bold text-white tracking-tight drop-shadow-lg">
-              neighborville
-            </h1>
-          </div>
-          <p className="text-xl text-white/90 font-medium tracking-wide">
-            Build your dream neighborhood
-          </p>
-        </motion.div>
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-indigo-900 via-purple-800 to-blue-900">
+        <BackgroundBubbles />
         
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.6, delay: 0.4 }}
-          className="w-full max-w-lg"
-        >
-          <GlassCard className="p-8 backdrop-blur-lg bg-white/95 border-white/30 shadow-2xl">
-            {!showSaves ? (
-              <>
-                {isAuthenticated && user ? (
-                  <>
-                    <div className="relative mb-8">
-                      <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-2xl p-6 border border-emerald-100 relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-100 rounded-full -translate-y-16 translate-x-16 opacity-50"></div>
-                        <div className="relative flex items-center justify-between">
-                          <div className="flex items-center">
-                            <div className="w-16 h-16 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center mr-4 shadow-lg">
-                              <User size={24} className="text-white" />
-                            </div>
-                            <div>
-                              <h3 className="text-xl font-bold text-emerald-800">Welcome back!</h3>
-                              <p className="text-emerald-600 font-medium">{user.username}</p>
-                              <p className="text-sm text-emerald-500">Ready to continue building?</p>
-                            </div>
-                          </div>
-                          
-                          <div className="relative">
-                            <button
-                              onClick={() => setShowSettingsModal(true)}
-                              className="p-3 rounded-xl bg-white/60 hover:bg-white/80 transition-all duration-200 shadow-lg hover:shadow-xl"
-                            >
-                              <Settings size={20} className="text-emerald-700" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-4">
-                      {authVerified && latestSave && (
-                        <motion.div
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-100 relative overflow-hidden"
-                        >
-                          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-100 rounded-full -translate-y-16 translate-x-16 opacity-50"></div>
-                          
-                          <div className="relative">
-                            <div className="flex items-center mb-4">
-                              <Cloud size={20} className="text-blue-600 mr-3" />
-                              <div>
-                                <h4 className="font-semibold text-blue-800">Continue Your City</h4>
-                                <p className="text-sm text-blue-600">{latestSave.name} • {latestSave.date}</p>
-                              </div>
-                            </div>
-                            
-                            <motion.div
-                              animate={loadingContinue ? { scale: [1, 1.02, 1] } : {}}
-                              transition={{ duration: 1.5, repeat: loadingContinue ? Infinity : 0 }}
-                            >
-                              <Button
-                                variant="primary"
-                                size="lg"
-                                fullWidth
-                                onClick={handleLoadLatestServerSave}
-                                disabled={loadingContinue}
-                                className={`transition-all duration-300 ${
-                                  loadingContinue 
-                                    ? 'bg-gradient-to-r from-blue-400 to-indigo-500 shadow-xl' 
-                                    : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl'
-                                } text-white`}
-                              >
-                                {loadingContinue ? (
-                                  <motion.div 
-                                    className="flex items-center justify-center"
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 1 }}
-                                    transition={{ duration: 0.3 }}
-                                  >
-                                    <Loader2 size={20} className="animate-spin mr-2" />
-                                    <span>Loading your city...</span>
-                                    <motion.div
-                                      className="ml-2"
-                                      animate={{ scale: [1, 1.2, 1] }}
-                                      transition={{ duration: 1, repeat: Infinity }}
-                                    >
-                                      🏙️
-                                    </motion.div>
-                                  </motion.div>
-                                ) : (
-                                  <>
-                                    <Play size={20} className="mr-2" />
-                                    Continue Building
-                                  </>
-                                )}
-                              </Button>
-                            </motion.div>
-                          </div>
-                        </motion.div>
-                      )}
-                      
-                      <div className="grid grid-cols-1 gap-3">
-                        <Button
-                          variant="success"
-                          size="lg"
-                          fullWidth
-                          icon={<PlusCircle size={20} />}
-                          onClick={() => onStartGame(user.username || playerName)}
-                          className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-lg"
-                        >
-                          Start New City
-                        </Button>
-                        
-                        <Button
-                          variant="outline"
-                          size="lg"
-                          fullWidth
-                          icon={<Cloud size={20} />}
-                          onClick={() => setShowSaves(true)}
-                          className="border-2 border-emerald-200 bg-white hover:bg-emerald-50 text-emerald-700 shadow-sm"
-                        >
-                          View All Saves
-                        </Button>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="text-center mb-8">
-                      <div className="w-20 h-20 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-xl">
-                        <User size={32} className="text-white" />
-                      </div>
-                      <h2 className="text-3xl font-bold text-gray-800 mb-2">Welcome Mayor!</h2>
-                      <p className="text-gray-600 text-lg">Ready to build your dream neighborhood?</p>
-                    </div>
-                    
-                    <div className="space-y-6">
-                      <div>
-                        <label className="block text-gray-700 text-sm font-semibold mb-3">Your Mayor Name</label>
-                        <input
-                          type="text"
-                          value={playerName}
-                          onChange={(e) => setPlayerName(e.target.value)}
-                          className="w-full px-6 py-4 rounded-2xl bg-gray-50 text-gray-900 border-2 border-gray-200 placeholder-gray-500 outline-none focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all duration-200 text-lg font-medium"
-                          placeholder="Enter your name"
-                        />
-                      </div>
-                      
-                      <div className="space-y-3">
-                        <Button
-                          variant="success"
-                          size="lg"
-                          fullWidth
-                          icon={<Play size={20} />}
-                          onClick={handleStartGame}
-                          className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-lg"
-                        >
-                          Start Building
-                        </Button>
-                        
-                        <div className="grid grid-cols-2 gap-3">
-                          <Button
-                            variant="outline"
-                            icon={<Info size={16} />}
-                            onClick={onShowTutorial}
-                            className="border-2 border-gray-200 bg-white hover:bg-gray-50 text-gray-700"
-                          >
-                            Tutorial
-                          </Button>
-                          
-                          <Button
-                            variant="outline"
-                            icon={<Upload size={16} />}
-                            onClick={() => setShowSaves(true)}
-                            className="border-2 border-gray-200 bg-white hover:bg-gray-50 text-gray-700"
-                          >
-                            Load Game
-                          </Button>
-                        </div>
-                      </div>
-                      
-                      <div className="text-center">
-                        <p className="text-sm text-gray-500 mb-3">Want to save your progress?</p>
-                        <Button
-                          variant="ghost"
-                          onClick={() => setShowLogin(true)}
-                          className="text-emerald-600 hover:bg-emerald-50 font-semibold"
-                        >
-                          Sign In / Register
-                        </Button>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </>            ) : (
-              <>
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-bold text-gray-800">Your Saved Cities</h2>
-                  <Button
-                    variant="ghost"
-                    onClick={() => setShowSaves(false)}
-                    className="text-gray-600 hover:bg-gray-100"
-                  >
-                    Back
-                  </Button>
-                </div>
-                
-                {loadingCloudSaves ? (
-                  <div className="flex items-center justify-center py-12">
-                    <Loader2 size={32} className="animate-spin text-emerald-500" />
-                    <span className="ml-3 text-emerald-600 font-medium">Loading your saves...</span>
-                  </div>
-                ) : cloudSaves.length > 0 ? (
-                  <div className="space-y-4">
-                    {cloudSaves.map((save) => (
-                      <div 
-                        key={save.id} 
-                        className="bg-gradient-to-r from-white to-gray-50 border border-gray-200 rounded-2xl p-4 hover:shadow-lg transition-all duration-200"
-                      >
-                        <div className="flex justify-between items-center">
-                          <div className="flex items-center">
-                            <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center mr-4">
-                              <Home size={20} className="text-white" />
-                            </div>
-                            <div>
-                              <h3 className="font-semibold text-gray-800">{save.name}</h3>
-                              <p className="text-sm text-gray-600">Saved: {save.date}</p>
-                            </div>
-                          </div>
-                          <Button
-                            variant="primary"
-                            onClick={() => {
-                              setShowSaves(false);
-                              onLoadGame(save.data);
-                            }}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                          >
-                            Load
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-12">
-                    <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                      <CloudOff size={24} className="text-gray-400" />
-                    </div>
-                    <h3 className="text-lg font-semibold text-gray-800 mb-2">No Saves Found</h3>
-                    <p className="text-gray-600 mb-6">Start building your first neighborhood!</p>
-                    <Button
-                      variant="success"
-                      onClick={() => {
-                        setShowSaves(false);
-                        onStartGame(user?.username || playerName || 'Mayor');
-                      }}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                    >
-                      Start New City
-                    </Button>
-                  </div>
-                )}
-              </>
-            )}
-          </GlassCard>
-        </motion.div>
-            
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1 }}
-          className="mt-8 text-center text-white/70"
-        >
-          <p className="text-sm">© 2025 NeighborVille • Build, Manage, Thrive</p>
-        </motion.div>
-      </div>
-      
-      {showSettingsModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden"
-          >
-            <div className="bg-gradient-to-r from-emerald-50 to-teal-50 p-6 border-b border-gray-100">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center mr-4">
-                    <Settings size={24} className="text-white" />
-                  </div>
-                  <div>
-                    <h3 className="text-2xl font-bold text-gray-800">Settings</h3>
-                    <p className="text-gray-600">Manage your account and game preferences</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setShowSettingsModal(false)}
-                  className="p-2 hover:bg-gray-100 rounded-xl transition-colors"
-                >
-                  <X size={24} className="text-gray-600" />
-                </button>
+        <div className="absolute inset-0 bg-gradient-to-br from-black/20 via-transparent to-black/30 pointer-events-none" />
+        
+        <div className="absolute top-20 left-20 w-32 h-32 bg-purple-500/20 rounded-full blur-xl animate-pulse" />
+        <div className="absolute bottom-32 right-32 w-48 h-48 bg-blue-500/20 rounded-full blur-2xl animate-pulse delay-1000" />
+        <div className="absolute top-1/2 left-1/4 w-24 h-24 bg-indigo-400/20 rounded-full blur-lg animate-pulse delay-500" />
+        
+        <div className="relative z-10 min-h-screen flex items-center justify-center p-4">
+          <div className="max-w-lg w-full animate-fade-in">
+            <div className="text-center mb-12">
+              <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-2xl flex items-center justify-center shadow-2xl hover:scale-110 hover:rotate-6 transition-all duration-300">
+                <Building className="w-10 h-10 text-white" />
               </div>
               
-              <div className="mt-4 bg-white/60 rounded-2xl p-4">
-                <div className="flex items-center">
-                  <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center mr-3">
-                    <User size={20} className="text-white" />
+              <h1 className="text-5xl font-bold text-white mb-4 animate-slide-down">
+                NeighborVille
+              </h1>
+              
+              <p className="text-xl text-purple-100 mb-2 animate-slide-down delay-200">
+                Build Your Dream City
+              </p>
+              
+              <p className="text-purple-200/80 animate-slide-down delay-300">
+                Create, manage, and grow your virtual neighborhood
+              </p>
+            </div>
+            
+            <div className="backdrop-blur-xl bg-white/10 rounded-3xl shadow-2xl p-8 border border-white/20 animate-scale-in delay-500">
+              <button
+                onClick={() => setIsAuthModalOpen(true)}
+                className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white py-4 px-6 rounded-2xl font-semibold hover:from-purple-700 hover:to-indigo-700 transition-all duration-300 transform hover:scale-[1.02] shadow-xl mb-6 flex items-center justify-center space-x-3"
+              >
+                <User className="w-5 h-5" />
+                <span>Enter Your City</span>
+                <ChevronRight className="w-5 h-5" />
+              </button>
+
+              <div className="relative my-6">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-white/20"></div>
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-4 bg-transparent text-purple-200">or explore first</span>
+                </div>
+              </div>
+              
+              <button
+                onClick={onShowTutorial}
+                className="w-full bg-white/10 hover:bg-white/20 text-white py-3 px-6 rounded-xl font-medium transition-all duration-300 border border-white/20 hover:border-white/40 flex items-center justify-center space-x-2 hover:scale-[1.02]"
+              >
+                <BookOpen className="w-4 h-4" />
+                <span>Take the City Tour</span>
+              </button>
+
+              <div className="mt-8 grid grid-cols-3 gap-4">
+                <div className="text-center animate-fade-in delay-700">
+                  <div className="w-10 h-10 mx-auto mb-2 bg-green-500/20 rounded-lg flex items-center justify-center">
+                    <Home className="w-5 h-5 text-green-400" />
                   </div>
-                  <div>
-                    <p className="font-semibold text-gray-800">{user?.username}</p>
-                    <p className="text-sm text-gray-600">{user?.email}</p>
+                  <p className="text-xs text-purple-200">Build Homes</p>
+                </div>
+
+                <div className="text-center animate-fade-in delay-800">
+                  <div className="w-10 h-10 mx-auto mb-2 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                    <Users className="w-5 h-5 text-blue-400" />
                   </div>
+                  <p className="text-xs text-purple-200">Meet Neighbors</p>
+                </div>
+              
+                <div className="text-center animate-fade-in delay-900">
+                  <div className="w-10 h-10 mx-auto mb-2 bg-yellow-500/20 rounded-lg flex items-center justify-center">
+                    <Trophy className="w-5 h-5 text-yellow-400" />
+                  </div>
+                  <p className="text-xs text-purple-200">Earn Rewards</p>
                 </div>
               </div>
             </div>
-            
-            <div className="p-6 max-h-[60vh] overflow-y-auto">
-              <div className="space-y-6">
-                <div>
-                  <h4 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                    <User size={20} className="mr-2 text-emerald-600" />
-                    Account Information
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Username</label>
-                      <input
-                        type="text"
-                        value={user?.username || ''}
-                        className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50"
-                        readOnly
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
-                      <input
-                        type="email"
-                        value={user?.email || ''}
-                        className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50"
-                        readOnly
-                      />
-                    </div>
-                  </div>
-                </div>
-                
-                <div>
-                  <h4 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                    <Shield size={20} className="mr-2 text-emerald-600" />
-                    Security & Privacy
-                  </h4>
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between p-4 bg-green-50 rounded-xl border border-green-100">
-                      <div className="flex items-center">
-                        <div className="w-3 h-3 bg-green-500 rounded-full mr-3"></div>
-                        <div>
-                          <p className="font-medium text-green-800">Email Verified</p>
-                          <p className="text-sm text-green-600">Your account is secure</p>
-                        </div>
-                      </div>
-                      <CheckCircle size={20} className="text-green-600" />
-                    </div>
-                    
-                    <div className="flex items-center justify-between p-4 bg-green-50 rounded-xl border border-green-100">
-                      <div className="flex items-center">
-                        <div className="w-3 h-3 bg-green-500 rounded-full mr-3"></div>
-                        <div>
-                          <p className="font-medium text-green-800">Auto-Save Enabled</p>
-                          <p className="text-sm text-green-600">Your progress is automatically backed up</p>
-                        </div>
-                      </div>
-                      <Cloud size={20} className="text-green-600" />
-                    </div>
-                  </div>
-                </div>
-                
-                <div>
-                  <h4 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                    <Monitor size={20} className="mr-2 text-emerald-600" />
-                    Active Sessions
-                  </h4>
-                  
-                  <div className="flex justify-between items-center mb-4">
-                    <button
-                      onClick={fetchSessions}
-                      disabled={loadingSessions}
-                      className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
-                    >
-                      {loadingSessions ? (
-                        <Loader2 size={16} className="animate-spin" />
-                      ) : (
-                        <Shield size={16} />
-                      )}
-                      {loadingSessions ? 'Loading...' : 'Refresh Sessions'}
-                    </button>
-                    
-                    {sessions.length > 1 && (
-                      <div>
-                        {!showRevokeAllConfirm ? (
-                          <button
-                            onClick={() => setShowRevokeAllConfirm(true)}
-                            className="bg-red-100 text-red-700 hover:bg-red-200 px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
-                          >
-                            <LogOut size={16} />
-                            Revoke All Others
-                          </button>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm text-gray-600">Are you sure?</span>
-                            <button
-                              onClick={() => setShowRevokeAllConfirm(false)}
-                              disabled={revokingAll}
-                              className="bg-gray-100 text-gray-700 hover:bg-gray-200 px-3 py-1 rounded text-sm"
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              onClick={revokeAllOtherSessions}
-                              disabled={revokingAll}
-                              className="bg-red-600 text-white hover:bg-red-700 px-3 py-1 rounded text-sm flex items-center gap-1"
-                            >
-                              {revokingAll ? (
-                                <Loader2 size={14} className="animate-spin" />
-                              ) : (
-                                <CheckCircle size={14} />
-                              )}
-                              {revokingAll ? 'Revoking...' : 'Confirm'}
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  
-                  {sessionError && (
-                    <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
-                      <p className="text-red-700 text-sm">{sessionError}</p>
-                    </div>
+          </div>
+        </div>
+
+        {isAuthModalOpen && (
+          <AuthModal
+            onClose={() => setIsAuthModalOpen(false)}
+            onLogin={(userData) => {
+              setIsAuthModalOpen(false);
+            }}
+          />
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-indigo-900 via-purple-800 to-blue-900">
+      <BackgroundBubbles />
+      
+      <div className="absolute inset-0 bg-gradient-to-br from-black/10 via-transparent to-black/20 pointer-events-none" />
+      
+      <div className="absolute top-32 left-32 w-32 h-32 bg-purple-400/40 rounded-full blur-xl animate-pulse" />
+      <div className="absolute bottom-40 right-40 w-48 h-48 bg-blue-400/40 rounded-full blur-2xl animate-pulse delay-1000" />
+      <div className="absolute top-1/3 left-1/5 w-24 h-24 bg-indigo-400/40 rounded-full blur-lg animate-pulse delay-500" />
+      
+      <div className="absolute inset-0">
+        <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-purple-500/20 via-transparent to-transparent" />
+        <div className="absolute bottom-0 right-0 w-96 h-96 bg-gradient-to-tl from-blue-500/20 to-transparent rounded-full blur-3xl" />
+        <div className="absolute top-20 left-20 w-64 h-64 bg-gradient-to-br from-indigo-500/20 to-transparent rounded-full blur-2xl" />
+      </div>
+
+      <div className="relative z-10 max-w-7xl mx-auto p-6 pb-24">
+        <div className="bg-white/20 backdrop-blur-xl rounded-3xl shadow-lg p-6 mb-8 border border-white/30 animate-slide-down delay-100">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg hover:scale-110 hover:rotate-6 transition-all duration-300">
+                <Crown className="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold text-white drop-shadow-lg">
+                  Welcome back, {user?.username}!
+                </h1>
+                <p className="text-purple-100 flex items-center space-x-2">
+                  <Sparkles className="w-4 h-4 text-purple-300" />
+                  <span>Ready to continue building your city?</span>
+                </p>
+              </div>
+            </div>
+
+            <div className="relative" data-profile-menu>
+              <button
+                onClick={() => setShowingProfileMenu(!showingProfileMenu)}
+                className="group relative p-3 bg-white/10 backdrop-blur-sm rounded-2xl hover:bg-white/20 transition-all duration-300 border border-white/20 text-white hover:scale-105 hover:shadow-xl"
+              >
+                <div className="relative">
+                  <User size={22} />
+                  {profileStats?.verified && (
+                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
                   )}
-                  
-                  {sessionSuccess && (
-                    <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
-                      <p className="text-green-700 text-sm">{sessionSuccess}</p>
-                    </div>
-                  )}
-                  
-                  {loadingSessions ? (
-                    <div className="bg-gray-50 rounded-lg p-6 text-center">
-                      <Loader2 size={24} className="animate-spin mx-auto mb-2 text-gray-400" />
-                      <p className="text-gray-600">Loading sessions...</p>
-                    </div>
-                  ) : sessions.length > 0 ? (
-                    <div className="space-y-3">
-                      {sessions.map(session => (
-                        <div key={session.id} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              {getDeviceIcon(session.device.type)}
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <p className="font-medium text-gray-800">{getSessionName(session)}</p>
-                                  {session.isCurrent && (
-                                    <span className="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs font-medium">
-                                      Current
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="text-sm text-gray-600">
-                                  <p>IP: {session.ipAddress}</p>
-                                  <p>Last active: {formatSessionDate(session.lastActive)}</p>
-                                </div>
-                              </div>
+                </div>
+              </button>
+
+              {showingProfileMenu && (
+                <div 
+                  className="absolute top-0 left-full ml-2 w-80 bg-white rounded-2xl shadow-xl border border-gray-200 z-50 animate-fade-in"
+                >
+                    <div className="relative overflow-hidden">
+                      <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-indigo-500/10"></div>
+                      <div className="relative px-6 py-5 border-b border-gray-200">
+                        <div className="flex items-center space-x-4">
+                          <div className="relative">
+                            <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg">
+                              <User size={24} className="text-white" />
                             </div>
-                            
-                            {!session.isCurrent && (
-                              <button
-                                onClick={() => revokeSession(session.id)}
-                                disabled={revokingSession === session.id}
-                                className="text-red-600 hover:text-red-800 p-2 rounded-md hover:bg-red-50 flex items-center gap-1 text-sm"
-                              >
-                                {revokingSession === session.id ? (
-                                  <Loader2 size={14} className="animate-spin" />
-                                ) : (
-                                  <LogOut size={14} />
-                                )}
-                                {revokingSession === session.id ? 'Revoking...' : 'Revoke'}
-                              </button>
+                            {profileStats?.verified && (
+                              <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white flex items-center justify-center">
+                                <svg className="w-2 h-2 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                </svg>
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-bold text-gray-800 text-lg truncate">{user?.username}</h3>
+                            <div className="flex items-center space-x-2 mt-1">
+                              <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                                profileStats?.role === 'admin' ? 'bg-red-100 text-red-700' :
+                                profileStats?.role === 'moderator' ? 'bg-blue-100 text-blue-700' :
+                                'bg-gray-100 text-gray-700'
+                              }`}>
+                                {profileStats?.role?.charAt(0).toUpperCase() + profileStats?.role?.slice(1) || 'User'}
+                              </span>
+                              {profileStats?.verified && (
+                                <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-semibold">
+                                  Verified
+                                </span>
+                              )}
+                            </div>
+                            {profileStats?.memberSince && (
+                              <p className="text-xs text-gray-500 mt-1">
+                                Member since {new Date(profileStats.memberSince).toLocaleDateString()}
+                              </p>
                             )}
                           </div>
                         </div>
-                      ))}
+                      </div>
                     </div>
-                  ) : (
-                    <div className="bg-gray-50 rounded-lg p-6 text-center">
-                      <Monitor size={24} className="mx-auto mb-2 text-gray-400" />
-                      <p className="text-gray-600">No sessions found</p>
-                      <p className="text-sm text-gray-500">Click "Refresh Sessions" to load your active sessions</p>
+
+                    <div className="px-2 py-3 space-y-1">
+                      <div className="px-3 py-1">
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Profile</p>
+                      </div>
+                      
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowingProfileMenu(false);
+                        }}
+                        className="w-full text-left px-4 py-3 text-gray-700 hover:bg-gradient-to-r hover:from-purple-50 hover:to-indigo-50 rounded-xl transition-all duration-200 flex items-center space-x-3 group opacity-50 cursor-not-allowed"
+                      >
+                        <div className="w-8 h-8 bg-purple-100 group-hover:bg-purple-200 rounded-lg flex items-center justify-center transition-colors">
+                          <Settings size={16} className="text-purple-600" />
+                        </div>
+                        <div>
+                          <span className="font-medium">Settings</span>
+                          <p className="text-xs text-gray-500">Available in-game</p>
+                        </div>
+                      </button>
+
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowProfilePreview(true);
+                          setShowingProfileMenu(false);
+                        }}
+                        className="w-full text-left px-4 py-3 text-gray-700 hover:bg-gradient-to-r hover:from-blue-50 hover:to-cyan-50 rounded-xl transition-all duration-200 flex items-center space-x-3 group"
+                      >
+                        <div className="w-8 h-8 bg-blue-100 group-hover:bg-blue-200 rounded-lg flex items-center justify-center transition-colors">
+                          <User size={16} className="text-blue-600" />
+                        </div>
+                        <div>
+                          <span className="font-medium">My Profile</span>
+                          <p className="text-xs text-gray-500">View profile details</p>
+                        </div>
+                      </button>
+
+                      <div className="px-3 py-1 mt-4">
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Community</p>
+                      </div>
+                      
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowLeaderboard(true);
+                          setShowingProfileMenu(false);
+                        }}
+                        className="w-full text-left px-4 py-3 text-gray-700 hover:bg-gradient-to-r hover:from-yellow-50 hover:to-orange-50 rounded-xl transition-all duration-200 flex items-center space-x-3 group"
+                      >
+                        <div className="w-8 h-8 bg-yellow-100 group-hover:bg-yellow-200 rounded-lg flex items-center justify-center transition-colors">
+                          <Trophy size={16} className="text-yellow-600" />
+                        </div>
+                        <div>
+                          <span className="font-medium">Leaderboard</span>
+                          <p className="text-xs text-gray-500">See top mayors</p>
+                        </div>
+                      </button>
+
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowUserSearch(true);
+                          setShowingProfileMenu(false);
+                        }}
+                        className="w-full text-left px-4 py-3 text-gray-700 hover:bg-gradient-to-r hover:from-green-50 hover:to-emerald-50 rounded-xl transition-all duration-200 flex items-center space-x-3 group"
+                      >
+                        <div className="w-8 h-8 bg-green-100 group-hover:bg-green-200 rounded-lg flex items-center justify-center transition-colors">
+                          <Search size={16} className="text-green-600" />
+                        </div>
+                        <div>
+                          <span className="font-medium">Find Players</span>
+                          <p className="text-xs text-gray-500">Search community</p>
+                        </div>
+                      </button>
+
+                      {(profileStats?.role === 'admin' || profileStats?.role === 'moderator') && (
+                        <>
+                          <div className="px-3 py-1 mt-4">
+                            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Administration</p>
+                          </div>
+                          
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowAdminPanel(true);
+                              setShowingProfileMenu(false);
+                            }}
+                            className="w-full text-left px-4 py-3 text-gray-700 hover:bg-gradient-to-r hover:from-red-50 hover:to-pink-50 rounded-xl transition-all duration-200 flex items-center space-x-3 group"
+                          >
+                            <div className="w-8 h-8 bg-red-100 group-hover:bg-red-200 rounded-lg flex items-center justify-center transition-colors">
+                              <Shield size={16} className="text-red-600" />
+                            </div>
+                            <div>
+                              <span className="font-medium">Admin Panel</span>
+                              <p className="text-xs text-gray-500">Manage platform</p>
+                            </div>
+                          </button>
+                        </>
+                      )}
+                      
+                      <div className="mx-4 my-3 border-t border-gray-200"></div>
+                      
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          logout();
+                          setShowingProfileMenu(false);
+                        }}
+                        className="w-full text-left px-4 py-3 text-red-600 hover:bg-gradient-to-r hover:from-red-50 hover:to-pink-50 rounded-xl transition-all duration-200 flex items-center space-x-3 group"
+                      >
+                        <div className="w-8 h-8 bg-red-100 group-hover:bg-red-200 rounded-lg flex items-center justify-center transition-colors">
+                          <LogOut size={16} className="text-red-600" />
+                        </div>
+                        <div>
+                          <span className="font-medium">Sign Out</span>
+                          <p className="text-xs text-gray-500">End your session</p>
+                        </div>
+                      </button>
                     </div>
-                  )}
+                  </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex justify-center animate-fade-in">
+          <div className="w-full max-w-4xl space-y-8">
+            <div className="bg-white/10 backdrop-blur-2xl rounded-3xl shadow-2xl p-8 border border-white/20 hover:bg-white/15 transition-all duration-300 animate-slide-down delay-200">
+              <div className="flex items-center space-x-3 mb-6">
+                <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center">
+                  <Play className="w-5 h-5 text-white" />
                 </div>
-                
-                <div>
-                  <h4 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                    <HelpCircle size={20} className="mr-2 text-emerald-600" />
-                    Help & Support
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <button
-                      onClick={() => {
-                        setShowSettingsModal(false);
-                        onShowTutorial();
-                      }}
-                      className="flex items-center p-4 bg-blue-50 hover:bg-blue-100 rounded-xl transition-colors text-left"
-                    >
-                      <Info size={20} className="text-blue-600 mr-3" />
-                      <div>
-                        <p className="font-medium text-blue-800">Tutorial</p>
-                        <p className="text-sm text-blue-600">Learn how to play</p>
-                      </div>
-                    </button>
+                <h2 className="text-3xl font-bold text-white drop-shadow-lg">
+                  Continue Your Journey
+                </h2>
+              </div>
+            
+              {loading ? (
+                <div className="text-center py-12">
+                  <div className="w-12 h-12 mx-auto mb-4 border-4 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  <p className="text-white/80 text-lg">Loading your cities...</p>
+                </div>
+              ) : cloudSaves.length > 0 ? (
+                <div className="space-y-6">
+                  <div className="relative overflow-hidden bg-white/15 backdrop-blur-xl rounded-2xl p-6 border border-white/30 hover:border-white/50 transition-all duration-300 hover:scale-[1.02] hover:bg-white/20 animate-scale-in delay-300">
+                    <div className="absolute top-4 right-4">
+                      <span className="px-3 py-1 bg-emerald-500 text-white text-xs font-bold rounded-full animate-pulse">
+                        LATEST
+                      </span>
+                    </div>
                     
-                    <button className="flex items-center p-4 bg-purple-50 hover:bg-purple-100 rounded-xl transition-colors text-left">
-                      <Globe size={20} className="text-purple-600 mr-3" />
+                    <div className="flex items-center justify-between mb-4">
                       <div>
-                        <p className="font-medium text-purple-800">Community</p>
-                        <p className="text-sm text-purple-600">Join our community</p>
+                        <h3 className="text-xl font-bold text-white mb-1 drop-shadow-lg">{cloudSaves[0].name}</h3>
+                        <div className="flex items-center space-x-4 text-sm text-white/80">
+                          <span className="flex items-center">
+                            <Calendar className="w-4 h-4 mr-1 text-emerald-500" />
+                            {cloudSaves[0].date}
+                          </span>
+                          <span className="flex items-center">
+                            <Clock className="w-4 h-4 mr-1 text-emerald-500" />
+                            {formatTimeAgo(cloudSaves[0].timestamp)}
+                          </span>
+                        </div>
                       </div>
-                    </button>
+                      
+                      <button
+                        onClick={handleLoadLatestServerSave}
+                        className="bg-gradient-to-r from-emerald-500 to-green-600 text-white px-8 py-3 rounded-xl font-semibold hover:from-emerald-600 hover:to-green-700 transition-all duration-200 shadow-lg flex items-center space-x-2 hover:scale-105"
+                      >
+                        <Play className="w-4 h-4" />
+                        <span>Continue</span>
+                      </button>
+                    </div>
+                    
+                    {cloudSaves[0].data && (
+                      <div className="grid grid-cols-3 gap-4 mt-4">
+                        <div className="text-center">
+                          <div className="text-lg font-bold text-emerald-300">Day {cloudSaves[0].data.day || 1}</div>
+                          <div className="text-xs text-white/60">Progress</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-lg font-bold text-emerald-300">Lv.{cloudSaves[0].data.level || 1}</div>
+                          <div className="text-xs text-white/60">Mayor Level</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-lg font-bold text-emerald-300">{cloudSaves[0].data.coins?.toLocaleString() || '0'}</div>
+                          <div className="text-xs text-white/60">Coins</div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                
+                  <div className="mt-6 animate-fade-in delay-500">
+                    <div className="text-center">
+                      <button
+                        onClick={handleStartGame}
+                        className="bg-gradient-to-r from-purple-500 to-indigo-600 text-white px-8 py-3 rounded-xl font-semibold hover:from-purple-600 hover:to-indigo-700 transition-all duration-200 shadow-lg flex items-center space-x-2 mx-auto hover:scale-105"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Start Fresh City</span>
+                      </button>
+                      <p className="text-sm text-white/70 mt-2">Begin a new mayor journey</p>
+                    </div>
                   </div>
                 </div>
-              </div>
+              ) : (
+                <div className="text-center py-12 animate-fade-in delay-300">
+                  <div className="w-20 h-20 bg-white/20 backdrop-blur-xl rounded-2xl flex items-center justify-center mx-auto mb-6 hover:scale-110 hover:rotate-6 transition-all duration-300 border border-white/30">
+                    <Plus className="w-10 h-10 text-white" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-white mb-2 drop-shadow-lg">Start Your First City</h3>
+                  <p className="text-white/80 mb-6 text-lg">Begin your mayor journey and build the city of your dreams!</p>
+                  <button
+                    onClick={handleStartGame}
+                    className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-8 py-4 rounded-xl font-semibold hover:from-purple-700 hover:to-indigo-700 transition-all duration-200 shadow-lg flex items-center space-x-3 mx-auto hover:scale-105"
+                  >
+                    <Sparkles className="w-5 h-5" />
+                    <span>Create New City</span>
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+                </div>
+              )}
             </div>
             
-            <div className="bg-gray-50 p-6 border-t border-gray-100">
-              <div className="flex justify-between items-center">
-                <div className="flex space-x-3">
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowSettingsModal(false)}
-                    className="border-gray-200 text-gray-700 hover:bg-gray-100"
+            <div className="bg-white/10 backdrop-blur-2xl rounded-3xl shadow-2xl p-8 border border-white/20 hover:bg-white/15 transition-all duration-300 animate-slide-up delay-500">
+              <div className="flex items-center space-x-3 mb-6">
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl flex items-center justify-center">
+                  <Target className="w-5 h-5 text-white" />
+                </div>
+                <h2 className="text-3xl font-bold text-white drop-shadow-lg">
+                  Quick Actions
+                </h2>
+              </div>
+            
+              <div className="grid grid-cols-2 gap-6">
+                {[
+                  { icon: Plus, label: 'New City', color: 'from-green-500 to-emerald-600', action: handleStartGame },
+                  { icon: BookOpen, label: 'Wiki', color: 'from-blue-500 to-indigo-600', action: onShowWiki }
+                ].map((item, index) => (
+                <button
+                    key={item.label}
+                    onClick={item.action}
+                    className={`flex flex-col items-center p-8 bg-white/10 backdrop-blur-xl hover:bg-white/20 transition-all duration-300 group border border-white/20 hover:border-white/40 rounded-2xl hover:scale-105 hover:-translate-y-1 shadow-xl animate-scale-in ${index === 0 ? 'delay-700' : 'delay-800'}`}
                   >
-                    Close
-                  </Button>
-                  <Button
-                    variant="primary"
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                  >
-                    Save Changes
-                  </Button>                </div>
-                
-                <button 
-                  onClick={() => logout()}
-                  className="flex items-center text-red-600 hover:bg-red-50 px-4 py-2 rounded-xl transition-colors"
-                >
-                  <LogOut size={18} className="mr-2" />
-                  <span>Sign Out</span>
+                    <div className={`w-12 h-12 bg-gradient-to-br ${item.color} rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform duration-200 shadow-lg`}>
+                      <item.icon className="w-6 h-6 text-white" />
+                    </div>
+                    <span className="font-semibold text-white drop-shadow-lg group-hover:text-white/90 transition-colors text-lg">
+                      {item.label}
+                    </span>
                 </button>
+                ))}
               </div>
             </div>
-          </motion.div>
+          </div>
         </div>
-      )}
+
+        {showAdminPanel && (
+          <AdminPanel onClose={() => setShowAdminPanel(false)} />
+        )}
+
+        {showSettingsModal && (
+          <SettingsModal 
+            isOpen={showSettingsModal}
+            onClose={() => setShowSettingsModal(false)}
+            musicEnabled={false}
+            onToggleMusic={() => {}}
+            audioRef={{ current: null }}
+            onShowTutorial={onShowTutorial}
+            onShowStats={() => {}}
+            isAuthenticated={isAuthenticated}
+            user={user}
+            onLogout={logout}
+          />
+        )}
+
+        {showLeaderboard && (
+          <Leaderboard 
+            onClose={() => setShowLeaderboard(false)}
+            onViewProfile={handleViewProfile}
+          />
+        )}
+
+        {showUserSearch && (
+          <UserSearch
+            onClose={() => setShowUserSearch(false)}
+            onViewProfile={handleViewProfile}
+          />
+        )}
+
+        {showPublicProfile && (
+          <PublicProfileModal 
+            onClose={() => setShowPublicProfile(false)}
+            username={selectedProfileUser}
+          />
+        )}
+
+        {showProfilePreview && (
+          <ProfilePreview 
+            onClose={() => setShowProfilePreview(false)}
+          />
+        )}
+
+        {showNeighborhoodCreation && (
+          <NeighborhoodCreationModal
+            isOpen={showNeighborhoodCreation}
+            onClose={() => setShowNeighborhoodCreation(false)}
+            onCreateNeighborhood={handleCreateNeighborhood}
+            playerName={profileStats?.username || 'Player'}
+          />
+        )}
+
+        <FreshCityWarningModal
+          isOpen={showFreshWarning}
+          onClose={() => setShowFreshWarning(false)}
+          onConfirm={handleConfirmFresh}
+          currentNeighborhoodName={cloudSaves[0]?.data?.neighborhoodName || 'Your City'}
+        />
+
+      </div>
+
+      <div className="fixed bottom-0 left-0 right-0 bg-black/50 backdrop-blur-md border-t border-white/20 z-10">
+        <div className="max-w-7xl mx-auto px-6 py-4">
+          <div className="text-center">
+            <div className="text-sm text-white font-medium mb-1">
+              © 2025 NeighborVille • Made with <span className="text-red-400 animate-pulse">❤️</span> by{' '}
+              <span className="font-bold text-blue-200">d0mkaaa</span>
+            </div>
+            <div className="flex items-center justify-center space-x-4 text-xs text-gray-200">
+              <span>Version 0.9.1-beta</span>
+              <span>•</span>
+              <span>Build 070e1aa</span>
+              <span>•</span>
+              <span>React + TypeScript + Node.js + MongoDB</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

@@ -1,12 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { User, Save, Award, AlertCircle, Calendar, Clock, Settings, Play, Pause, TrendingUp, Volume2, VolumeX, Package, Factory, Wrench } from 'lucide-react';
+import { User, Save, Award, AlertCircle, Calendar, Clock, Settings, Play, Pause, TrendingUp, Volume2, VolumeX, Package, Factory, Wrench, Users, Globe, Home, Eye, BookOpen, ShoppingBag } from 'lucide-react';
 import ProgressBar from './ProgressBar';
 import Button from '../ui/Button';
 import WeatherForecast from './WeatherForecast';
 import Tooltip from '../ui/Tooltip';
 import type { TimeOfDay, WeatherType } from '../../types/game';
 import { getResourceById } from '../../data/resources';
+import GameWiki from './GameWiki';
 
 interface GameHeaderProps {
   playerName: string;
@@ -29,6 +30,7 @@ interface GameHeaderProps {
   onOpenSaveManager: () => void;
   onShowSettings: () => void;
   onShowTutorial: () => void;
+  onShowWiki?: () => void;
   onShowAchievements: () => void;
   onLogout?: () => void;
   onToggleTimePause: () => void;
@@ -46,6 +48,12 @@ interface GameHeaderProps {
   onToggleMusic: () => void;
   onSaveGame?: () => void;
   onShowProductionManager?: () => void;
+  onReturnToMenu?: () => Promise<void>;
+  onShowProfileSettings?: () => void;
+  onShowUserSearch?: () => void;
+  onShowProfilePreview?: () => void;
+  onShowLeaderboard?: () => void;
+  onShowMarketplace?: () => void;
 }
 
 export default function GameHeader({
@@ -69,6 +77,7 @@ export default function GameHeader({
   onOpenSaveManager,
   onShowSettings,
   onShowTutorial,
+  onShowWiki,
   onShowAchievements,
   onToggleTimePause,
   onTimeChange,
@@ -85,7 +94,13 @@ export default function GameHeader({
   onToggleMusic,
   onLogout,
   onSaveGame,
-  onShowProductionManager
+  onShowProductionManager,
+  onReturnToMenu,
+  onShowProfileSettings,
+  onShowUserSearch,
+  onShowProfilePreview,
+  onShowLeaderboard,
+  onShowMarketplace
 }: GameHeaderProps) {
   const getTimeOfDayColor = () => {
     switch(timeOfDay) {
@@ -107,13 +122,19 @@ export default function GameHeader({
     <div className="w-full z-30">
       <header className={`text-white p-4 shadow-lg transition-colors duration-700 bg-gradient-to-r ${getTimeOfDayColor()}`}>
         <div className="container mx-auto flex justify-between items-center">
-          <motion.h1 
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="text-2xl font-medium lowercase tracking-tight flex items-center"
-          >
-            <span className="text-2xl mr-2">🏙️</span> neighborville
-          </motion.h1>
+          <Tooltip content="Return to Main Menu (Auto-saves your progress)">
+            <motion.h1 
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="text-2xl font-medium lowercase tracking-tight flex items-center cursor-pointer hover:opacity-80 transition-opacity"
+              onClick={onReturnToMenu}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <span className="text-2xl mr-2">🏙️</span> neighborville
+              <Home size={16} className="ml-2 opacity-60" />
+            </motion.h1>
+          </Tooltip>
           
           <div className="flex items-center gap-3">
             <motion.div 
@@ -275,32 +296,83 @@ export default function GameHeader({
             <motion.div 
               whileHover={{ scale: 1.05 }}
               onClick={onPlayerNameClick}
-              className="bg-emerald-50 rounded-lg shadow-sm px-3 py-1.5 flex items-center cursor-pointer"
+              className="bg-gradient-to-r from-emerald-50 to-blue-50 border border-emerald-200 rounded-xl shadow-sm px-4 py-2 flex items-center cursor-pointer hover:shadow-md transition-all duration-200"
             >
-              <User size={16} className="text-emerald-700 mr-2" />
-              <span className="text-emerald-800 font-medium mr-2 text-sm lowercase">{playerName} • level {level}</span>
-              <ProgressBar 
-                value={experience} 
-                maxValue={level * 100} 
-                width={80}
-                color="#10b981"
-                bgColor="#e2e8f0"
-                showText
-                textPosition="inside"
-              />
+              <div className="w-8 h-8 bg-gradient-to-r from-emerald-500 to-blue-500 rounded-lg flex items-center justify-center mr-3">
+                <User size={16} className="text-white" />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-emerald-800 font-semibold text-sm lowercase">{playerName}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-emerald-600 text-xs">Level {level}</span>
+                  <ProgressBar 
+                    value={experience} 
+                    maxValue={level * 100} 
+                    width={60}
+                    height={4}
+                    color="#10b981"
+                    bgColor="#e2e8f0"
+                  />
+                </div>
+              </div>
             </motion.div>
-            
-
             
             <motion.div
               whileHover={{ scale: 1.05 }}
-              className="bg-emerald-50 rounded-lg shadow-sm p-1.5 flex items-center justify-center cursor-pointer"
+              className="bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-200 rounded-xl shadow-sm px-4 py-2 flex items-center cursor-pointer hover:shadow-md transition-all duration-200"
               onClick={onShowAchievements}
             >
-              <Award size={16} className="text-emerald-700 mr-1" />
-              <span className="text-emerald-800 text-sm lowercase">
-                {achievements.filter(a => a.completed).length}/{achievements.length}
-              </span>
+              <div className="w-8 h-8 bg-gradient-to-r from-yellow-500 to-orange-500 rounded-lg flex items-center justify-center mr-3">
+                <Award size={16} className="text-white" />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-yellow-800 font-semibold text-sm">Achievements</span>
+                <span className="text-yellow-600 text-xs">
+                  {achievements.filter(a => a.completed).length}/{achievements.length} completed
+                </span>
+              </div>
+            </motion.div>
+
+            <motion.div
+              whileHover={{ scale: 1.05 }}
+              className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl shadow-sm px-4 py-2 flex items-center cursor-pointer hover:shadow-md transition-all duration-200"
+              onClick={onShowLeaderboard}
+            >
+              <div className="w-8 h-8 bg-gradient-to-r from-amber-500 to-orange-500 rounded-lg flex items-center justify-center mr-3">
+                <TrendingUp size={16} className="text-white" />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-amber-800 font-semibold text-sm">Leaderboard</span>
+                <span className="text-amber-600 text-xs">Top Players</span>
+              </div>
+            </motion.div>
+
+            <motion.div
+              whileHover={{ scale: 1.05 }}
+              className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-xl shadow-sm px-4 py-2 flex items-center cursor-pointer hover:shadow-md transition-all duration-200"
+              onClick={onShowUserSearch}
+            >
+              <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-indigo-500 rounded-lg flex items-center justify-center mr-3">
+                <Users size={16} className="text-white" />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-purple-800 font-semibold text-sm">Find Players</span>
+                <span className="text-purple-600 text-xs">Search Community</span>
+              </div>
+            </motion.div>
+
+            <motion.div
+              whileHover={{ scale: 1.05 }}
+              className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl shadow-sm px-4 py-2 flex items-center cursor-pointer hover:shadow-md transition-all duration-200"
+              onClick={onShowMarketplace}
+            >
+              <div className="w-8 h-8 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-lg flex items-center justify-center mr-3">
+                <ShoppingBag size={16} className="text-white" />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-emerald-800 font-semibold text-sm">Marketplace</span>
+                <span className="text-emerald-600 text-xs">Trade & Shop</span>
+              </div>
             </motion.div>
             
             {hasUnpaidBills && (
@@ -348,13 +420,23 @@ export default function GameHeader({
               )}
             </div>
             
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={<Settings size={16} />}
-              onClick={onShowSettings}
+            <button
+              onClick={onShowWiki}
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all duration-200 text-sm font-medium shadow-sm hover:shadow-md"
+              title="Game Wiki"
             >
-            </Button>
+              <BookOpen size={16} />
+              <span className="hidden sm:inline">Wiki</span>
+            </button>
+
+            <button
+              onClick={onShowSettings}
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-xl hover:from-gray-600 hover:to-gray-700 transition-all duration-200 text-sm font-medium shadow-sm hover:shadow-md"
+              title="Settings"
+            >
+              <Settings size={16} />
+              <span className="hidden sm:inline">Settings</span>
+            </button>
           </div>
         </div>
       </div>

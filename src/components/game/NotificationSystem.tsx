@@ -56,7 +56,7 @@ function NotificationItem({ notification, onClose }: NotificationItemProps) {
     if (message.includes('production') || message.includes('building') || message.includes('construct')) {
       return <Factory className="text-white" size={20} />;
     }
-    if (message.includes('happiness') || message.includes('satisfaction') || message.includes('neighbor')) {
+    if (message.includes('satisfaction') || message.includes('neighbor')) {
       return <Heart className="text-white" size={20} />;
     }
     if (message.includes('energy') || message.includes('power')) {

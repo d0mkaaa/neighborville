@@ -12,9 +12,11 @@ router.post('/send-verification', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Valid email is required' });
     }
     
-    const existingUser = await findUserByEmail(email);
-    console.log(`Checking if user exists: ${email}, exists: ${!!existingUser}`);
+    const normalizedEmail = email.toLowerCase().trim();
     
+    const existingUser = await findUserByEmail(normalizedEmail);
+    console.log(`✅ Checking if user exists: ${normalizedEmail}, exists: ${!!existingUser}`);
+
     if (!existingUser && username) {
       try {
         const existingUsername = await findUserByUsername(username);
@@ -23,44 +25,80 @@ router.post('/send-verification', async (req, res) => {
         }
         
         const tempPassword = Math.random().toString(36).slice(-8);
-        await createUser(email, username, tempPassword);
-        console.log(`Pre-created user for ${email} with username ${username}`);
+        await createUser(normalizedEmail, username, tempPassword);
+        console.log(`📝 Pre-created user for ${normalizedEmail} with username ${username}`);
       } catch (error) {
-        console.error(`Error pre-creating user for ${email}:`, error);
+        console.error(`❌ Error pre-creating user for ${normalizedEmail}:`, error);
+        if (error.code === 11000) {
+          return res.status(409).json({ 
+            success: false, 
+            message: 'Email or username already exists' 
+          });
+        }
       }
     }
     
-    const existingCode = await getStoredVerificationCode(email);
-    const verificationCode = existingCode || generateVerificationCode();
+    const existingCode = await getStoredVerificationCode(normalizedEmail);
+    let verificationCode;
+    let isNewCode = false;
     
-    if (!existingCode) {
-      console.log(`Storing new verification code in Redis: ${email}`);
-      const stored = await storeVerificationCode(email, verificationCode);
+    if (existingCode) {
+      verificationCode = existingCode;
+      console.log(`♻️ REUSING existing verification code for ${normalizedEmail}`);
+    } else {
+      verificationCode = generateVerificationCode();
+      isNewCode = true;
+      console.log(`🆕 GENERATING new verification code for ${normalizedEmail}: ${verificationCode}`);
+      
+      const stored = await storeVerificationCode(normalizedEmail, verificationCode, 15);
       
       if (!stored) {
-        console.error(`Failed to store verification code for ${email}`);
-        return res.status(500).json({ success: false, message: 'Failed to store verification code' });
+        console.error(`❌ Failed to store verification code for ${normalizedEmail}`);
+        return res.status(500).json({ 
+          success: false, 
+          message: 'Failed to store verification code. Please try again.' 
+        });
       }
-    } else {
-      console.log(`Reusing existing verification code for ${email}`);
     }
     
-    const result = await sendVerificationEmail(email, verificationCode, username);
-    
-    const response = {
-      success: true,
-      message: existingCode ? 'You already have a valid verification code' : 'Verification email sent with new code',
-      fallback: result.fallback || false
-    };
-    
-    if (process.env.NODE_ENV === 'development') {
-      response.code = verificationCode;
+    try {
+      const result = await sendVerificationEmail(normalizedEmail, verificationCode, username);
+      console.log(`📧 Email sending result for ${normalizedEmail}:`, result.messageId ? 'Success' : 'Failed');
+      
+      const response = {
+        success: true,
+        message: isNewCode 
+          ? 'Verification code sent to your email!' 
+          : 'Using your existing verification code. Check your email!',
+        fallback: result.fallback || false,
+        codeExpiry: '15 minutes'
+      };
+      
+      if (process.env.NODE_ENV === 'development') {
+        response.code = verificationCode;
+        response.debugInfo = {
+          email: normalizedEmail,
+          isNewCode,
+          hasExistingUser: !!existingUser
+        };
+      }
+      
+      res.status(200).json(response);
+      
+    } catch (emailError) {
+      console.error(`❌ Email sending failed for ${normalizedEmail}:`, emailError);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Failed to send verification email. Please try again.' 
+      });
     }
     
-    res.status(200).json(response);
   } catch (error) {
-    console.error('Error in /send-verification route:', error);
-    res.status(500).json({ success: false, message: 'Failed to send verification email' });
+    console.error('❌ Error in /send-verification route:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Server error. Please try again later.' 
+    });
   }
 });
 

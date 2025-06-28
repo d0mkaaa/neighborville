@@ -1,73 +1,20 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { X, MapPin, Users, Building2, Star, Lock, AlertCircle, Loader2 } from 'lucide-react';
-import { getPublicProfile } from "../../services/userService";
-import type { PublicProfileData } from "../../services/userService";
+import { X, Lock, AlertCircle, Loader2, Home, Building2, Trophy, Activity, BarChart3 } from 'lucide-react';
 
 type PublicProfileModalProps = {
   onClose: () => void;
-  profile?: {
-    id: string;
-    username: string;
-    neighborhood: {
-      name: string;
-      buildings: any[];
-      neighbors: any[];
-      stats: {
-        totalHappiness: number;
-        totalIncome: number;
-        totalResidents: number;
-        totalBuildings: number;
-      };
-    };
-  };
+  profile?: any;
   userId?: string;
   username?: string;
 };
 
-interface ProfileSettings {
-  visibility: 'public' | 'private';
-  showBio: boolean;
-  showStats: boolean;
-  showActivity: boolean;
-}
-
 export default function PublicProfileModal({ onClose, profile, userId, username }: PublicProfileModalProps) {
-  const profileName = profile?.username || username || 'Unknown';
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPrivate, setIsPrivate] = useState(false);
-  const [profileData, setProfileData] = useState<PublicProfileData | null>(null);
 
-  useEffect(() => {
-    const fetchProfileData = async () => {
-      if (!username) return;
-      
-      setLoading(true);
-      setError(null);
-      
-      try {
-        const result = await getPublicProfile(username);
-        
-        if (result.success && result.profile) {
-          setProfileData(result.profile);
-        } else if (result.isPrivate) {
-          setIsPrivate(true);
-        } else {
-          setError(result.message || 'Failed to load profile data');
-        }
-      } catch (err) {
-        console.error('Error fetching profile data:', err);
-        setError('Failed to load profile data');
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    if (username) {
-      fetchProfileData();
-    }
-  }, [username]);
+  const profileName = username || profile?.username || 'Unknown Player';
 
   if (loading) {
     return (
@@ -75,27 +22,16 @@ export default function PublicProfileModal({ onClose, profile, userId, username 
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
         onClick={onClose}
       >
-        <motion.div
-          initial={{ scale: 0.9, opacity: 0, y: 20 }}
-          animate={{ scale: 1, opacity: 1, y: 0 }}
-          exit={{ scale: 0.9, opacity: 0, y: 20 }}
-          className="bg-white rounded-xl shadow-xl max-w-md w-full overflow-hidden"
-          onClick={e => e.stopPropagation()}
-        >
-          <div className="p-4 bg-gradient-to-r from-blue-500 to-indigo-600 text-white flex justify-between items-center">
-            <h2 className="text-lg font-medium">Profile</h2>
-            <button onClick={onClose} className="text-white/80 hover:text-white">
-              <X size={20} />
-            </button>
+        <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-8">
+          <div className="flex flex-col items-center justify-center">
+            <Loader2 className="animate-spin text-blue-500 mb-4" size={48} />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Loading Profile</h3>
+            <p className="text-gray-600 text-center">Please wait...</p>
           </div>
-          <div className="p-6 flex flex-col items-center justify-center py-12">
-            <Loader2 className="animate-spin text-blue-500" size={32} />
-            <p className="mt-4 text-gray-500">Loading profile...</p>
-          </div>
-        </motion.div>
+        </div>
       </motion.div>
     );
   }
@@ -106,28 +42,28 @@ export default function PublicProfileModal({ onClose, profile, userId, username 
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
         onClick={onClose}
       >
-        <motion.div
-          initial={{ scale: 0.9, opacity: 0, y: 20 }}
-          animate={{ scale: 1, opacity: 1, y: 0 }}
-          exit={{ scale: 0.9, opacity: 0, y: 20 }}
-          className="bg-white rounded-xl shadow-xl max-w-md w-full overflow-hidden"
-          onClick={e => e.stopPropagation()}
-        >
-          <div className="p-4 bg-gradient-to-r from-blue-500 to-indigo-600 text-white flex justify-between items-center">
-            <h2 className="text-lg font-medium">Profile</h2>
-            <button onClick={onClose} className="text-white/80 hover:text-white">
+        <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
+          <div className="p-4 bg-red-500 text-white flex justify-between items-center rounded-t-xl">
+            <h2 className="text-lg font-medium">Error</h2>
+            <button onClick={onClose} className="text-white/80 hover:text-white transition-colors">
               <X size={20} />
             </button>
           </div>
-          <div className="p-6 flex flex-col items-center justify-center py-8">
-            <AlertCircle size={32} className="text-red-500 mb-2" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Error</h3>
-            <p className="text-gray-600 text-center">{error}</p>
+          <div className="p-6 text-center">
+            <AlertCircle size={48} className="text-red-500 mb-4 mx-auto" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Unable to Load Profile</h3>
+            <p className="text-gray-600 mb-4">{error}</p>
+            <button
+              onClick={onClose}
+              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+            >
+              Close
+            </button>
           </div>
-        </motion.div>
+        </div>
       </motion.div>
     );
   }
@@ -138,138 +74,66 @@ export default function PublicProfileModal({ onClose, profile, userId, username 
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
         onClick={onClose}
       >
-        <motion.div
-          initial={{ scale: 0.9, opacity: 0, y: 20 }}
-          animate={{ scale: 1, opacity: 1, y: 0 }}
-          exit={{ scale: 0.9, opacity: 0, y: 20 }}
-          className="bg-white rounded-xl shadow-xl max-w-md w-full overflow-hidden"
-          onClick={e => e.stopPropagation()}
-        >
-          <div className="p-4 bg-gradient-to-r from-blue-500 to-indigo-600 text-white flex justify-between items-center">
-            <h2 className="text-lg font-medium">Profile</h2>
-            <button onClick={onClose} className="text-white/80 hover:text-white">
+        <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
+          <div className="p-4 bg-gray-500 text-white flex justify-between items-center rounded-t-xl">
+            <h2 className="text-lg font-medium">Private Profile</h2>
+            <button onClick={onClose} className="text-white/80 hover:text-white transition-colors">
               <X size={20} />
             </button>
           </div>
-
-          <div className="p-6 flex flex-col items-center justify-center py-12">
-            <div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center text-gray-500">
-              <Lock size={32} />
-            </div>
-            <h3 className="text-xl font-semibold text-gray-900 mt-4">{profileName}</h3>
-            <p className="text-gray-500 mt-2 text-center">
-              This profile is private
-            </p>
+          <div className="p-8 text-center">
+            <Lock size={40} className="text-gray-400 mb-4 mx-auto" />
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">{profileName}</h3>
+            <p className="text-gray-500">This profile is set to private</p>
           </div>
-        </motion.div>
+        </div>
       </motion.div>
     );
   }
-
-  const userData = profileData?.gameData ? {
-    neighborhood: profileData.gameData.playerName + "'s City",
-    neighbors: profileData.gameData.stats.neighborCount,
-    buildings: profileData.gameData.stats.buildingCount,
-    rating: Math.min(5, profileData.gameData.happiness / 20)
-  } : {
-    neighborhood: 'Sunny Valley',
-    neighbors: 0,
-    buildings: 0,
-    rating: 0
-  };
 
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
       onClick={onClose}
     >
       <motion.div
         initial={{ scale: 0.9, opacity: 0, y: 20 }}
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.9, opacity: 0, y: 20 }}
-        className="bg-white rounded-xl shadow-xl max-w-md w-full overflow-hidden"
+        className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
-        <div className="p-4 bg-gradient-to-r from-blue-500 to-indigo-600 text-white flex justify-between items-center">
-          <h2 className="text-lg font-medium">Profile</h2>
-          <button onClick={onClose} className="text-white/80 hover:text-white">
-            <X size={20} />
-          </button>
+        <div className="p-4 bg-gradient-to-r from-blue-600 to-purple-700 text-white">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center text-white font-bold text-lg">
+                {profileName[0]?.toUpperCase() || 'U'}
+              </div>
+              <div>
+                <h2 className="text-xl font-bold">{profileName}'s Profile</h2>
+                <p className="text-blue-100 text-sm">@{profileName}</p>
+              </div>
+            </div>
+            <button onClick={onClose} className="p-2 text-white/80 hover:text-white transition-colors">
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         <div className="p-6">
-          <div className="flex items-center gap-4 mb-6">
-            <div className="w-16 h-16 rounded-full bg-blue-500 flex items-center justify-center text-white text-2xl font-bold">
-              {profileName[0].toUpperCase()}
-            </div>
-            <div>
-              <h3 className="text-xl font-semibold text-gray-900">{profileData?.gameData?.playerName || profileName}</h3>
-              <p className="text-gray-500">@{profileData?.username || profileName}</p>
-              {profileData?.createdAt && (
-                <p className="text-gray-500 text-sm">Member since {new Date(profileData.createdAt).toLocaleDateString()}</p>
-              )}
-            </div>
+          <div className="text-center py-12">
+            <Home size={48} className="text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Profile Coming Soon</h3>
+            <p className="text-gray-600">Public profiles are being developed</p>
           </div>
-
-          {(!profileData?.showStats) ? null : (
-            <div className="grid grid-cols-2 gap-4 mb-6">
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <div className="flex items-center gap-2 text-gray-600 mb-1">
-                  <MapPin size={16} />
-                  <span className="text-sm font-medium">Neighborhood</span>
-                </div>
-                <p className="text-gray-900 font-medium">{userData.neighborhood}</p>
-              </div>
-
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <div className="flex items-center gap-2 text-gray-600 mb-1">
-                  <Users size={16} />
-                  <span className="text-sm font-medium">Neighbors</span>
-                </div>
-                <p className="text-gray-900 font-medium">{userData.neighbors}</p>
-              </div>
-
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <div className="flex items-center gap-2 text-gray-600 mb-1">
-                  <Building2 size={16} />
-                  <span className="text-sm font-medium">Buildings</span>
-                </div>
-                <p className="text-gray-900 font-medium">{userData.buildings}</p>
-              </div>
-
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <div className="flex items-center gap-2 text-gray-600 mb-1">
-                  <Star size={16} />
-                  <span className="text-sm font-medium">Rating</span>
-                </div>
-                <p className="text-gray-900 font-medium">{userData.rating.toFixed(1)}/5.0</p>
-              </div>
-            </div>
-          )}
-
-          {(!profileData?.showActivity) ? null : (
-            <div className="space-y-4">
-              <h4 className="font-medium text-gray-900">Recent Activity</h4>
-              <div className="space-y-3">
-                <div className="p-3 bg-gray-50 rounded-lg">
-                  <p className="text-sm text-gray-600">Last active {profileData?.lastActive ? new Date(profileData.lastActive).toLocaleString() : 'Unknown'}</p>
-                </div>
-                {profileData?.gameData && (
-                  <div className="p-3 bg-gray-50 rounded-lg">
-                    <p className="text-sm text-gray-600">Current day: {profileData.gameData.day}</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
         </div>
       </motion.div>
     </motion.div>
   );
-} 
+}

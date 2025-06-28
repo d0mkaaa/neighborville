@@ -83,7 +83,7 @@ export default function ContinueModal({
         
         cloudSaves = serverSaves.map(save => ({
           id: save.id,
-          name: save.data.saveName || save.data.playerName || 'Cloud Save',
+          name: save.data.playerName || 'Cloud Save',
           date: new Date(save.timestamp).toLocaleDateString('en-US', {
             month: 'short',
             day: 'numeric',
@@ -197,7 +197,7 @@ export default function ContinueModal({
             </div>
             <div className="flex items-center gap-2">
               <Smile size={16} className="text-yellow-500" />
-              <span className="text-gray-700">{savedGame.happiness}% happiness</span>
+              <span className="text-gray-700">Level {savedGame.level}</span>
             </div>
           </div>
         </div>
@@ -288,7 +288,7 @@ export default function ContinueModal({
                                     {save.data.coins} coins
                                   </div>
                                   <div className="text-xs text-gray-600">
-                                    {save.data.happiness}% happy
+                                    Level {save.data.level}
                                   </div>
                                 </div>
                               </div>

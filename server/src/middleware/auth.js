@@ -103,7 +103,7 @@ export const auth = async (req, res, next) => {
     
     console.log('Auth middleware - Token verified for user ID:', decoded.userId);
     
-    const user = await User.findById(decoded.userId);
+    const user = await User.findById(decoded.userId).populate('suspensions.issuedBy', 'username');
     if (!user) {
       console.log('Auth middleware - User not found for ID:', decoded.userId);
       await logSecurityAction(decoded.userId, 'USER_NOT_FOUND', ip, userAgent, false);
@@ -182,7 +182,7 @@ export const optionalAuth = async (req, res, next) => {
       return next();
     }
     
-    const user = await User.findById(decoded.userId);
+    const user = await User.findById(decoded.userId).populate('suspensions.issuedBy', 'username');
     const session = await Session.findOne({ token, userId: decoded.userId });
     
     if (user && session && session.isValid()) {

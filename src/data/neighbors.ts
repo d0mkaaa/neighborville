@@ -12,7 +12,7 @@ export const neighborProfiles: Neighbor[] = [
     unlockCondition: null,
     hasHome: false,
     dailyRent: 25,
-    happiness: 70,
+
     housingPreference: 'house',
     maxNeighbors: 1
   },
@@ -27,7 +27,7 @@ export const neighborProfiles: Neighbor[] = [
     unlockCondition: null,
     hasHome: false,
     dailyRent: 30,
-    happiness: 75,
+
     housingPreference: 'any',
     maxNeighbors: 2
   },
@@ -42,7 +42,7 @@ export const neighborProfiles: Neighbor[] = [
     unlockCondition: null,
     hasHome: false,
     dailyRent: 20,
-    happiness: 65,
+
     housingPreference: 'house',
     maxNeighbors: 1
   },
@@ -62,7 +62,7 @@ export const neighborProfiles: Neighbor[] = [
     },
     hasHome: false,
     dailyRent: 35,
-    happiness: 80,
+
     housingPreference: 'apartment',
     maxNeighbors: 3
   },
@@ -82,7 +82,6 @@ export const neighborProfiles: Neighbor[] = [
     },
     hasHome: false,
     dailyRent: 28,
-    happiness: 85,
     housingPreference: 'apartment',
     maxNeighbors: 4
   },
@@ -101,7 +100,7 @@ export const neighborProfiles: Neighbor[] = [
     },
     hasHome: false,
     dailyRent: 40,
-    happiness: 90,
+
     housingPreference: 'any',
     maxNeighbors: 2
   },
@@ -120,7 +119,7 @@ export const neighborProfiles: Neighbor[] = [
     },
     hasHome: false,
     dailyRent: 45,
-    happiness: 95,
+
     housingPreference: 'house',
     maxNeighbors: 1
   },
@@ -139,7 +138,6 @@ export const neighborProfiles: Neighbor[] = [
     },
     hasHome: false,
     dailyRent: 32,
-    happiness: 78,
     housingPreference: 'apartment',
     maxNeighbors: 3
   },
@@ -159,7 +157,6 @@ export const neighborProfiles: Neighbor[] = [
     },
     hasHome: false,
     dailyRent: 60,
-    happiness: 50,
     housingPreference: 'any',
     maxNeighbors: 1
   },
@@ -179,7 +176,6 @@ export const neighborProfiles: Neighbor[] = [
     },
     hasHome: false,
     dailyRent: 50,
-    happiness: 85,
     housingPreference: 'house',
     maxNeighbors: 1
   },
@@ -199,7 +195,6 @@ export const neighborProfiles: Neighbor[] = [
     },
     hasHome: false,
     dailyRent: 70,
-    happiness: 60,
     housingPreference: 'house',
     maxNeighbors: 1
   },
@@ -218,7 +213,7 @@ export const neighborProfiles: Neighbor[] = [
     },
     hasHome: false,
     dailyRent: 100,
-    happiness: 100,
+
     housingPreference: 'any',
     maxNeighbors: 3
   }

@@ -124,7 +124,7 @@ const SaveItem: React.FC<SaveItemProps> = ({
         </div>
         <div className="flex items-center text-gray-600">
           <Smile size={10} className="mr-1" />
-          {save.data.happiness}% happy
+          City Stats
         </div>
       </div>
     </div>

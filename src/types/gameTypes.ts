@@ -1,1 +1,1 @@
-export type { GameProgress } from './game'; 
+export type { GameProgress, NeighborhoodMilestone } from './game'; 

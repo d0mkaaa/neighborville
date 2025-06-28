@@ -41,6 +41,7 @@ services:
       - REDIS_URI=redis://redis:6379
       - JWT_SECRET=${JWT_SECRET}
       - COOKIE_SECRET=${COOKIE_SECRET}
+      - ADMIN_SECRET_KEY=${ADMIN_SECRET_KEY}
     restart: unless-stopped
     depends_on:
       - mongo

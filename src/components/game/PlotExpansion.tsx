@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { LockOpen, Lock, ChevronRight, TrendingUp, Zap } from "lucide-react";
+import { Unlock, Lock, ChevronRight, TrendingUp, Zap } from "lucide-react";
 
 type PlotExpansionProps = {
   currentSize: number;
@@ -157,7 +157,7 @@ export default function PlotExpansion({
           >
             {canExpand ? (
               <>
-                <LockOpen size={16} className="mr-2" />
+                <Unlock size={16} className="mr-2" />
                 purchase expansion
               </>
             ) : !hasRequiredLevel ? (

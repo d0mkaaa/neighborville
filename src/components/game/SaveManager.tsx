@@ -6,7 +6,7 @@ import {
   Trash2, 
   X, 
   Cloud, 
-  CloudUpload, 
+  Upload, 
   CloudOff, 
   CheckCircle, 
   AlertCircle, 
@@ -105,7 +105,7 @@ export default function SaveManager({
       
       const formattedSaves: SaveItem[] = saves.map(save => ({
         key: save.id,
-        name: save.data?.saveName || save.data?.playerName || `Save ${save.id.slice(0, 8)}`,
+        name: save.data?.playerName || `Save ${save.id.slice(0, 8)}`,
         date: new Date(save.timestamp).toLocaleDateString('en-US', {
           year: 'numeric',
           month: 'short',
@@ -130,7 +130,7 @@ export default function SaveManager({
 
   const handleQuickSave = () => {
     if (!saveName.trim()) {
-      const defaultName = `${gameData.playerName}'s City`;
+      const defaultName = 'Unnamed City';
       setSaveName(defaultName);
       onSave(defaultName);
     } else {
@@ -141,7 +141,7 @@ export default function SaveManager({
   };
 
   const handleNamedSave = () => {
-    const name = saveName.trim() || `${gameData.playerName}'s City`;
+          const name = saveName.trim() || 'Unnamed City';
     onSave(name);
     setSaveName('');
     addNotification?.('Game saved locally', 'success');
@@ -165,7 +165,7 @@ export default function SaveManager({
       } else {
         const saveData = {
           ...gameData,
-          saveName: saveName.trim() || `${gameData.playerName}'s City`,
+          saveName: saveName.trim() || 'Unnamed City',
           saveTimestamp: Date.now()
         };
         success = await saveGameToServer(saveData);
@@ -406,7 +406,7 @@ export default function SaveManager({
                         value={saveName}
                         onChange={e => setSaveName(e.target.value)}
                         className="w-full py-2 px-4 border border-gray-300 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder={`${gameData.playerName}'s City`}
+                        placeholder="Enter city name"
                       />
                     </div>
                     <button 
@@ -456,7 +456,7 @@ export default function SaveManager({
                         </>
                       ) : (
                         <>
-                          <CloudUpload size={16} />
+                          <Upload size={16} />
                           Save to Cloud
                         </>
                       )}

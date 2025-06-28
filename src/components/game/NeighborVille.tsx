@@ -32,7 +32,7 @@ import SettingsModal from "./SettingsModal";
 import WeatherForecast from "./WeatherForecast";
 import { calculateSeasonalBonuses, getCurrentSeason, checkForSeasonalEvent } from "../../data/seasons";
 import { getAvailableUpgrades, calculateUpgradedStats } from "../../data/upgrades";
-import SaveManager from "./SaveManager";
+import NeighborhoodManager from "./NeighborhoodManager";
 import TutorialGuide from "./TutorialGuide";
 import Marketplace from "./Marketplace";
 import type { MarketItem } from "./Marketplace";
@@ -43,7 +43,8 @@ import BackgroundBubbles from "./BackgroundBubbles";
 import PlayerStatsModal from "./PlayerStatsModal";
 import PublicProfileModal from "../profile/PublicProfileModal";
 import MusicControls from "./MusicControls";
-import { saveGameToServer, loadGameFromServer, shouldSaveGame } from "../../services/gameService";
+import { saveNeighborhoodToServer, loadNeighborhoodFromServer, updateNeighborhoodName, startFreshNeighborhood } from "../../services/neighborhoodService";
+import { shouldSaveGame } from "../../services/gameService";
 import { DEFAULT_TAX_POLICIES, calculateCityBudget, updateTaxPolicy, toggleTaxPolicy, DEFAULT_SERVICE_BUDGETS, calculateCityBudgetSystem } from "../../data/taxPolicies";
 import ContinueModal from "./ContinueModal";
 import GameLayout from "../ui/GameLayout";
@@ -81,6 +82,10 @@ import { createDefaultPlayerResources, getResourceById, getRecipeById } from "..
 import { useAuth } from "../../context/AuthContext";
 import AppLayout from "../ui/AppLayout";
 import { TimeService } from "../../services/timeService";
+import ProfileSettings from "../profile/ProfileSettings";
+import ProfilePreview from '../profile/ProfilePreview';
+import UserSearch from '../profile/UserSearch';
+import GameWiki from './GameWiki';
 
 type ProductionQueues = Map<number, ProductionQueueItem[]>;
 type ActiveProductions = Map<number, ActiveProduction>;
@@ -90,9 +95,10 @@ interface NeighborVilleProps {
   showTutorialProp?: boolean;
   onTimeChange?: (newTimeOfDay: TimeOfDay) => void;
   onLoadGame?: (gameData: GameProgress) => void;
+  onReturnToMenu?: () => Promise<void>;
 }
 
-const getWeatherHappinessEffect = () => 0;
+
 
 const timeBonuses: any[] = [];
 
@@ -107,9 +113,11 @@ export default function NeighborVille({
   initialGameState, 
   showTutorialProp = false,
   onTimeChange,
-  onLoadGame
+  onLoadGame,
+  onReturnToMenu
 }: NeighborVilleProps) {
   const [playerName, setPlayerName] = useState("");
+  const [neighborhoodName, setNeighborhoodName] = useState("");
   const [coins, setCoins] = useState(2000);
   const [day, setDay] = useState(1);
   const [level, setLevel] = useState(1);
@@ -130,7 +138,7 @@ export default function NeighborVille({
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [selectedBuilding, setSelectedBuilding] = useState<Building | null>(null);
   const [selectedTile, setSelectedTile] = useState<number | null>(null);
-  const [showSaveManager, setShowSaveManager] = useState(false);
+  const [showNeighborhoodManager, setShowNeighborhoodManager] = useState(false);
   const [showTutorial, setShowTutorial] = useState(showTutorialProp);
   const [tutorialStep, setTutorialStep] = useState(1);
   const [activeTab, setActiveTab] = useState('buildings');
@@ -246,14 +254,29 @@ export default function NeighborVille({
   });
 
   const addNotification = (message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info', autoRemove: boolean = true) => {
-    const newNotification: Notification = {
-      id: Math.random().toString(36).substring(2, 9),
-      message,
-      type,
-      autoRemove
-    };
+    setNotifications(prev => {
+      const existingNotification = prev.find(n => n.message === message && n.type === type);
+      
+      if (existingNotification) {
+        return [
+          ...prev.filter(n => n.id !== existingNotification.id),
+          {
+            ...existingNotification,
+            id: Math.random().toString(36).substring(2, 9),
+          }
+        ];
+      }
+      
+      const newNotification: Notification = {
+        id: Math.random().toString(36).substring(2, 9),
+        message,
+        type,
+        autoRemove
+      };
 
-    setNotifications(prev => [...prev, newNotification]);
+      const updatedNotifications = [...prev, newNotification];
+      return updatedNotifications.length > 5 ? updatedNotifications.slice(-5) : updatedNotifications;
+    });
   };
 
   const saveGameCallback = useCallback(async (buildingCompleted?: Building | string, isAutoSave: boolean = false) => {
@@ -274,6 +297,7 @@ export default function NeighborVille({
 
     const gameState: GameProgress = {
       playerName,
+      neighborhoodName: neighborhoodName || 'Unnamed City',
       coins,
       day,
       level,
@@ -317,7 +341,7 @@ export default function NeighborVille({
         return queuesObj;
       })(),
       xpHistory: [],
-      saveTimestamp: Date.now()
+      lastAutoSave: Date.now()
     };
 
     try {
@@ -326,7 +350,7 @@ export default function NeighborVille({
       }
 
       const saveType = isAutoSave ? 'auto' : 'manual';
-      const saveResult = await saveGameToServer(gameState);
+      const saveResult = await saveNeighborhoodToServer(gameState);
 
       if (saveResult) {
         setLastSaveTime(new Date());
@@ -388,11 +412,8 @@ export default function NeighborVille({
 
   const loadGameStateRef = useRef((state: GameProgress, forceReload: boolean = false) => {
     if (initFlags.current.gameStateLoaded && !forceReload) {
-      console.log('Game state already loaded, skipping');
       return;
     }
-
-    console.log('Loading game state:', state.playerName, forceReload ? '(forced reload)' : '(initial load)');
 
     const batchedUpdates = {
       playerName: state.playerName || "",
@@ -446,8 +467,6 @@ export default function NeighborVille({
       })()
     };
 
-    console.log(`Loading time from save: ${batchedUpdates.gameTime}:00`);
-
     const savedGameTime = batchedUpdates.gameTime;
 
     setPlayerName(batchedUpdates.playerName);
@@ -474,17 +493,13 @@ export default function NeighborVille({
     setPlayerResources(batchedUpdates.playerResources);
 
     if (state.productionQueues) {
-      console.log(`🔄 LOADING PRODUCTION QUEUES:`, state.productionQueues);
       const loadedQueues = new Map<number, ProductionQueueItem[]>();
       Object.entries(state.productionQueues).forEach(([buildingIndexStr, queue]) => {
         const buildingIndex = parseInt(buildingIndexStr);
         loadedQueues.set(buildingIndex, queue);
-        console.log(`   📋 Loaded queue for building ${buildingIndex}:`, queue);
       });
       setProductionQueues(loadedQueues);
-      console.log(`✅ Production queues loaded:`, Array.from(loadedQueues.entries()));
     } else {
-      console.log(`❌ No production queues in save data`);
       setProductionQueues(new Map());
     }
 
@@ -988,10 +1003,6 @@ export default function NeighborVille({
     }
 
     const totalResidents = neighbors.filter(n => n.hasHome).length;
-    const weatherEffect = getWeatherHappinessEffect();
-    const utilityPenalty = calculateUtilityHappinessPenalty();
-
-    const happinessLoss = 1.2 + (totalResidents * 0.2) - weatherEffect + utilityPenalty;
 
     if (Math.random() < 0.08) { 
       const event = getRandomEvent(day);
@@ -999,31 +1010,6 @@ export default function NeighborVille({
         setCurrentEvent(event);
       }
     }
-  };
-
-  const calculateUtilityHappinessPenalty = (): number => {
-    let penalty = 0;
-
-    const buildingsWithoutPower = grid.filter((b, i) => 
-      b && b.needsElectricity && !b.isConnectedToPower
-    ).length;
-
-    const buildingsWithoutWater = grid.filter((b, i) => 
-      b && b.needsWater && !b.isConnectedToWater
-    ).length;
-
-    penalty += buildingsWithoutPower * 2;
-    penalty += buildingsWithoutWater * 3;
-
-    if (powerGrid.totalPowerConsumption > powerGrid.totalPowerProduction) {
-      penalty += 5;
-    }
-
-    if (waterGrid.totalWaterConsumption > waterGrid.totalWaterProduction) {
-      penalty += 6;
-    }
-
-    return penalty;
   };
 
   const addToCoinHistory = useCallback((amount: number, description: string, type: 'income' | 'expense') => {
@@ -1059,11 +1045,6 @@ export default function NeighborVille({
       isActive: true,
       cycleCount: 0
     };
-
-    console.log(`🚀 STARTING CONTINUOUS PRODUCTION:`);
-    console.log(`   Building: ${buildingIndex}`);
-    console.log(`   Recipe: ${recipeId}`);
-    console.log(`   Start time: ${currentTime.totalMinutes} (${currentTime.formattedTime})`);
 
     setActiveProductions(prev => {
       const updated = new Map(prev);
@@ -1115,22 +1096,17 @@ export default function NeighborVille({
   }, [activeProductions]);
 
   const handleBuildingSelect = useCallback((building: Building) => {
-    console.log('Building selected:', building);
     setSelectedBuilding(building);
     setSelectedTile(null);
   }, []);
 
   const handleTileClick = useCallback((index: number) => {
-    console.log('Tile clicked:', index, 'Selected building:', selectedBuilding, 'Grid at index:', grid[index]);
-
     if (index >= gridSize) return;
 
     if (selectedBuilding && grid[index] === null) {
-      console.log('Setting selectedTile to:', index, 'and showing building modal');
       setSelectedTile(index);
       setTimeout(() => {
         setShowBuildingModal(true);
-        console.log('showBuildingModal should now be:', true);
       }, 0);
     } else if (!selectedBuilding && grid[index] !== null) {
       const building = grid[index];
@@ -1146,11 +1122,8 @@ export default function NeighborVille({
 
   const handleBuildingComplete = useCallback((building: Building, index: number) => {
     if (!building || index === null || index < 0 || coins < building.cost) {
-      console.log('Invalid building completion attempt:', building?.name, 'at index', index);
       return;
     }
-
-    console.log('Building complete:', building.name, 'at index', index);
 
     try {
       const newGrid = [...grid];
@@ -1162,11 +1135,9 @@ export default function NeighborVille({
         const fastestProduction = Math.min(...building.produces.map(p => p.timeMinutes));
         buildingWithProductionState.lastProductionCheck = currentGameTime;
         buildingWithProductionState.nextProductionTime = currentGameTime + fastestProduction;
-        console.log(`Initialized production for ${building.name}. Current time:`, currentGameTime, 'Next production at:', currentGameTime + fastestProduction);
 
         const firstProduction = building.produces[0];
         const recipeId = `extract_${firstProduction.resourceId}`;
-        console.log(`🚀 Auto-starting production for ${building.name}: ${recipeId}`);
         
         setTimeout(() => {
           startProduction(index, recipeId);
@@ -1296,6 +1267,8 @@ export default function NeighborVille({
     handleDeleteBuilding(gridIndex);
   };
 
+
+
   const handleEndDay = async () => {
     let hourlyIncome = buildings.reduce((sum, building) => {
       return sum + (building?.income || 0);
@@ -1378,13 +1351,62 @@ export default function NeighborVille({
     setSelectedTile(null);
   };
 
+  const [lastEventDay, setLastEventDay] = useState(0);
+  const [eventHistory, setEventHistory] = useState<string[]>([]);
+  const [eventCooldown, setEventCooldown] = useState(0);
+
   const checkForRandomEvent = () => {
-    if (Math.random() < 0.5) {
-      const event = getRandomEvent(day);
-      if (event) {
-        setCurrentEvent(event);
-      }
+    if (day < 3) return;
+
+    if (eventCooldown > 0) {
+      setEventCooldown(eventCooldown - 1);
+      return;
     }
+
+    let eventChance = 0.15;
+
+    const daysSinceLastEvent = day - lastEventDay;
+    if (daysSinceLastEvent > 3) {
+      eventChance += 0.1;
+    }
+    if (daysSinceLastEvent > 7) {
+      eventChance += 0.2;
+    }
+
+    const buildingCount = grid.filter(cell => cell !== null).length;
+    eventChance += buildingCount * 0.02;
+
+    const averageSatisfaction = neighbors
+      .filter(n => n.hasHome)
+      .reduce((sum, n) => sum + (n.satisfaction || 70), 0) / 
+      Math.max(1, neighbors.filter(n => n.hasHome).length);
+    
+    if (averageSatisfaction < 50) {
+      eventChance += 0.15;
+    }
+
+    if (day % 7 === 0 || day % 7 === 6) {
+      eventChance += 0.1;
+    }
+    if (day % 10 === 0) {
+      eventChance += 0.15;
+    }
+
+    eventChance = Math.min(eventChance, 0.7);
+
+      if (Math.random() < eventChance) {
+       const event = getRandomEvent(day);
+       
+       if (event && !eventHistory.slice(-3).includes(event.id)) {
+         setCurrentEvent(event);
+         setLastEventDay(day);
+         setEventHistory(prev => [...prev, event.id].slice(-10));
+         
+         const cooldownDays = event.title.includes('Crisis') || event.title.includes('Emergency') ? 3 : 
+                            event.title.includes('Drama') || event.title.includes('Dispute') ? 2 : 1;
+         setEventCooldown(cooldownDays);
+       }
+     }
   };
 
   const handleEventOption = (option: EventOption) => {
@@ -1489,12 +1511,6 @@ export default function NeighborVille({
           }
         }
       });
-
-      const weatherBonus = getWeatherHappinessEffect();
-      satisfactionChange += weatherBonus;
-      if (weatherBonus !== 0) {
-        reasons.push(`Weather: ${weather} (${weatherBonus > 0 ? '+' : ''}${weatherBonus})`);
-      }
 
       const newSatisfaction = Math.min(100, Math.max(0, (neighbor.satisfaction || 70) + satisfactionChange));
 
@@ -1865,6 +1881,10 @@ export default function NeighborVille({
     setShowSettings(true);
   };
 
+  const handleShowWiki = () => {
+    setShowWiki(true);
+  };
+
   const handlePurchaseMarketItem = (item: any) => {
     if (coins >= item.price) {
       setCoins(coins - item.price);
@@ -1872,7 +1892,7 @@ export default function NeighborVille({
 
       switch (item.itemType) {
         case 'building_upgrade':
-          addNotification('Building happiness bonus increased by 5%!', 'success');
+          addNotification('Building efficiency bonus increased!', 'success');
           break;
         case 'service':
           addNotification('Energy consumption reduced for 3 days!', 'success');
@@ -1881,7 +1901,7 @@ export default function NeighborVille({
           addNotification('Building costs reduced by 10% for 5 buildings!', 'success');
           break;
         case 'rare':
-          if (item.id === 'happiness_charm') {
+          if (item.id === 'efficiency_charm') {
             addNotification('Neighborhood bonus applied!', 'success');
           }
           break;
@@ -1949,6 +1969,10 @@ export default function NeighborVille({
   };
 
   const [showSettings, setShowSettings] = useState(false);
+  const [showProfileSettings, setShowProfileSettings] = useState(false);
+  const [showProfilePreview, setShowProfilePreview] = useState(false);
+  const [showUserSearch, setShowUserSearch] = useState(false);
+  const [showWiki, setShowWiki] = useState(false);
 
   const checkAchievementsInstant = useCallback(() => {
     const updatedAchievements = achievements.map(achievement => {
@@ -2188,7 +2212,7 @@ export default function NeighborVille({
     }
 
     setLastActiveTime(null);
-  }, [isTabVisible, lastActiveTime, timePaused, gameTime, gameMinutes, productionQueues, playerResources, grid, timeSpeed, handleXPGain, addNotification]);
+  }, [isTabVisible, lastActiveTime, timePaused, gameTime, gameMinutes, timeSpeed]);
 
   useEffect(() => {
     if (activeProductions.size === 0) return;
@@ -2295,6 +2319,38 @@ export default function NeighborVille({
     setShowProductionManager(true);
   };
 
+  const handleReturnToMenu = async () => {
+    try {
+      setAutoSaving(true);
+      await saveGameCallback(undefined, false);
+      
+      setTimeout(() => {
+        setAutoSaving(false);
+        if (onReturnToMenu) {
+          onReturnToMenu();
+        } else {
+          window.location.href = '/';
+        }
+      }, 1000);
+    } catch (error) {
+      console.error('Error saving game before returning to menu:', error);
+      setAutoSaving(false);
+      addNotification('Failed to save game. Please try again.', 'error');
+    }
+  };
+
+  const handleShowProfileSettings = () => {
+    setShowProfileSettings(true);
+  };
+
+  const handleShowProfilePreview = () => {
+    setShowProfilePreview(true);
+  };
+
+  const handleShowUserSearch = () => {
+    setShowUserSearch(true);
+  };
+
   return (
     <AppLayout 
       header={
@@ -2317,14 +2373,15 @@ export default function NeighborVille({
               showWeatherForecast={showWeatherForecast}
               playerResources={playerResources}
               onEndDay={handleEndDay}
-              onOpenSaveManager={() => setShowSaveManager(true)}
+              onOpenSaveManager={() => setShowNeighborhoodManager(true)}
               onShowSettings={() => setShowSettings(true)}
               onShowTutorial={() => setShowTutorial(true)}
+              onShowWiki={handleShowWiki}
               onShowAchievements={() => setShowAchievements(true)}
-                          onToggleTimePause={toggleTimePause}
-            onTimeChange={handleTimeChange}
-            timeSpeed={timeSpeed}
-            onChangeTimeSpeed={handleChangeTimeSpeed}
+              onToggleTimePause={toggleTimePause}
+              onTimeChange={handleTimeChange}
+              timeSpeed={timeSpeed}
+              onChangeTimeSpeed={handleChangeTimeSpeed}
               onShowCalendar={() => setShowCalendar(true)}
               onToggleWeatherForecast={() => setShowWeatherForecast(!showWeatherForecast)}
               onShowBudgetModal={() => setShowBudgetModal(true)}
@@ -2335,7 +2392,13 @@ export default function NeighborVille({
               isMusicPlaying={musicEnabled}
               onToggleMusic={toggleMusic}
               onSaveGame={handleSaveGame}
-                                onShowProductionManager={handleShowProductionManager}
+              onShowProductionManager={handleShowProductionManager}
+              onReturnToMenu={handleReturnToMenu}
+              onShowProfileSettings={handleShowProfileSettings}
+              onShowProfilePreview={handleShowProfilePreview}
+              onShowUserSearch={handleShowUserSearch}
+              onShowLeaderboard={() => setShowLeaderboard(true)}
+              onShowMarketplace={() => setShowMarketplace(true)}
             />
 
             <AnimatePresence>
@@ -2344,7 +2407,19 @@ export default function NeighborVille({
                   initial={{ opacity: 0, scale: 0.5, y: 50 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.5, y: -50 }}
-                  className="absolute top-1/4 left-1/2 transform -translate-x-1/2 bg-yellow-500 text-white px-4 py-2 rounded-full text-lg font-bold shadow-lg"
+                  style={{
+                    position: 'absolute',
+                    top: '25%',
+                    left: '50%',
+                    transform: 'translate(-50%, 0)',
+                    backgroundColor: '#eab308',
+                    color: 'white',
+                    padding: '8px 16px',
+                    borderRadius: '9999px',
+                    fontSize: '18px',
+                    fontWeight: 'bold',
+                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)'
+                  }}
                 >
                   +{hourlyCoinBonus} coins
                 </motion.div>
@@ -2420,11 +2495,32 @@ export default function NeighborVille({
                     <div className="flex items-center justify-between">
                       <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Filter Buildings</h3>
                       <button 
-                        onClick={() => setBuildingCategory('all')}
+                        onClick={() => {
+                          setBuildingCategory('all');
+                          setBuildingSearchTerm('');
+                        }}
                         className="text-xs text-emerald-600 hover:text-emerald-700 font-medium"
                       >
-                        Clear Filters
+                        Clear All
                       </button>
+                    </div>
+                        
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="Search buildings..."
+                        value={buildingSearchTerm}
+                        onChange={(e) => setBuildingSearchTerm(e.target.value)}
+                        className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm"
+                      />
+                      {buildingSearchTerm && (
+                        <button
+                          onClick={() => setBuildingSearchTerm('')}
+                          className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        >
+                          ✕
+                        </button>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
@@ -2458,6 +2554,11 @@ export default function NeighborVille({
                           {buildingCategory === 'all' ? 'All Categories' : 
                            buildingCategory.charAt(0).toUpperCase() + buildingCategory.slice(1)}
                         </span>
+                        {buildingSearchTerm && (
+                          <span className="text-blue-600 ml-1">
+                            (search: "{buildingSearchTerm}")
+                          </span>
+                        )}
                       </div>
                       <div className="text-gray-500">
                         Showing {getCategorizedBuildings().filter(b => !b.levelRequired || level >= b.levelRequired).length} unlocked
@@ -2483,6 +2584,7 @@ export default function NeighborVille({
                           playerLevel={level}
                           playerCoins={coins}
                           playerResources={playerResources}
+                          showDetailed={true}
                         />
                       ))}
                     </div>
@@ -2551,47 +2653,7 @@ export default function NeighborVille({
           </div>
         </div>
 
-        <div className="fixed bottom-24 right-4 space-y-2 flex flex-col">
-          <motion.button
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            onClick={() => setShowLeaderboard(true)}
-            className="w-12 h-12 bg-gradient-to-br from-amber-400 to-amber-500 text-white rounded-full shadow-lg transition-all flex items-center justify-center"
-            title="Leaderboard"
-          >
-            🏆
-          </motion.button>
 
-          <motion.button
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            onClick={() => setShowMarketplace(true)}
-            className="w-12 h-12 bg-gradient-to-br from-amber-500 to-orange-600 text-white rounded-full shadow-lg transition-all flex items-center justify-center"
-            title="Marketplace"
-          >
-            🛍️
-          </motion.button>
-
-          <motion.button
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            onClick={handleShowProductionManager}
-            className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 text-white rounded-full shadow-lg transition-all flex items-center justify-center"
-            title="Production Manager"
-          >
-            🏭
-          </motion.button>
-
-          <motion.button
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            onClick={() => setShowSpecialEvents(true)}
-            className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 text-white rounded-full shadow-lg transition-all flex items-center justify-center"
-            title="Special Events"
-          >
-            🎉
-          </motion.button>
-        </div>
 
         <AnimatePresence>
           {(autoSaving || lastSaveTime) && (
@@ -2599,14 +2661,29 @@ export default function NeighborVille({
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 20 }}
-              className="fixed top-24 right-4 z-30 group"
+              style={{
+                position: 'fixed',
+                top: '96px',
+                right: '16px',
+                zIndex: 30
+              }}
+              className="group"
             >
               <div className="relative">
                 <motion.div
                   whileHover={{ scale: 1.1 }}
-                  className={`rounded-full shadow-md w-10 h-10 flex items-center justify-center cursor-help ${
-                    autoSaving ? 'bg-emerald-500' : 'bg-white/80 backdrop-blur-sm'
-                  }`}
+                  style={{
+                    borderRadius: '50%',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                    width: '40px',
+                    height: '40px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'help',
+                    backgroundColor: autoSaving ? '#10b981' : 'rgba(255, 255, 255, 0.8)',
+                    backdropFilter: autoSaving ? 'none' : 'blur(4px)'
+                  }}
                 >
                   {autoSaving ? (
                     <div className="relative">
@@ -2614,7 +2691,12 @@ export default function NeighborVille({
                       <motion.div 
                         animate={{ scale: [1, 1.5, 1] }}
                         transition={{ repeat: Infinity, duration: 2 }}
-                        className="absolute inset-0 rounded-full bg-emerald-300/50"
+                        style={{
+                          position: 'absolute',
+                          inset: 0,
+                          borderRadius: '50%',
+                          backgroundColor: 'rgba(52, 211, 153, 0.5)'
+                        }}
                       />
                     </div>
                   ) : (
@@ -2634,83 +2716,12 @@ export default function NeighborVille({
           )}
         </AnimatePresence>
 
-        <SaveManager 
-          isOpen={showSaveManager}
-          onClose={() => setShowSaveManager(false)}
-          onSave={(name) => saveGameCallback(name)}
-          onLoadGame={(gameData) => {
-            loadGameState(gameData, true);
-            if (onLoadGame) {
-              onLoadGame(gameData);
-            }
-          }}
-          onSaveToServer={async () => {
-            console.log('Manual server save triggered from SaveManager');
-
-            const currentGameState: GameProgress = {
-              playerName,
-              coins,
-              day,
-              level,
-              experience,
-              grid,
-              gridSize,
-              neighborProgress: neighbors.reduce((progress, neighbor) => {
-                progress[neighbor.id.toString()] = {
-                  unlocked: neighbor.unlocked || false,
-                  hasHome: neighbor.hasHome || false,
-                  houseIndex: neighbor.houseIndex,
-                  satisfaction: neighbor.satisfaction
-                };
-                return progress;
-              }, {} as { [neighborId: string]: { unlocked: boolean; hasHome: boolean; houseIndex?: number; satisfaction?: number } }),
-              completedAchievements: achievements.filter(a => a.completed).map(a => a.id),
-              seenAchievements: seenAchievements,
-              neighbors,
-              achievements,
-              events: [],
-              gameTime,
-              timeOfDay,
-              recentEvents,
-              bills,
-              energyRate,
-              totalEnergyUsage,
-              lastBillDay,
-              coinHistory,
-              weather,
-              powerGrid,
-              waterGrid,
-              taxPolicies,
-              cityBudget,
-              playerResources,
-              productionQueues: (() => {
-                const queuesObj: { [buildingIndex: string]: ProductionQueueItem[] } = {};
-                productionQueues.forEach((queue, buildingIndex) => {
-                  queuesObj[buildingIndex.toString()] = queue;
-                });
-                return queuesObj;
-              })(),
-              xpHistory: [],
-              saveTimestamp: Date.now()
-            };
-
-            try {
-              const result = await saveGameToServer(currentGameState);
-              if (result) {
-                setLastSaveTime(new Date());
-                addNotification('Game saved to server!', 'success');
-              } else {
-                addNotification('Failed to save to server', 'error');
-              }
-              return result;
-            } catch (error) {
-              console.error('Error saving to server:', error);
-              addNotification('Error saving to server', 'error');
-              return false;
-            }
-          }}
+        <NeighborhoodManager 
+          isOpen={showNeighborhoodManager}
+          onClose={() => setShowNeighborhoodManager(false)}
           gameData={{
             playerName,
+            neighborhoodName,
             coins,
             day,
             level,
@@ -2753,10 +2764,37 @@ export default function NeighborVille({
               return queuesObj;
             })(),
             xpHistory: [],
-            saveTimestamp: Date.now()
+            neighborhoodFoundedDate: Date.now() - (day * 24 * 60 * 60 * 1000),
+            neighborhoodMilestones: [],
+            cityEra: 'Growing Village',
+            lastAutoSave: Date.now()
+          }}
+          onUpdateNeighborhood={async (newName: string) => {
+            try {
+              await updateNeighborhoodName(newName);
+              setNeighborhoodName(newName);
+              addNotification(`Neighborhood renamed to "${newName}"`, 'success');
+            } catch (error) {
+              console.error('Error updating neighborhood name:', error);
+              addNotification('Failed to update neighborhood name', 'error');
+              throw error;
+            }
+          }}
+          onStartFresh={async () => {
+            try {
+              const result = await startFreshNeighborhood();
+              if (result.success && result.gameData) {
+                loadGameState(result.gameData, true);
+                addNotification('Started a fresh neighborhood!', 'success');
+              } else {
+                addNotification('Failed to start fresh neighborhood', 'error');
+              }
+            } catch (error) {
+              console.error('Error starting fresh neighborhood:', error);
+              addNotification('Error starting fresh neighborhood', 'error');
+            }
           }}
           isAuthenticated={isAuthenticated}
-          lastServerSaveTime={lastSaveTime}
           onShowLogin={() => setShowAuthModal(true)}
           addNotification={addNotification}
         />
@@ -2787,6 +2825,7 @@ export default function NeighborVille({
               playerLevel={level}
               gameProgress={{
                 playerName,
+                neighborhoodName: neighborhoodName || 'Unnamed City',
                 coins,
                 day,
                 level,
@@ -2808,6 +2847,7 @@ export default function NeighborVille({
                 achievements,
                 events: [],
                 gameTime,
+                gameMinutes,
                 timeOfDay,
                 recentEvents,
                 bills,
@@ -2828,8 +2868,7 @@ export default function NeighborVille({
                   });
                   return queuesObj;
                 })(),
-                xpHistory: [],
-                saveTimestamp: Date.now()
+                xpHistory: []
               }}
             />
           )}
@@ -2840,6 +2879,7 @@ export default function NeighborVille({
               <SpecialEventsManager
                 gameData={{
                   playerName,
+                  neighborhoodName: neighborhoodName || 'Unnamed City',
                   coins,
                   day,
                   level,
@@ -2861,6 +2901,7 @@ export default function NeighborVille({
                   achievements,
                   events: [],
                   gameTime,
+                  gameMinutes,
                   timeOfDay,
                   recentEvents,
                   bills,
@@ -2881,8 +2922,7 @@ export default function NeighborVille({
                     });
                     return queuesObj;
                   })(),
-                  xpHistory: [],
-                  saveTimestamp: Date.now()
+                  xpHistory: []
                 }}
                 neighbors={neighbors}
                 grid={grid}
@@ -2971,10 +3011,20 @@ export default function NeighborVille({
         </AnimatePresence>
 
         <AnimatePresence>
+          {showWiki && (
+            <GameWiki
+              isOpen={showWiki}
+              onClose={() => setShowWiki(false)}
+            />
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
           {showPlayerStats && (
             <PlayerStatsModal 
               gameData={{
                 playerName,
+                neighborhoodName: neighborhoodName || 'Unnamed City',
                 coins,
                 day,
                 level,
@@ -2991,10 +3041,12 @@ export default function NeighborVille({
                   return progress;
                 }, {} as { [neighborId: string]: { unlocked: boolean; hasHome: boolean; houseIndex?: number; satisfaction?: number } }),
                 completedAchievements: achievements.filter(a => a.completed).map(a => a.id),
+                seenAchievements: seenAchievements,
                 neighbors,
                 achievements,
                 events: [],
                 gameTime,
+                gameMinutes,
                 timeOfDay,
                 recentEvents,
                 bills,
@@ -3015,18 +3067,13 @@ export default function NeighborVille({
                   });
                   return queuesObj;
                 })(),
-                xpHistory: [],
-                saveTimestamp: Date.now()
+                xpHistory: []
               }}
               achievements={achievements}
               neighbors={neighbors}
               grid={grid}
               xpHistory={[]}
               onClose={() => setShowPlayerStats(false)}
-              onShowLogin={() => {
-                setShowPlayerStats(false);
-                setShowAuthModal(true);
-              }}
             />
           )}
         </AnimatePresence>
@@ -3223,6 +3270,35 @@ export default function NeighborVille({
             />
           )}
         </AnimatePresence>
+
+        {showProfileSettings && (
+          <ProfileSettings
+            onClose={() => setShowProfileSettings(false)}
+          />
+        )}
+
+        {showProfilePreview && (
+          <ProfilePreview
+            onClose={() => setShowProfilePreview(false)}
+          />
+        )}
+
+        {showUserSearch && (
+          <UserSearch
+            onClose={() => setShowUserSearch(false)}
+            onViewProfile={(username) => {
+              console.log('Viewing profile for:', username);
+              setShowUserSearch(false);
+            }}
+          />
+        )}
+
+        {showWiki && (
+          <GameWiki
+            isOpen={showWiki}
+            onClose={() => setShowWiki(false)}
+          />
+        )}
       </AppLayout>
     );
   }

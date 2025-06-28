@@ -6,7 +6,11 @@ import dotenv from 'dotenv';
 import { connectMongoDB, connectRedis } from './config/database.js';
 import emailRoutes from './routes/email.js';
 import userRoutes from './routes/user.js';
+import profileRoutes from './routes/profile.js';
 import apiRoutes from './routes/api.js';
+import adminRoutes from './routes/admin.js';
+import reportRoutes from './routes/reports.js';
+
 
 dotenv.config();
 
@@ -49,6 +53,10 @@ app.use(cors({
 
 app.use('/api/email', emailRoutes);
 app.use('/api/user', userRoutes);
+app.use('/api/profile', profileRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/reports', reportRoutes);
+
 app.use('/api', apiRoutes);
 
 app.get('/health', (req, res) => {

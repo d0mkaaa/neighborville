@@ -149,7 +149,7 @@ export default function Leaderboard({ onClose, onViewProfile }: LeaderboardProps
             <div className="bg-red-50 text-red-600 p-4 rounded-lg text-center">
               {error}
             </div>
-          ) : leaderboard.length === 0 ? (
+          ) : (!leaderboard || leaderboard.length === 0) ? (
             <div className="bg-gray-50 p-6 rounded-lg text-center text-gray-500">
               No leaderboard data available yet.
             </div>
@@ -218,7 +218,7 @@ export default function Leaderboard({ onClose, onViewProfile }: LeaderboardProps
             </div>
           )}
           
-          {!loading && leaderboard.length > 0 && (
+          {!loading && leaderboard && leaderboard.length > 0 && (
             <div className="flex justify-between items-center mt-4">
               <div className="text-sm text-gray-500">
                 Page {page} of {totalPages}

@@ -1,174 +1,295 @@
-# 🏙️ neighborville
+# 🏙️ NeighborVille v1.0.0-live
 
-A city-building simulation game built for [Hack Club Neighborhood](https://neighborhood.hackclub.com/), where you can build your own virtual community, manage resources, and keep your residents happy!
+A modern city-building simulation game with real-time updates, featuring live GitHub integration, comprehensive user management, and family-friendly community features. Build your dream neighborhood, manage resources, compete on leaderboards, and grow your virtual city!
 
-## 🎮 Game Features
+🚀 **Live Version**: Currently running v1.0.0-live with real-time GitHub integration for instant updates!
 
-- **City Building**: Design and build your neighborhood with various buildings, houses, and community spaces
-- **Resource Management**: Balance income, happiness, and energy usage
-- **Dynamic Weather & Day/Night Cycle**: Experience changing weather patterns and a day/night cycle
-- **Neighbor System**: House neighbors with unique traits, preferences, and personalities
-- **Random Events**: Face unexpected events that challenge your management skills
-- **Achievement System**: Unlock achievements as you develop your neighborhood
-- **Energy Management**: Monitor and reduce your city's energy consumption
-- **Housing System**: Assign your neighbors to appropriate housing based on their preferences
-- **Email Verification**: Secure user authentication with simulated email verification codes
+## ✨ Key Features
 
-## 🚀 tools used
+### 🎮 **Core Gameplay**
+- **Advanced City Building**: Design neighborhoods with 25+ building types including residential, commercial, utilities, and decorations
+- **Economic Simulation**: Manage coins, resources (wood, stone, iron ore), and city budget with dynamic pricing
+- **Resource Production**: Complex production chains with material requirements and building dependencies
+- **Day/Night Cycle**: Dynamic time system affecting gameplay, building efficiency, and visual aesthetics
+- **Weather System**: Dynamic weather patterns impacting city operations and resident mood
+- **Achievement System**: 20+ achievements to unlock with progress tracking and rewards
 
-- [React](https://react.dev/) - UI framework
-- [TypeScript](https://www.typescriptlang.org/) - Type-safe JavaScript
-- [Vite](https://vitejs.dev/) - Fast development environment
-- [Tailwind CSS](https://tailwindcss.com/) - Styling
-- [Framer Motion](https://www.framer.com/motion/) - Animations
-- [Lucide Icons](https://lucide.dev/) - UI icons
-- [Docker](https://www.docker.com/) - Containerization
-- [Nginx](https://nginx.org/) - Web server
+### 🏆 **Social & Competition**
+- **Global Leaderboards**: Compete with players worldwide by level, building count, and city progress
+- **User Profiles**: Customizable profiles with bio, location, interests, and privacy settings
+- **Public City Viewing**: Showcase your city to other players (with privacy controls)
+- **User Search**: Find and connect with other city builders globally
 
-## 🛠️ Development
+### 💾 **Modern Infrastructure**
+- **Cloud Save System**: Automatic cloud saves with 30-save history and cross-device sync
+- **Live GitHub Integration**: Real-time version tracking directly from GitHub repository
+- **Auto-Updates**: Automatic update notifications and version management
+- **Progressive Web App**: Works offline and can be installed on any device
 
-### prerequisites
+### 🛡️ **Security & Moderation**
+- **Family-Safe Environment**: Comprehensive content moderation for usernames, profiles, and user content
+- **Admin Dashboard**: Complete user management, moderation logs, and security monitoring
+- **Suspension System**: Unified user and IP suspension with appeal process
+- **Two-Factor Authentication**: TOTP support with backup codes for account security
 
-- [Docker](https://docs.docker.com/get-docker/)
-- [Docker Compose](https://docs.docker.com/compose/install/)
+### 📊 **Advanced Systems**
+- **Tutorial & Wiki**: Comprehensive in-game help system and building encyclopedia
+- **Settings Management**: Granular game settings, audio controls, and accessibility options
+- **Responsive Design**: Fully responsive interface working on desktop, tablet, and mobile
+- **Animations**: Smooth Framer Motion animations throughout the interface
 
-### getting started
+## 🛠️ **Technology Stack**
 
-1. Clone the repository:
+### **Frontend**
+- **React 18** - Modern UI framework with concurrent features
+- **TypeScript** - Type-safe development with enhanced IDE support
+- **Vite** - Lightning-fast development and optimized production builds
+- **Tailwind CSS** - Utility-first CSS framework for rapid styling
+- **Framer Motion** - Professional animations and micro-interactions
+- **Lucide React** - Beautiful, consistent iconography
+
+### **Backend**
+- **Node.js + Express** - High-performance server architecture
+- **MongoDB + Mongoose** - Flexible NoSQL database with ODM
+- **JWT Authentication** - Secure session management
+- **Nodemailer** - Professional email verification system
+- **Express Rate Limiting** - API protection and abuse prevention
+
+### **DevOps & Infrastructure**
+- **Docker** - Containerized deployment
+- **Nginx** - High-performance web server and reverse proxy
+- **GitHub Integration** - Live version tracking and automated updates
+- **Environment Management** - Secure configuration handling
+
+## 🚀 **Quick Start**
+
+### **Prerequisites**
+- [Docker](https://docs.docker.com/get-docker/) & [Docker Compose](https://docs.docker.com/compose/install/)
+- [Node.js 22+](https://nodejs.org/) (for local development)
+- [Git](https://git-scm.com/) for repository management
+
+### **Installation**
+
+1. **Clone the repository:**
    ```bash
    git clone https://github.com/d0mkaaa/neighborville.git
    cd neighborville
    ```
 
-2. Create and configure your environment variables:
+2. **Environment setup:**
    ```bash
    cp .env.example .env
+   # Edit .env with your configuration
    ```
-   Edit the `.env` file with your configuration values.
 
-3. Build and start the containers:
+3. **Launch with Docker:**
    ```bash
+   # Production build
    docker-compose up --build
-   ```
 
-4. Open [http://localhost](http://localhost) in your browser
-
-### Production Mode
-
-In production, the application will use:
-
-1. The `VITE_API_URL` environment variable for API requests
-2. The CORS settings defined in `ALLOWED_ORIGINS` for server security
-
-### Environment Variables
-
-The following environment variables are available:
-
-- `VITE_API_URL`: Your API server URL (only needed in production)
-- `VITE_WS_URL`: Your WebSocket server URL
-- `VITE_EMAIL_FROM`: Email sender address (e.g., hello@domka.me)
-- `VITE_EMAIL_FROM_NAME`: Email sender name
-
-### authentication system
-
-NeighborVille features a comprehensive authentication system with the following features:
-
-1. **Session Management**:
-   - Browser-local sessions with configurable expiration time
-   - Automatic session refresh for active users
-   - Ability to manage multiple sessions across devices
-
-2. **User Types**:
-   - Guest users with limited functionality
-   - Registered users with email verification
-   - User settings persistence
-
-3. **Security Features**:
-   - Session validation on app load and during usage
-   - Automatic logout on session expiration
-   - Session tracking with user agent information
-
-4. **Environment Configuration**:
-   - Configurable session timeout via environment variables
-   - Mailtrap integration for production email testing
-   - Development fallbacks for email verification
-
-## Authentication System
-
-### Security Improvements
-
-The authentication system has been enhanced with the following improvements:
-
-1. **Session-based Storage**: User data is now stored in `sessionStorage` instead of `localStorage` for improved security. This means user data is automatically cleared when the browser session ends.
-
-2. **Automatic 401 Handling**: The system now properly detects unauthorized (401) responses from the API and automatically shows the login modal. This ensures users aren't left in a broken state when their session expires.
-
-3. **Event-based Authentication**: The system uses custom events (`auth:unauthorized`) to communicate authentication failures across components, ensuring a consistent user experience.
-
-4. **Centralized Auth Context**: All authentication logic is centralized in the AuthContext, making it easier to maintain and extend.
-
-### Usage
-
-The authentication system provides the following hooks and components:
-
-```tsx
-// Using the auth context
-const { 
-  user,             // Current user object or null
-  isAuthenticated,  // Whether the user is authenticated (not a guest)
-  isGuest,          // Whether the user is a guest
-  login,            // Function to log in a user
-  logout,           // Function to log out
-  refreshAuth,      // Function to refresh authentication
-  showLogin,        // Whether to show the login modal
-  setShowLogin      // Function to show/hide the login modal
-} = useAuth();
-```
-
-## 📚 Project Structure
-
-- `src/components/game/` - Game components like buildings, residents, events
-- `src/components/ui/` - Reusable UI components
-- `src/components/auth/` - Authentication components and flows
-- `src/services/` - Services for email verification and storage
-- `src/data/` - Game data (buildings, events, neighbors, achievements)
-- `src/types/` - TypeScript type definitions
-
-## 👥 Contributing
-
-Contributions are welcome! Feel free to open issues or submit pull requests to help improve neighborville.
-
-## 📜 License
-
-This project is open source and available under the [MIT License](LICENSE).
-
-## Development Environment
-
-### Local Development without SSL
-
-For local development, you can use the provided development configuration that doesn't require SSL certificates.
-
-1. Build and run the development environment:
-   ```bash
-   # Run with development configuration
+   # Development build (with hot reload)
    docker-compose -f docker-compose.dev.yml up --build
    ```
 
-2. Access the application:
-   - Frontend: [http://localhost](http://localhost)
-   - API: [http://api.localhost](http://api.localhost) (add this to your hosts file)
+4. **Access the application:**
+   - **Frontend**: [http://localhost](http://localhost)
+   - **API**: [http://api.localhost](http://api.localhost)
 
-3. For development without Docker:
+### **Local Development**
+
+```bash
+# Backend server
+cd server
+npm install
+npm run dev
+
+# Frontend development server (new terminal)
+cd neighborville
+npm install
+npm run dev
+```
+
+## ⚙️ **Configuration**
+
+### **Environment Variables**
+
+**Frontend (.env):**
+```bash
+VITE_API_URL=http://localhost:3001          # API endpoint
+VITE_WS_URL=ws://localhost:3001             # WebSocket endpoint
+VITE_EMAIL_FROM=hello@domka.me              # Email sender
+VITE_EMAIL_FROM_NAME=NeighborVille          # Email sender name
+```
+
+**Backend (server/.env):**
+```bash
+NODE_ENV=development                         # Environment mode
+MONGODB_URI=mongodb://localhost:27017/neighborville
+JWT_SECRET=your-super-secure-secret-key
+ADMIN_SECRET=neighborville_admin_2024       # Admin promotion key
+ADMIN_SETUP_KEY=neighborville-admin-setup-2024
+
+# Email Configuration (Mailtrap for testing)
+MAILTRAP_HOST=smtp.mailtrap.io
+MAILTRAP_PORT=2525
+MAILTRAP_USER=your-mailtrap-user
+MAILTRAP_PASS=your-mailtrap-password
+EMAIL_FROM=hello@domka.me
+```
+
+## 📁 **Project Structure**
+
+```
+neighborville/
+├── 📁 src/                          # Frontend source code
+│   ├── 📁 components/               # React components
+│   │   ├── 📁 game/                # Game-specific components
+│   │   ├── 📁 ui/                  # Reusable UI components
+│   │   ├── 📁 auth/                # Authentication components
+│   │   ├── 📁 admin/               # Admin panel components
+│   │   └── 📁 profile/             # User profile components
+│   ├── 📁 services/                # API and service layer
+│   ├── 📁 data/                    # Game data and configurations
+│   ├── 📁 types/                   # TypeScript type definitions
+│   ├── 📁 context/                 # React context providers
+│   └── 📁 hooks/                   # Custom React hooks
+├── 📁 server/                      # Backend source code
+│   ├── 📁 src/
+│   │   ├── 📁 controllers/         # Request handlers
+│   │   ├── 📁 models/              # Database models
+│   │   ├── 📁 routes/              # API route definitions
+│   │   ├── 📁 middleware/          # Express middleware
+│   │   └── 📁 services/            # Business logic services
+│   └── 📁 config/                  # Server configuration
+├── 📁 public/                      # Static assets
+├── 📄 docker-compose.yml           # Production Docker setup
+├── 📄 docker-compose.dev.yml       # Development Docker setup
+└── 📄 README.md                    # This file
+```
+
+## 🎮 **Game Features Deep Dive**
+
+### **Building System**
+- **25+ Building Types**: Houses, shops, utilities, decorations, and special buildings
+- **Upgrade Paths**: Buildings can be upgraded for better efficiency and appearance
+- **Resource Requirements**: Each building requires specific materials to construct
+- **Placement Strategy**: Grid-based building system with adjacency bonuses
+
+### **Economy Management**
+- **Starting Capital**: New players begin with 2000 coins
+- **Income Generation**: Buildings provide daily income based on type and upgrades
+- **Resource Trading**: Buy and sell materials through the marketplace
+- **Budget Tracking**: Comprehensive financial overview and coin history
+
+### **Progression System**
+- **Experience Points**: Gain XP through building, upgrading, and daily activities
+- **Level Unlocks**: New buildings and features unlock as you level up
+- **Achievement Rewards**: Bonus coins and XP for completing challenges
+- **Leaderboard Rankings**: Global competition across multiple categories
+
+## 🛡️ **Security & Moderation**
+
+### **Content Moderation**
+- **Family-Safe Policy**: Comprehensive filtering of inappropriate usernames and content
+- **Real-time Scanning**: Automatic detection of prohibited language and patterns
+- **Appeals Process**: Users can appeal moderation decisions through structured system
+- **Logging**: All moderation actions are logged for admin review
+
+### **User Management**
+- **Role-Based Access**: User, Moderator, and Admin permission levels
+- **Account Verification**: Email verification required for full account access
+- **Session Management**: Secure session handling with automatic expiration
+- **Privacy Controls**: Users control profile visibility and data sharing
+
+## 🌟 **What's New in v1.0.0-live**
+
+### **🔥 Live GitHub Integration**
+- Real-time version tracking from GitHub repository
+- Automatic update notifications when new commits are pushed
+- Live commit information displayed in-game
+- Seamless update experience without manual version management
+
+### **⚡ Enhanced Performance**
+- Optimized rendering for large cities (1000+ buildings)
+- Improved load times through code splitting and lazy loading
+- Memory usage optimization for extended play sessions
+- Smooth animations even on lower-end devices
+
+### **🎨 UI/UX Improvements**
+- Modern glassmorphism design language
+- Smooth page transitions and micro-interactions
+- Improved mobile responsiveness
+- Accessibility enhancements for screen readers
+
+### **🔐 Advanced Security**
+- Enhanced content moderation system
+- Improved admin tools and security monitoring
+- Better rate limiting and abuse prevention
+- Secure authentication flow improvements
+
+## 🚀 **Deployment**
+
+### **Production Deployment**
+
+1. **Environment Setup:**
    ```bash
-   # Start the backend server
-   cd server
-   NODE_ENV=development npm run dev
-
-   # Start the frontend in a separate terminal
-   npm run dev
+   # Set production environment variables
+   NODE_ENV=production
+   MONGODB_URI=mongodb+srv://your-cluster/neighborville
+   # ... other production configs
    ```
 
-This development setup:
-- Uses the `nginx.dev.conf` which doesn't require SSL certificates
-- Configures all services to work on standard non-SSL ports
-- Sets NODE_ENV to development automatically
+2. **Docker Production:**
+   ```bash
+   docker-compose -f docker-compose.yml up -d
+   ```
+
+3. **Health Checks:**
+   - Frontend: `http://your-domain/`
+   - API Health: `http://your-domain/api/health`
+   - Database: Monitor MongoDB connection
+
+### **Performance Optimization**
+- Enable gzip compression in Nginx
+- Configure Redis for session storage (optional)
+- Set up CDN for static assets
+- Monitor application metrics and logs
+
+## 🤝 **Contributing**
+
+We welcome contributions! Here's how to get started:
+
+1. **Fork the repository**
+2. **Create a feature branch**: `git checkout -b feature/amazing-feature`
+3. **Make your changes** and test thoroughly
+4. **Commit your changes**: `git commit -m 'Add amazing feature'`
+5. **Push to the branch**: `git push origin feature/amazing-feature`
+6. **Open a Pull Request**
+
+### **Development Guidelines**
+- Follow TypeScript best practices
+- Maintain test coverage for new features
+- Use conventional commit messages
+- Update documentation for new features
+
+## 📞 **Support & Community**
+
+- **Issues**: [GitHub Issues](https://github.com/d0mkaaa/neighborville/issues)
+- **Email**: domantas@domkutis.com
+
+## 👨‍💻 **About the Developer**
+
+**Created by d0mkaaa (Domantas Rutkauskas)**
+- Passionate full-stack developer from Lithuania 🇱🇹
+- Building modern web experiences with love ❤️
+- Always open to feedback and collaboration!
+
+## 📄 **License**
+
+This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
+
+---
+
+**🏙️ NeighborVille v1.0.0-live** - Building the future of browser-based city simulation games with cutting-edge web technologies and real-time features.
+
+*Made with ❤️ for city builders everywhere | Featuring live GitHub integration and real-time updates! 🚀*

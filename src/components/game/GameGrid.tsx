@@ -181,23 +181,31 @@ export default function GameGrid({
           let powerStatus = showUtilityMode ? getBuildingStatus(index, "power") : null;
           let waterStatus = showUtilityMode ? getBuildingStatus(index, "water") : null;
           
+          const showPreview = selectedBuilding && !building && selectedTile !== index;
+          const isValidPlacement = selectedBuilding && !building;
+          
           return (
             <motion.div
               key={index}
-              whileHover={{ scale: 1.05 }}
+              whileHover={{ 
+                scale: building ? 1.02 : 1.05,
+                boxShadow: building ? "0 8px 25px rgba(0,0,0,0.15)" : "0 4px 15px rgba(16, 185, 129, 0.3)"
+              }}
               whileTap={{ scale: 0.95 }}
               layout
               onClick={() => handleTileClick(index)}
               onDoubleClick={() => handleTileDoubleClick(index)}
-              className={`aspect-ratio-1 rounded-lg flex flex-col items-center justify-center cursor-pointer ${
-                selectedTile === index ? 'ring-2 ring-emerald-500' : ''
+              className={`group aspect-ratio-1 rounded-lg flex flex-col items-center justify-center cursor-pointer relative transition-all duration-200 ${
+                selectedTile === index ? 'ring-3 ring-emerald-500 ring-opacity-60' : ''
               } ${
-                !building ? 'bg-emerald-50 hover:bg-emerald-100' : 'text-white'
+                !building ? (isValidPlacement ? 'bg-emerald-50 hover:bg-emerald-100 border-2 border-dashed border-emerald-300 hover:border-emerald-400' : 'bg-emerald-50 hover:bg-emerald-100') : 'text-white shadow-md hover:shadow-lg'
               } ${
                 selectedSource === index ? 'ring-2 ring-yellow-400' : ''
+              } ${
+                showPreview ? 'ring-2 ring-blue-300 bg-blue-50' : ''
               }`}
               style={{ 
-                backgroundColor: building ? building.color : '',
+                backgroundColor: building ? building.color : (showPreview ? selectedBuilding?.color + '20' : ''),
               }}
             >
               {building ? (

@@ -48,12 +48,85 @@ export const findUserByUsername = async (username) => {
   }
 };
 
-export const createSession = async (user, userAgent, ip) => {
+const getLocationFromIP = async (ip) => {
+  try {
+    if (!ip || ip === '::1' || ip === '127.0.0.1' || ip.startsWith('192.168.') || ip.startsWith('10.') || ip.startsWith('172.')) {
+      return {
+        country: 'Local Network',
+        city: 'Local',
+        region: 'Local',
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      };
+    }
+
+    return {
+      country: 'Unknown',
+      city: 'Unknown', 
+      region: 'Unknown',
+      timezone: 'UTC'
+    };
+  } catch (error) {
+    console.error('Error getting location from IP:', error);
+    return {
+      country: 'Unknown',
+      city: 'Unknown',
+      region: 'Unknown', 
+      timezone: 'UTC'
+    };
+  }
+};
+
+const parseUserAgent = (userAgent) => {
+  if (!userAgent) {
+    return {
+      browser: 'Unknown',
+      os: 'Unknown',
+      device: 'Unknown'
+    };
+  }
+
+  let browser = 'Unknown';
+  let os = 'Unknown';
+  let device = 'Desktop';
+
+  if (userAgent.includes('Chrome')) browser = 'Chrome';
+  else if (userAgent.includes('Firefox')) browser = 'Firefox';
+  else if (userAgent.includes('Safari') && !userAgent.includes('Chrome')) browser = 'Safari';
+  else if (userAgent.includes('Edge')) browser = 'Edge';
+  else if (userAgent.includes('Opera')) browser = 'Opera';
+
+  if (userAgent.includes('Windows')) os = 'Windows';
+  else if (userAgent.includes('Mac OS')) os = 'macOS';
+  else if (userAgent.includes('Linux')) os = 'Linux';
+  else if (userAgent.includes('Android')) os = 'Android';
+  else if (userAgent.includes('iOS')) os = 'iOS';
+
+  if (userAgent.includes('Mobile') || userAgent.includes('Android') || userAgent.includes('iPhone')) {
+    device = 'Mobile';
+  } else if (userAgent.includes('Tablet') || userAgent.includes('iPad')) {
+    device = 'Tablet';
+  }
+
+  return { browser, os, device };
+};
+
+const sanitizeIP = (ip) => {
+  if (ip && ip.startsWith('::ffff:')) {
+    return ip.substring(7);
+  }
+  return ip || 'Unknown';
+};
+
+export const createSession = async (user, userAgent, rawIp) => {
   try {
     const token = crypto.randomBytes(32).toString('hex');
     
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
+    
+    const ip = sanitizeIP(rawIp);
+    const location = await getLocationFromIP(ip);
+    const deviceInfo = parseUserAgent(userAgent);
     
     const session = new Session({
       userId: user._id,
@@ -62,7 +135,11 @@ export const createSession = async (user, userAgent, ip) => {
       clientInfo: {
         userAgent,
         ip,
-        device: userAgent ? userAgent.split('(')[0] : 'Unknown'
+        location,
+        browser: deviceInfo.browser,
+        os: deviceInfo.os,
+        device: deviceInfo.device,
+        createdAt: new Date()
       }
     });
     
@@ -147,50 +224,86 @@ export const getUserSessions = async (userId) => {
   }
 };
 
-export const storeVerificationCode = async (email, code, expiresInMinutes = 10) => {
+export const storeVerificationCode = async (email, code, expiresInMinutes = 15) => {
   try {
-    const key = `verification:${email}`;
-    console.log(`Storing verification code for ${email}: ${code}`);
-    await redisClient.set(key, code);
-    await redisClient.expire(key, expiresInMinutes * 60);
+    const key = `verification:${email.toLowerCase().trim()}`;
+    console.log(`📝 STORING verification code for ${email}: ${code} (expires in ${expiresInMinutes} minutes)`);
+    
+    await redisClient.setEx(key, expiresInMinutes * 60, code);
     
     const storedCode = await redisClient.get(key);
-    console.log(`Verification code stored for ${email}: ${storedCode}`);
+    const ttl = await redisClient.ttl(key);
+    console.log(`✅ VERIFIED storage - Code: ${storedCode}, TTL: ${ttl}s`);
     
-    return true;
+    if (storedCode === code) {
+      return true;
+    } else {
+      console.error(`❌ STORAGE VERIFICATION FAILED - Expected: ${code}, Got: ${storedCode}`);
+      return false;
+    }
   } catch (error) {
-    console.error('Error storing verification code:', error);
+    console.error('❌ Error storing verification code:', error);
     return false;
   }
 };
 
 export const verifyCode = async (email, code) => {
   try {
-    const key = `verification:${email}`;
-    console.log(`Attempting to verify code for ${email}: ${code}`);
+    const normalizedEmail = email.toLowerCase().trim();
+    const normalizedCode = String(code).trim();
+    const key = `verification:${normalizedEmail}`;
+    
+    console.log(`🔍 VERIFYING code for ${normalizedEmail}: ${normalizedCode}`);
     
     const storedCode = await redisClient.get(key);
-    console.log(`Retrieved stored code for ${email}: ${storedCode}`);
+    const ttl = await redisClient.ttl(key);
+    
+    console.log(`📋 RETRIEVED from Redis - Key: ${key}, Code: ${storedCode}, TTL: ${ttl}s`);
     
     if (!storedCode) {
-      console.log(`No verification code found for ${email}`);
-      return false;
+      console.log(`❌ NO CODE FOUND for ${normalizedEmail} - checking all verification keys...`);
+      
+      try {
+        const allKeys = await redisClient.keys('verification:*');
+        console.log(`🔍 ALL VERIFICATION KEYS:`, allKeys);
+        
+        for (const debugKey of allKeys) {
+          const debugCode = await redisClient.get(debugKey);
+          const debugTtl = await redisClient.ttl(debugKey);
+          console.log(`   - ${debugKey}: ${debugCode} (TTL: ${debugTtl}s)`);
+        }
+      } catch (debugError) {
+        console.error('Debug key listing failed:', debugError);
+      }
+      
+      return { 
+        valid: false, 
+        error: 'No verification code found or code has expired. Please request a new code.' 
+      };
     }
     
-    const isMatch = String(storedCode).trim() === String(code).trim();
-    console.log(`Code comparison result: ${isMatch}`);
+    const normalizedStoredCode = String(storedCode).trim();
+    const isMatch = normalizedStoredCode === normalizedCode;
+    
+    console.log(`🔄 CODE COMPARISON - Expected: "${normalizedStoredCode}", Got: "${normalizedCode}", Match: ${isMatch}`);
     
     if (isMatch) {
       await redisClient.del(key);
-      console.log(`Verification successful for ${email}, code deleted from Redis`);
-      return true;
+      console.log(`✅ VERIFICATION SUCCESSFUL for ${normalizedEmail}, code deleted from Redis`);
+      return { valid: true };
     } else {
-      console.log(`Code mismatch for ${email}: expected ${storedCode}, got ${code}`);
-      return false;
+      console.log(`❌ CODE MISMATCH for ${normalizedEmail}`);
+      return { 
+        valid: false, 
+        error: 'Invalid verification code. Please check the code and try again.' 
+      };
     }
   } catch (error) {
-    console.error('Error verifying code:', error);
-    return false;
+    console.error('❌ Error verifying code:', error);
+    return { 
+      valid: false, 
+      error: 'Server error during verification. Please try again.' 
+    };
   }
 };
 
@@ -255,15 +368,28 @@ export const updateUser = async (userId, userData) => {
 
 export const getStoredVerificationCode = async (email) => {
   try {
-    const key = `verification:${email}`;
-    console.log(`Checking for existing verification code for ${email}`);
+    const normalizedEmail = email.toLowerCase().trim();
+    const key = `verification:${normalizedEmail}`;
+    
+    console.log(`🔍 CHECKING for existing code for ${normalizedEmail}`);
     
     const storedCode = await redisClient.get(key);
-    console.log(`Found verification code for ${email}: ${storedCode ? 'Yes' : 'No'}`);
+    const ttl = await redisClient.ttl(key);
     
-    return storedCode;
+    console.log(`📋 FOUND existing code: ${storedCode ? 'Yes' : 'No'}, TTL: ${ttl}s`);
+    
+    if (storedCode && ttl > 120) {
+      console.log(`♻️ REUSING existing code for ${normalizedEmail} (${Math.floor(ttl/60)} minutes remaining)`);
+      return storedCode;
+    } else if (storedCode && ttl <= 120) {
+      console.log(`⏰ EXISTING code for ${normalizedEmail} expires soon (${ttl}s), will generate new one`);
+      await redisClient.del(key);
+      return null;
+    }
+    
+    return null;
   } catch (error) {
-    console.error('Error retrieving verification code:', error);
+    console.error('❌ Error retrieving verification code:', error);
     return null;
   }
 };

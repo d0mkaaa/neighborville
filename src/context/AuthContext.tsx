@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, type ReactNode, useCallback, useRef } from 'react';
 import type { User } from '../services/userService';
-import { getCurrentUser, logout as logoutUser } from '../services/userService';
+import { getCurrentUser, logout as logoutUser, isRememberMeEnabled } from '../services/userService';
 
 interface AuthContextType {
   user: User | null;
@@ -9,6 +9,9 @@ interface AuthContextType {
   login: (user: User) => void;
   logout: () => Promise<void>;
   refreshAuth: () => Promise<boolean>;
+  refreshUser: () => Promise<void>;
+  forceRefresh: () => Promise<boolean>;
+  updateUser: (userData: Partial<User>) => void;
   checkAuthStatus: () => Promise<boolean>;
   showLogin: boolean;
   setShowLogin: (show: boolean) => void;
@@ -28,29 +31,38 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
-const saveToSession = (key: string, value: string) => {
+const saveToStorage = (key: string, value: string, persistent: boolean = false) => {
   try {
-    sessionStorage.setItem(key, value);
+    if (persistent && isRememberMeEnabled()) {
+      localStorage.setItem(key, value);
+    } else {
+      sessionStorage.setItem(key, value);
+    }
   } catch (e) {
-    console.warn('Failed to save to sessionStorage', e);
+    console.warn('Failed to save to storage', e);
   }
 };
 
-const getFromSession = (key: string): string | null => {
+const getFromStorage = (key: string): string | null => {
   try {
-    return sessionStorage.getItem(key);
+    return localStorage.getItem(key) || sessionStorage.getItem(key);
   } catch (e) {
-    console.warn('Failed to get from sessionStorage', e);
+    console.warn('Failed to get from storage', e);
     return null;
   }
 };
 
-const removeFromSession = (key: string) => {
+const removeFromStorage = (key: string) => {
   try {
+    localStorage.removeItem(key);
     sessionStorage.removeItem(key);
   } catch (e) {
-    console.warn('Failed to remove from sessionStorage', e);
+    console.warn('Failed to remove from storage', e);
   }
+};
+
+const checkCookieAuth = (): boolean => {
+  return true;
 };
 
 export const AuthProvider = ({ children }: AuthProviderProps) => {
@@ -59,6 +71,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [lastAuthCheck, setLastAuthCheck] = useState<number>(0);
   const [showLogin, setShowLogin] = useState<boolean>(false);
   const authCheckTimeoutRef = useRef<number | null>(null);
+  const initializationComplete = useRef(false);
   
   const checkAuth = useCallback(async (): Promise<boolean> => {
     try {
@@ -71,30 +84,66 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       }, 10000);
       
       let userData: User | null = null;
+      let authFailed = false;
       
       try {
+        console.log('Checking authentication status...');
         userData = await getCurrentUser();
         window.clearTimeout(timeoutId);
+        console.log('Auth check result:', userData ? `User: ${userData.username}` : 'No user');
       } catch (e) {
         window.clearTimeout(timeoutId);
         console.error('Error fetching user data:', e);
+        
+        if (e instanceof Error && e.message.includes('401')) {
+          console.log('Received 401 - authentication failed');
+          authFailed = true;
+        } else {
+          console.warn('Auth check failed with non-401 error, keeping existing user state if available');
+          if (initializationComplete.current) {
+            console.log('Keeping existing user due to non-auth error');
+            setIsLoading(false);
+            return true;
+          }
+        }
       }
       
       if (userData) {
+        console.log('Setting authenticated user:', userData.username);
         setUser(userData);
-        saveToSession('neighborville_playerName', userData.username);
+        saveToStorage('neighborville_playerName', userData.username, isRememberMeEnabled());
         setLastAuthCheck(Date.now());
         setIsLoading(false);
+        initializationComplete.current = true;
         return true;
-      } else {
+      } else if (authFailed) {
+        console.log('Clearing user state due to auth failure');
         setUser(null);
         setIsLoading(false);
+        initializationComplete.current = true;
         return false;
+      } else {
+        if (initializationComplete.current) {
+          console.log('No user data and already initialized - clearing user state');
+          setUser(null);
+          setIsLoading(false);
+          return false;
+        } else {
+          console.log('No user data during initialization - keeping existing state');
+          setIsLoading(false);
+          return false;
+        }
       }
     } catch (error) {
       console.error('Error in checkAuth:', error);
+      if (initializationComplete.current) {
+        console.log('Keeping existing user due to general error');
+        setIsLoading(false);
+        return true;
+      }
       setUser(null);
       setIsLoading(false);
+      initializationComplete.current = true;
       return false;
     }
   }, []);
@@ -106,12 +155,26 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       setShowLogin(true);
     };
     
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        const timeSinceLastCheck = Date.now() - lastAuthCheck;
+        if (timeSinceLastCheck > 2 * 60 * 1000) {
+          console.log('Tab became visible after', Math.floor(timeSinceLastCheck / 1000), 'seconds, checking auth');
+          refreshAuth().catch(error => {
+            console.warn('Auth refresh failed on visibility change:', error);
+          });
+        }
+      }
+    };
+    
     window.addEventListener('auth:unauthorized', handleUnauthorized);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     
     return () => {
       window.removeEventListener('auth:unauthorized', handleUnauthorized);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, []);
+  }, [lastAuthCheck]);
   
   useEffect(() => {
     checkAuth();
@@ -121,20 +184,45 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         window.clearTimeout(authCheckTimeoutRef.current);
       }
     };
-  }, [checkAuth]);
+  }, []);
   
   const refreshAuth = useCallback(async (): Promise<boolean> => {
-    if (Date.now() - lastAuthCheck < 60000) {
-      return !!user;
+    if (Date.now() - lastAuthCheck < 30000) {
+      return true;
     }
     
+    try {
+      return await checkAuth();
+    } catch (error) {
+      console.warn('Auth refresh failed, keeping existing state:', error);
+      return false;
+    }
+  }, [checkAuth, lastAuthCheck]);
+
+  const forceRefresh = useCallback(async (): Promise<boolean> => {
+    console.log('Force refreshing user data...');
     return await checkAuth();
-  }, [checkAuth, lastAuthCheck, user]);
+  }, [checkAuth]);
+
+  const updateUser = useCallback((userData: Partial<User>) => {
+    setUser(currentUser => {
+      if (currentUser) {
+        const updatedUser = { ...currentUser, ...userData };
+        console.log('Updating user in context:', updatedUser);
+        return updatedUser;
+      }
+      return currentUser;
+    });
+  }, []);
 
   useEffect(() => {
-    const refreshInterval = setInterval(refreshAuth, 5 * 60 * 1000);
+    const refreshInterval = setInterval(() => {
+      if (Date.now() - lastAuthCheck > 5 * 60 * 1000) {
+        refreshAuth();
+      }
+    }, 5 * 60 * 1000);
     return () => clearInterval(refreshInterval);
-  }, [refreshAuth]);
+  }, [lastAuthCheck, refreshAuth]);
 
   const login = useCallback((newUser: User) => {
     if (!newUser || !newUser.id) {
@@ -147,7 +235,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     setShowLogin(false);
     
     if (newUser.username) {
-      saveToSession('neighborville_playerName', newUser.username);
+      saveToStorage('neighborville_playerName', newUser.username, isRememberMeEnabled());
     }
     
     setLastAuthCheck(Date.now());
@@ -161,8 +249,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
     
     setUser(null);
-    removeFromSession('neighborville_playerName');
-    removeFromSession('neighborville_auth_token');
+    removeFromStorage('neighborville_playerName');
+    removeFromStorage('neighborville_auth_token');
     document.cookie = 'neighborville_auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax';
     setShowLogin(true);
   }, []);
@@ -177,20 +265,37 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    try {
+      const userData = await getCurrentUser();
+      if (userData) {
+        setUser(userData);
+      } else {
+        setUser(null);
+      }
+    } catch (error) {
+      console.error('Error refreshing user:', error);
+      setUser(null);
+    }
+  }, []);
+
+  const value = {
+    user,
+    isLoading,
+    isAuthenticated: !!user,
+    login,
+    logout,
+    refreshAuth,
+    forceRefresh,
+    updateUser,
+    checkAuthStatus,
+    refreshUser,
+    showLogin,
+    setShowLogin
+  };
+
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isLoading,
-        isAuthenticated: !!user,
-        login,
-        logout,
-        refreshAuth,
-        checkAuthStatus,
-        showLogin,
-        setShowLogin
-      }}
-    >
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

@@ -26,7 +26,21 @@ const sessionSchema = new mongoose.Schema({
   clientInfo: {
     userAgent: { type: String },
     ip: { type: String },
-    device: { type: String }
+    device: { type: String },
+    browser: { type: String },
+    os: { type: String },
+    location: {
+      country: { type: String },
+      city: { type: String },
+      region: { type: String }
+    },
+    createdAt: { type: Date, default: Date.now }
+  },
+  riskScore: { type: Number, default: 0 },
+  flags: {
+    vpnDetected: { type: Boolean, default: false },
+    suspiciousLocation: { type: Boolean, default: false },
+    deviceMismatch: { type: Boolean, default: false }
   }
 });
 

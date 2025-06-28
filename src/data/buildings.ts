@@ -16,7 +16,8 @@ export const buildings: Building[] = [
     isOccupied: false,
     occupantIds: [],    unlocked: true,
     needsElectricity: true,
-    needsWater: true
+    needsWater: true,
+    type: 'residential'
   },
   {
     id: 'apartment',
@@ -33,7 +34,8 @@ export const buildings: Building[] = [
     occupantIds: [],
     unlocked: true,
     needsElectricity: true,
-    needsWater: true
+    needsWater: true,
+    type: 'residential'
   },
   {
     id: 'park',
@@ -218,7 +220,8 @@ export const buildings: Building[] = [
     unlocked: false,
     levelRequired: 6,
     needsElectricity: true,
-    needsWater: true
+    needsWater: true,
+    type: 'residential'
   },
   {
     id: 'sports_complex',

@@ -1,22 +1,39 @@
-import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { X, Store, ShoppingCart, TrendingUp, RefreshCw, Coins, Star, CheckCircle, Package, DollarSign } from "lucide-react";
-import type { Neighbor, Building, GameProgress } from "../../types/game";
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  X, ShoppingCart, Package, TrendingUp, Clock, Star, 
+  Coins, Users, Filter, Search, RefreshCw, AlertCircle,
+  Award, Zap, Shield, Heart, Home, Sparkles, Timer,
+  ChevronDown, ChevronUp, ExternalLink, Gift, Crown
+} from 'lucide-react';
+import type { GameProgress } from '../../types/game';
+import type { Neighbor } from '../../types/game';
 
 export type MarketItem = {
   id: string;
   name: string;
   description: string;
   price: number;
-  sellerType: 'resident' | 'system' | 'traveling_merchant';
+  sellerType: 'resident' | 'system' | 'traveling_merchant' | 'premium' | 'seasonal';
   sellerId?: string | number;
-  itemType: 'material' | 'service' | 'rare' | 'building_upgrade' | 'boost' | 'decoration';
+  itemType: 'material' | 'service' | 'rare' | 'building_upgrade' | 'boost' | 'decoration' | 'blueprint' | 'special';
   quantity: number;
   icon: string;
   availableUntil?: number;
   effect?: string;
   duration?: number;
-  rarity?: 'common' | 'uncommon' | 'rare' | 'legendary';
+  rarity?: 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
+  category?: 'resources' | 'buildings' | 'boosts' | 'decorations' | 'special';
+  requirements?: {
+    level?: number;
+    buildings?: string[];
+    achievements?: string[];
+  };
+  discount?: number;
+  trending?: boolean;
+  featured?: boolean;
+  limited?: boolean;
+  dailyDeal?: boolean;
 };
 
 type MarketplaceProps = {
@@ -27,7 +44,7 @@ type MarketplaceProps = {
   onPurchase: (item: MarketItem) => void;
   onSellItem: (itemId: string, price: number) => void;
   onUpdateGameState: (updates: Partial<GameProgress>) => void;
-  grid: (Building | null)[];
+  grid: (any | null)[];
   playerLevel: number;
   gameProgress: GameProgress;
 };
@@ -44,693 +61,691 @@ export default function Marketplace({
   playerLevel,
   gameProgress
 }: MarketplaceProps) {
-  const [activeTab, setActiveTab] = useState<'buy' | 'sell' | 'history' | 'inventory'>('buy');
+  const [activeTab, setActiveTab] = useState<'featured' | 'browse' | 'sell' | 'history'>('featured');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<'price' | 'rarity' | 'popularity' | 'newest'>('popularity');
   const [marketItems, setMarketItems] = useState<MarketItem[]>([]);
-  const [refreshCost, setRefreshCost] = useState(50);
-  const [lastRefresh, setLastRefresh] = useState(day);
-  const [purchaseHistory, setPurchaseHistory] = useState<Array<{item: MarketItem, date: number, type: 'bought' | 'sold'}>>([]);
   const [inventory, setInventory] = useState<MarketItem[]>([]);
-  const [travelingMerchant, setTravelingMerchant] = useState<{
-    isPresent: boolean;
-    leavesOnDay: number;
-    items: MarketItem[];
-  } | null>(null);
-  const [itemPrices, setItemPrices] = useState<Record<string, number>>({});
+  const [purchaseHistory, setPurchaseHistory] = useState<any[]>([]);
+  const [refreshCooldown, setRefreshCooldown] = useState(0);
+  const [showFilters, setShowFilters] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<MarketItem | null>(null);
 
   useEffect(() => {
     generateMarketItems();
     loadInventory();
-    checkTravelingMerchant();
-    
-    const sellableItems = [
-      { id: 'extra_materials', name: 'Extra Materials', icon: '📦', basePrice: 50 },
-      { id: 'old_furniture', name: 'Old Furniture', icon: '🪑', basePrice: 80 },
-      { id: 'vintage_decor', name: 'Vintage Decor', icon: '🏺', basePrice: 120 },
-      { id: 'rare_artifact', name: 'Rare Artifact', icon: '💎', basePrice: 200 },
-      { id: 'building_plans', name: 'Extra Building Plans', icon: '📋', basePrice: 300 },
-      { id: 'neighborhood_photos', name: 'Neighborhood Photos', icon: '📸', basePrice: 150 }
-    ];
-    
-    const initialPrices: Record<string, number> = {};
-    sellableItems.forEach(item => {
-      initialPrices[item.id] = item.basePrice;
-    });
-    setItemPrices(initialPrices);
-  }, [day]);
+    loadPurchaseHistory();
+  }, [day, playerLevel]);
+
+  useEffect(() => {
+    if (refreshCooldown > 0) {
+      const timer = setTimeout(() => setRefreshCooldown(refreshCooldown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [refreshCooldown]);
 
   const loadInventory = () => {
-    const savedInventory = localStorage.getItem(`neighborville_inventory_${gameProgress.playerName}`);
+    const savedInventory = localStorage.getItem('neighborville_inventory');
     if (savedInventory) {
       setInventory(JSON.parse(savedInventory));
     }
   };
 
   const saveInventory = (newInventory: MarketItem[]) => {
+    localStorage.setItem('neighborville_inventory', JSON.stringify(newInventory));
     setInventory(newInventory);
-    localStorage.setItem(`neighborville_inventory_${gameProgress.playerName}`, JSON.stringify(newInventory));
   };
 
-  const updateItemPrice = (itemId: string, price: number) => {
-    setItemPrices(prev => ({
-      ...prev,
-      [itemId]: Math.max(0, price)
-    }));
-  };
-
-  const checkTravelingMerchant = () => {
-    if (!travelingMerchant && Math.random() < 0.15) {
-      const leavesOnDay = day + 3;
-      const merchantItems = generateTravelingMerchantItems();
-      setTravelingMerchant({
-        isPresent: true,
-        leavesOnDay,
-        items: merchantItems
-      });
-    } else if (travelingMerchant && day > travelingMerchant.leavesOnDay) {
-      setTravelingMerchant(null);
+  const loadPurchaseHistory = () => {
+    const savedHistory = localStorage.getItem('neighborville_market_history');
+    if (savedHistory) {
+      setPurchaseHistory(JSON.parse(savedHistory));
     }
-  };
-
-  const generateTravelingMerchantItems = (): MarketItem[] => {
-    const items: MarketItem[] = [
-      {
-        id: 'ancient_blueprint',
-        name: 'Ancient Blueprint',
-        description: 'Mysterious building plans from ages past',
-        price: 1500,
-        sellerType: 'traveling_merchant',
-        itemType: 'rare',
-        quantity: 1,
-        icon: '📜',
-        effect: 'Unlocks special building: Mystical Garden',
-        rarity: 'legendary'
-      },
-      {
-        id: 'time_crystal',
-        name: 'Time Crystal',
-        description: 'Skip to the next day instantly',
-        price: 800,
-        sellerType: 'traveling_merchant',
-        itemType: 'service',
-        quantity: 1,
-        icon: '💎',
-        effect: 'Jump forward one day',
-        rarity: 'rare'
-      },
-      {
-        id: 'golden_shovel',
-        name: 'Golden Shovel',
-        description: 'Building costs reduced for 14 days',
-        price: 1200,
-        sellerType: 'traveling_merchant',
-        itemType: 'boost',
-        quantity: 1,
-        icon: '🪙',
-        effect: '-20% building costs',
-        duration: 14,
-        rarity: 'rare'
-      }
-    ];
-
-    return items.filter(() => Math.random() < 0.6);
   };
 
   const generateMarketItems = () => {
-    const items: MarketItem[] = [];
-    
-    const systemItems: MarketItem[] = [
+    const baseItems: MarketItem[] = [
       {
-        id: 'energy_booster',
-        name: 'Energy Booster',
-        description: 'Reduce energy consumption for 3 days',
-        price: 200,
-        sellerType: 'system',
-        itemType: 'service',
-        quantity: 1,
-        icon: '⚡',
-        effect: '-25% energy consumption',
-        duration: 3,
-        rarity: 'common'
-      },
-      {
-        id: 'construction_materials',
-        name: 'Construction Materials',
-        description: 'Reduce building costs by 10% for 5 buildings',
-        price: 300,
-        sellerType: 'system',
-        itemType: 'material',
-        quantity: 3,
-        icon: '🔨',
-        effect: '-10% cost for next 5 buildings',
-        rarity: 'common'
-      },
-      {
-        id: 'xp_multiplier',
-        name: 'Experience Booster',
-        description: 'Double XP gains for 24 hours',
-        price: 500,
-        sellerType: 'system',
+        id: 'golden_hammer',
+        name: 'Golden Hammer',
+        description: 'Reduces all building construction time by 50% for 7 days',
+        price: 2500,
+        sellerType: 'premium',
         itemType: 'boost',
         quantity: 1,
-        icon: '📈',
-        effect: '2x XP gains',
-        duration: 1,
-        rarity: 'uncommon'
+        icon: '🔨',
+        rarity: 'legendary',
+        category: 'boosts',
+        effect: 'construction_speed_boost',
+        duration: 7,
+        featured: true,
+        requirements: { level: 10 }
+      },
+      {
+        id: 'rainbow_fountain',
+        name: 'Rainbow Fountain',
+        description: 'Beautiful centerpiece that boosts happiness of all residents by +15',
+        price: 5000,
+        sellerType: 'premium',
+        itemType: 'decoration',
+        quantity: 1,
+        icon: '⛲',
+        rarity: 'epic',
+        category: 'decorations',
+        effect: 'happiness_boost',
+        featured: true,
+        requirements: { level: 15 }
+      },
+      
+      {
+        id: 'wood_bundle_xl',
+        name: 'Premium Wood Bundle',
+        description: 'High-quality wood perfect for construction projects',
+        price: 800,
+        sellerType: 'system',
+        itemType: 'material',
+        quantity: 50,
+        icon: '🪵',
+        rarity: 'uncommon',
+        category: 'resources',
+        dailyDeal: true,
+        discount: 25
+      },
+      {
+        id: 'stone_collection',
+        name: 'Architect\'s Stone Collection',
+        description: 'Premium stones for your finest buildings',
+        price: 1200,
+        sellerType: 'system',
+        itemType: 'material',
+        quantity: 35,
+        icon: '🪨',
+        rarity: 'rare',
+        category: 'resources',
+        dailyDeal: true,
+        discount: 30
+      },
+
+      {
+        id: 'solar_panel_kit',
+        name: 'Solar Panel Upgrade Kit',
+        description: 'Upgrade any building to generate clean energy and reduce bills',
+        price: 3000,
+        sellerType: 'system',
+        itemType: 'building_upgrade',
+        quantity: 1,
+        icon: '☀️',
+        rarity: 'epic',
+        category: 'buildings',
+        trending: true,
+        requirements: { level: 12 }
+      },
+      {
+        id: 'community_garden_blueprint',
+        name: 'Community Garden Blueprint',
+        description: 'Build a beautiful garden that generates food and happiness',
+        price: 1800,
+        sellerType: 'system',
+        itemType: 'blueprint',
+        quantity: 1,
+        icon: '🌻',
+        rarity: 'rare',
+        category: 'buildings',
+        trending: true,
+        requirements: { level: 8 }
+      },
+
+      ...neighbors.slice(0, 3).map((neighbor, index) => ({
+        id: `neighbor_item_${neighbor.id}_${day}`,
+        name: `${neighbor.name}'s Special Craft`,
+        description: `A unique item crafted by ${neighbor.name} with love`,
+        price: 300 + (index * 150),
+        sellerType: 'resident' as const,
+        sellerId: neighbor.id,
+        itemType: 'decoration' as const,
+        quantity: 1,
+        icon: ['🎨', '🧸', '🏺', '🕯️', '🖼️'][index % 5],
+        rarity: 'uncommon' as const,
+        category: 'decorations' as const
+      })),
+
+      {
+        id: 'winter_wonderland_pack',
+        name: 'Winter Wonderland Pack',
+        description: 'Transform your city with beautiful winter decorations',
+        price: 4500,
+        sellerType: 'seasonal',
+        itemType: 'special',
+        quantity: 1,
+        icon: '❄️',
+        rarity: 'legendary',
+        category: 'special',
+        limited: true,
+        availableUntil: Date.now() + (7 * 24 * 60 * 60 * 1000)
+      },
+
+      {
+        id: 'iron_ore_small',
+        name: 'Iron Ore',
+        description: 'Essential material for advanced construction',
+        price: 150,
+        sellerType: 'system',
+        itemType: 'material',
+        quantity: 10,
+        icon: '⛏️',
+        rarity: 'common',
+        category: 'resources'
+      },
+      {
+        id: 'energy_cell',
+        name: 'Energy Cell',
+        description: 'Provides instant energy to power your buildings',
+        price: 400,
+        sellerType: 'system',
+        itemType: 'boost',
+        quantity: 5,
+        icon: '🔋',
+        rarity: 'uncommon',
+        category: 'boosts'
       }
     ];
-    
-    items.push(...systemItems);
-    
-    const activeResidents = neighbors.filter(n => n.hasHome);
-    activeResidents.forEach(resident => {
-      if (Math.random() < 0.4) {
-        const priceMultiplier = 0.7 + Math.random() * 0.6;
-        const residentItems: MarketItem[] = [
-          {
-            id: `${resident.id}_handmade_craft`,
-            name: 'Handmade Craft',
-            description: `Unique decoration from ${resident.name}`,
-            price: Math.floor(80 * priceMultiplier),
-            sellerType: 'resident',
-            sellerId: resident.id,
-            itemType: 'decoration',
-            quantity: 1,
-            icon: '🎁',
-            availableUntil: day + 3,
-            effect: 'Beautiful decoration for your neighborhood',
-            rarity: 'common'
-          },
-          {
-            id: `${resident.id}_home_services`,
-            name: 'Home Services',
-            description: `${resident.name} offers cleaning and maintenance`,
-            price: Math.floor(120 * priceMultiplier),
-            sellerType: 'resident',
-            sellerId: resident.id,
-            itemType: 'service',
-            quantity: 1,
-            icon: '🏠',
-            availableUntil: day + 2,
-            effect: 'Repairs one building to 100% efficiency',
-            rarity: 'common'
-          },
-          {
-            id: `${resident.id}_tutoring`,
-            name: 'Tutoring Services',
-            description: `Learn from ${resident.name}'s expertise`,
-            price: Math.floor(200 * priceMultiplier),
-            sellerType: 'resident',
-            sellerId: resident.id,
-            itemType: 'service',
-            quantity: 1,
-            icon: '👨‍🏫',
-            availableUntil: day + 1,
-            effect: '+50% XP for the next 24 hours',
-            duration: 1,
-            rarity: 'uncommon'
-          }
-        ];
-        
-        const randomItem = residentItems[Math.floor(Math.random() * residentItems.length)];
-        items.push(randomItem);
+
+    const availableItems = baseItems.filter(item => {
+      if (item.requirements?.level && playerLevel < item.requirements.level) {
+        return false;
       }
+      return true;
     });
-    
-    if (Math.random() < 0.15) {
-      const rareItems: MarketItem[] = [
-        {
-          id: 'golden_blueprint',
-          name: 'Golden Blueprint',
-          description: 'Unlocks a special building variant',
-          price: 1000,
-          sellerType: 'system',
-          itemType: 'rare',
-          quantity: 1,
-          icon: '📜',
-          availableUntil: day + 1,
-          effect: 'Unlock premium building variant',
-          rarity: 'rare'
-        },
-        {
-          id: 'land_deed',
-          name: 'Land Expansion Deed',
-          description: 'Expand your plot at 50% discount',
-          price: 750,
-          sellerType: 'system',
-          itemType: 'rare',
-          quantity: 1,
-          icon: '📄',
-          availableUntil: day + 2,
-          effect: 'Next plot expansion costs 50% less',
-          rarity: 'rare'
-        }
-      ];
-      
-      items.push(...rareItems);
-    }
-    
-    if (travelingMerchant?.isPresent) {
-      items.push(...travelingMerchant.items);
-    }
-    
-    setMarketItems(items);
+
+    setMarketItems(availableItems);
   };
-  
+
   const handleRefreshMarket = () => {
-    if (coins >= refreshCost) {
-      onUpdateGameState({ coins: coins - refreshCost });
-      generateMarketItems();
-      setLastRefresh(day);
-      setRefreshCost(prev => Math.floor(prev * 1.2));
-    }
+    if (refreshCooldown > 0) return;
+    
+    generateMarketItems();
+    setRefreshCooldown(30);
   };
-  
+
   const getItemRarityColor = (rarity?: string) => {
     switch (rarity) {
-      case 'legendary': return 'border-yellow-500 bg-yellow-50 shadow-yellow-500/20';
-      case 'rare': return 'border-purple-500 bg-purple-50 shadow-purple-500/20';
-      case 'uncommon': return 'border-blue-500 bg-blue-50 shadow-blue-500/20';
-      case 'common':
-      default: return 'border-gray-300 bg-gray-50';
+      case 'common': return 'text-gray-600 bg-gray-100';
+      case 'uncommon': return 'text-green-600 bg-green-100';
+      case 'rare': return 'text-blue-600 bg-blue-100';
+      case 'epic': return 'text-purple-600 bg-purple-100';
+      case 'legendary': return 'text-yellow-600 bg-yellow-100';
+      default: return 'text-gray-600 bg-gray-100';
+    }
+  };
+
+  const getItemTypeIcon = (type: string) => {
+    switch (type) {
+      case 'material': return <Package className="w-4 h-4" />;
+      case 'boost': return <Zap className="w-4 h-4" />;
+      case 'decoration': return <Sparkles className="w-4 h-4" />;
+      case 'building_upgrade': return <Home className="w-4 h-4" />;
+      case 'blueprint': return <Award className="w-4 h-4" />;
+      default: return <Gift className="w-4 h-4" />;
     }
   };
 
   const handlePurchaseItem = (item: MarketItem) => {
-    if (coins >= item.price) {
-      onPurchase(item);
-      
-      const newInventory = [...inventory];
-      const existingItem = newInventory.find(i => i.id === item.id);
-      
-      if (existingItem) {
-        existingItem.quantity += item.quantity;
-      } else {
-        newInventory.push({ ...item, quantity: item.quantity });
-      }
-      
-      saveInventory(newInventory);
-      
-      const history = [...purchaseHistory, { item, date: Date.now(), type: 'bought' as const }];
-      setPurchaseHistory(history);
-      
-      applyItemEffect(item);
+    if (coins < item.price) {
+      return;
     }
+
+    const purchase = {
+      id: Date.now().toString(),
+      item: item,
+      purchaseDate: new Date().toISOString(),
+      price: item.price
+    };
+    
+    const newHistory = [purchase, ...purchaseHistory].slice(0, 50);
+    localStorage.setItem('neighborville_market_history', JSON.stringify(newHistory));
+    setPurchaseHistory(newHistory);
+
+    applyItemEffect(item);
+    
+    onPurchase(item);
   };
 
   const applyItemEffect = (item: MarketItem) => {
-    const updates: Partial<GameProgress> = {};
-    
-    switch (item.id) {
-      case 'time_crystal':
-        updates.day = gameProgress.day + 1;
-        updates.gameTime = 8;
+    switch (item.effect) {
+      case 'construction_speed_boost':
         break;
-        
-      case 'xp_multiplier':
-        updates.experience = gameProgress.experience + 100;
+      case 'happiness_boost':
         break;
-        
-      case 'energy_booster':
-        updates.totalEnergyUsage = Math.max(0, gameProgress.totalEnergyUsage * 0.75);
-        break;
-    }
-    
-    if (Object.keys(updates).length > 0) {
-      onUpdateGameState(updates);
     }
   };
-  
-  const renderBuyTab = () => (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h3 className="text-lg font-medium text-gray-800">Available Items</h3>
+
+  const filteredItems = marketItems.filter(item => {
+    if (searchTerm && !item.name.toLowerCase().includes(searchTerm.toLowerCase())) {
+      return false;
+    }
+    if (selectedCategory !== 'all' && item.category !== selectedCategory) {
+      return false;
+    }
+    return true;
+  }).sort((a, b) => {
+    switch (sortBy) {
+      case 'price':
+        return a.price - b.price;
+      case 'rarity':
+        const rarityOrder = { common: 1, uncommon: 2, rare: 3, epic: 4, legendary: 5 };
+        return (rarityOrder[b.rarity || 'common'] || 1) - (rarityOrder[a.rarity || 'common'] || 1);
+      case 'newest':
+        return b.id.localeCompare(a.id);
+      default:
+        return (b.featured ? 1 : 0) - (a.featured ? 1 : 0);
+    }
+  });
+
+  const featuredItems = marketItems.filter(item => item.featured || item.dailyDeal || item.trending);
+
+  const renderItemCard = (item: MarketItem, compact = false) => (
+    <motion.div
+      key={item.id}
+      layout
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.9 }}
+      whileHover={{ scale: 1.02, y: -2 }}
+      className={`bg-white rounded-xl shadow-lg border-2 border-transparent hover:border-blue-200 transition-all duration-200 overflow-hidden ${compact ? 'p-3' : 'p-4'} cursor-pointer`}
+      onClick={() => setSelectedItem(item)}
+    >
+      <div className="flex justify-between items-start mb-3">
+        <div className="flex flex-wrap gap-1">
+          {item.featured && (
+            <span className="px-2 py-1 bg-gradient-to-r from-yellow-400 to-orange-400 text-white text-xs font-bold rounded-full flex items-center gap-1">
+              <Crown className="w-3 h-3" />
+              FEATURED
+            </span>
+          )}
+          {item.dailyDeal && (
+            <span className="px-2 py-1 bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs font-bold rounded-full flex items-center gap-1">
+              <Timer className="w-3 h-3" />
+              DAILY DEAL
+            </span>
+          )}
+          {item.trending && (
+            <span className="px-2 py-1 bg-gradient-to-r from-green-500 to-emerald-500 text-white text-xs font-bold rounded-full flex items-center gap-1">
+              <TrendingUp className="w-3 h-3" />
+              TRENDING
+            </span>
+          )}
+          {item.limited && (
+            <span className="px-2 py-1 bg-gradient-to-r from-purple-500 to-indigo-500 text-white text-xs font-bold rounded-full">
+              LIMITED
+            </span>
+          )}
+        </div>
+        <div className={`px-2 py-1 rounded-full text-xs font-medium ${getItemRarityColor(item.rarity)}`}>
+          {item.rarity?.toUpperCase()}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3 mb-3">
+        <div className="text-3xl">{item.icon}</div>
+        <div className="flex-1">
+          <h3 className={`font-bold text-gray-800 ${compact ? 'text-sm' : 'text-base'}`}>
+            {item.name}
+          </h3>
+          <div className="flex items-center gap-2 mt-1">
+            {getItemTypeIcon(item.itemType)}
+            <span className="text-xs text-gray-500 capitalize">{item.itemType.replace('_', ' ')}</span>
+            {item.quantity > 1 && (
+              <span className="text-xs bg-gray-100 px-2 py-1 rounded-full">
+                x{item.quantity}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <p className={`text-gray-600 mb-3 ${compact ? 'text-xs' : 'text-sm'}`}>
+        {item.description}
+      </p>
+
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
+            <Coins className="w-4 h-4 text-yellow-500" />
+            <span className={`font-bold text-gray-800 ${item.discount ? 'line-through text-gray-400' : ''}`}>
+              {item.price}
+            </span>
+            {item.discount && (
+              <span className="font-bold text-green-600">
+                {Math.floor(item.price * (1 - item.discount / 100))}
+              </span>
+            )}
+          </div>
+          {item.discount && (
+            <span className="bg-red-100 text-red-600 px-2 py-1 rounded text-xs font-bold">
+              -{item.discount}%
+            </span>
+          )}
+        </div>
+        
         <button
-          onClick={handleRefreshMarket}
-          disabled={coins < refreshCost}
-          className={`flex items-center gap-2 px-3 py-1 rounded ${
-            coins >= refreshCost
-              ? 'bg-blue-500 text-white hover:bg-blue-600'
-              : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+          onClick={(e) => {
+            e.stopPropagation();
+            handlePurchaseItem(item);
+          }}
+          disabled={coins < (item.discount ? Math.floor(item.price * (1 - item.discount / 100)) : item.price)}
+          className={`px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 ${
+            coins >= (item.discount ? Math.floor(item.price * (1 - item.discount / 100)) : item.price)
+              ? 'bg-blue-500 hover:bg-blue-600 text-white hover:scale-105'
+              : 'bg-gray-200 text-gray-400 cursor-not-allowed'
           }`}
         >
-          <RefreshCw size={16} />
-          Refresh ({refreshCost}c)
+          {coins >= (item.discount ? Math.floor(item.price * (1 - item.discount / 100)) : item.price) ? 'Buy Now' : 'Not Enough Coins'}
         </button>
       </div>
 
-      {travelingMerchant?.isPresent && (
-        <div className="bg-gradient-to-r from-purple-100 to-pink-100 border border-purple-300 rounded-lg p-4 mb-4">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-2xl">🎪</span>
-            <h4 className="font-medium text-purple-800">Traveling Merchant</h4>
-            <span className="ml-auto text-sm text-purple-600">
-              Leaves in {travelingMerchant.leavesOnDay - day} day{travelingMerchant.leavesOnDay - day !== 1 ? 's' : ''}
+      <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+        <div className="flex items-center gap-1">
+          <Users className="w-3 h-3" />
+          <span>
+            {item.sellerType === 'resident' && neighbors.find(n => n.id === item.sellerId)
+              ? neighbors.find(n => n.id === item.sellerId)!.name
+              : item.sellerType === 'system' 
+                ? 'NeighborVille Store'
+                : item.sellerType === 'premium'
+                  ? 'Premium Shop'
+                  : 'Special Vendor'
+            }
+          </span>
+        </div>
+        {item.availableUntil && (
+          <div className="flex items-center gap-1">
+            <Clock className="w-3 h-3" />
+            <span>
+              {Math.ceil((item.availableUntil - Date.now()) / (1000 * 60 * 60 * 24))} days left
             </span>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {travelingMerchant.items.map(item => renderItemCard(item))}
-          </div>
-        </div>
-      )}
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {marketItems.filter(item => item.sellerType !== 'traveling_merchant').map(renderItemCard)}
+        )}
       </div>
-    </div>
+    </motion.div>
   );
 
-  const renderItemCard = (item: MarketItem) => {
-    const seller = item.sellerId ? neighbors.find(n => n.id === item.sellerId) : null;
-    const canAfford = coins >= item.price;
-    const isExpired = item.availableUntil && day > item.availableUntil;
-    
-    return (
-      <motion.div
-        key={item.id}
-        whileHover={{ scale: 1.02 }}
-        className={`p-4 rounded-lg border shadow-md ${getItemRarityColor(item.rarity)} ${
-          isExpired ? 'opacity-60' : ''
-        }`}
-      >
-        <div className="flex justify-between items-start mb-2">
-          <div className="flex items-center gap-3">
-            <span className="text-2xl">{item.icon}</span>
-            <div>
-              <div className="flex items-center gap-2">
-                <h4 className="font-medium text-gray-800">{item.name}</h4>
-                {item.rarity && (
-                  <span className={`text-xs px-2 py-0.5 rounded ${
-                    item.rarity === 'legendary' ? 'bg-yellow-200 text-yellow-800' :
-                    item.rarity === 'rare' ? 'bg-purple-200 text-purple-800' :
-                    item.rarity === 'uncommon' ? 'bg-blue-200 text-blue-800' :
-                    'bg-gray-200 text-gray-600'
-                  }`}>
-                    {item.rarity}
-                  </span>
-                )}
-              </div>
-              <p className="text-sm text-gray-600">{item.description}</p>
-            </div>
-          </div>
-          <div className="text-right">
-            <div className="text-lg font-bold text-gray-900 flex items-center gap-1">
-              <Coins size={16} className="text-yellow-600" />
-              {item.price}
-            </div>
-            <div className="text-xs text-gray-500">x{item.quantity}</div>
-          </div>
-        </div>
-        
-        {item.effect && (
-          <div className="text-sm text-emerald-600 mb-2">
-            Effect: {item.effect}
-            {item.duration && <span className="text-gray-500"> (for {item.duration} day{item.duration !== 1 ? 's' : ''})</span>}
-          </div>
-        )}
-        
-        {seller && (
-          <div className="text-xs text-gray-500 mb-2">
-            Sold by {seller.name} {seller.avatar}
-          </div>
-        )}
-        
-        {item.availableUntil && (
-          <div className={`text-xs mb-2 ${
-            isExpired ? 'text-red-600' : 'text-orange-600'
-          }`}>
-            {isExpired ? 'Expired' : `Available for ${item.availableUntil - day} more day(s)`}
-          </div>
-        )}
-        
-        <button
-          onClick={() => canAfford && !isExpired && handlePurchaseItem(item)}
-          disabled={!canAfford || isExpired}
-          className={`w-full py-2 px-4 rounded text-sm flex items-center justify-center gap-2 ${
-            canAfford && !isExpired
-              ? 'bg-emerald-500 text-white hover:bg-emerald-600'
-              : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-          }`}
-        >
-          {isExpired ? (
-            <>Expired</>
-          ) : canAfford ? (
-            <>
-              <ShoppingCart size={14} />
-              Purchase
-            </>
-          ) : (
-            'Insufficient Funds'
-          )}
-        </button>
-      </motion.div>
-    );
-  };
-  
-  const renderSellTab = () => {
-    const inventoryItems = inventory.filter(item => item.quantity > 0);
-    
-    return (
-      <div className="space-y-8">
-        <div>
-          <h3 className="text-lg font-medium text-gray-800 mb-4">Sell Items from Inventory</h3>
-          {inventoryItems.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {inventoryItems.map(item => (
-                <div key={item.id} className="p-3 border border-gray-300 rounded-lg bg-white">
-                  <div className="flex items-center gap-3 mb-2">
-                    <span className="text-xl">{item.icon}</span>
-                    <div className="flex-1">
-                      <h4 className="font-medium text-gray-800">{item.name}</h4>
-                      <p className="text-xs text-gray-500">Quantity: {item.quantity}</p>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-sm font-medium">{Math.floor(item.price * 0.7)} coins</div>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => sellInventoryItem(item)}
-                    className="w-full py-1 px-3 bg-green-500 text-white rounded text-sm hover:bg-green-600"
-                  >
-                    Sell
-                  </button>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="p-4 bg-gray-50 rounded-lg text-center text-gray-500">
-              Your inventory is empty
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  const sellInventoryItem = (item: MarketItem) => {
-    const sellPrice = Math.floor(item.price * 0.7);
-    const newInventory = inventory.map(invItem => 
-      invItem.id === item.id 
-        ? { ...invItem, quantity: invItem.quantity - 1 }
-        : invItem
-    ).filter(invItem => invItem.quantity > 0);
-    
-    saveInventory(newInventory);
-    onUpdateGameState({ coins: coins + sellPrice });
-    
-    const history = [...purchaseHistory, { 
-      item: { ...item, price: sellPrice }, 
-      date: Date.now(), 
-      type: 'sold' as const 
-    }];
-    setPurchaseHistory(history);
-  };
-
-  const handleSellCustomItem = (itemId: string, price: number) => {
-    onSellItem(itemId, price);
-    const sellPrice = Math.floor(price * 0.9);
-    onUpdateGameState({ coins: coins + sellPrice });
-  };
-  
-  const renderHistoryTab = () => (
-    <div className="space-y-4">
-      <h3 className="text-lg font-medium text-gray-800">Transaction History</h3>
-      {purchaseHistory.length > 0 ? (
-        <div className="space-y-2">
-          {purchaseHistory.slice().reverse().map((transaction, index) => (
-            <div key={index} className="p-3 bg-gray-50 rounded-lg flex justify-between items-center">
-              <div className="flex items-center gap-3">
-                <span className="text-xl">{transaction.item.icon}</span>
-                <div>
-                  <div className="font-medium text-gray-700">{transaction.item.name}</div>
-                  <div className="text-sm text-gray-500">
-                    {new Date(transaction.date).toLocaleDateString()}
-                  </div>
-                </div>
-              </div>
-              <div className={`text-right ${
-                transaction.type === 'bought' ? 'text-red-600' : 'text-green-600'
-              }`}>
-                <div className="font-medium">
-                  {transaction.type === 'bought' ? '-' : '+'}{transaction.item.price} coins
-                </div>
-                <div className="text-xs text-gray-500">{transaction.type}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="p-4 bg-gray-50 rounded-lg text-center text-gray-500">
-          No transaction history yet
-        </div>
-      )}
-    </div>
-  );
-  
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ backdropFilter: "blur(8px)", backgroundColor: "rgba(0,0,0,0.3)" }}
-      onClick={onClose}
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
     >
       <motion.div
-        initial={{ scale: 0.9, opacity: 0, y: 20 }}
-        animate={{ scale: 1, opacity: 1, y: 0 }}
-        exit={{ scale: 0.9, opacity: 0, y: 20 }}
-        transition={{ type: "spring", damping: 20 }}
-        className="bg-white rounded-xl shadow-xl max-w-6xl w-full max-h-[90vh] overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.9, opacity: 0 }}
+        className="bg-gradient-to-br from-blue-50 to-indigo-100 rounded-2xl shadow-2xl w-full max-w-7xl h-[90vh] overflow-hidden"
       >
-        <div className="p-4 bg-gradient-to-r from-orange-500 to-amber-600 text-white flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <Store size={24} />
-            <h2 className="text-lg font-medium lowercase">marketplace</h2>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 bg-white/20 px-3 py-1 rounded">
-              <Coins size={16} />
-              <span>{coins} coins</span>
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+                <ShoppingCart className="w-6 h-6" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold">NeighborVille Marketplace</h1>
+                <p className="text-blue-100">Discover amazing items for your city</p>
+              </div>
             </div>
-            <button 
-              onClick={onClose}
-              className="text-white/80 hover:text-white transition-colors"
-            >
-              <X size={20} />
-            </button>
-          </div>
-        </div>
-        
-        <div className="border-b border-gray-200 bg-gray-50">
-          <nav className="flex">
-            {[
-              { id: 'buy', icon: ShoppingCart, label: 'Buy' },
-              { id: 'sell', icon: DollarSign, label: 'Sell' },
-              { id: 'inventory', icon: Package, label: 'Inventory' },
-              { id: 'history', icon: TrendingUp, label: 'History' }
-            ].map(({ id, icon: Icon, label }) => (
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 bg-white/20 rounded-lg px-3 py-2">
+                <Coins className="w-5 h-5 text-yellow-300" />
+                <span className="font-bold text-lg">{coins.toLocaleString()}</span>
+              </div>
               <button
-                key={id}
-                onClick={() => setActiveTab(id as typeof activeTab)}
-                className={`flex items-center gap-2 px-6 py-3 transition-colors ${
-                  activeTab === id
-                    ? 'border-b-2 border-orange-500 text-orange-600 bg-white'
-                    : 'text-gray-600 hover:bg-gray-100'
+                onClick={onClose}
+                className="w-10 h-10 bg-white/20 hover:bg-white/30 rounded-lg flex items-center justify-center transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+
+          <div className="flex gap-2 mt-6">
+            {[
+              { id: 'featured', label: 'Featured', icon: Star },
+              { id: 'browse', label: 'Browse All', icon: Search },
+              { id: 'sell', label: 'Sell Items', icon: Package },
+              { id: 'history', label: 'Purchase History', icon: Clock }
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                  activeTab === tab.id
+                    ? 'bg-white text-blue-600 shadow-lg'
+                    : 'bg-white/20 text-white hover:bg-white/30'
                 }`}
               >
-                <Icon size={16} />
-                <span>{label}</span>
+                <tab.icon className="w-4 h-4" />
+                {tab.label}
               </button>
             ))}
-          </nav>
+          </div>
         </div>
-        
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeTab}
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.2 }}
-            >
-              {activeTab === 'buy' && renderBuyTab()}
-              {activeTab === 'sell' && renderSellTab()}
-              {activeTab === 'inventory' && renderInventoryTab()}
-              {activeTab === 'history' && renderHistoryTab()}
-            </motion.div>
-          </AnimatePresence>
-        </div>
-      </motion.div>
-    </motion.div>
-  );
 
-  function renderInventoryTab() {
-    return (
-      <div className="space-y-4">
-        <h3 className="text-lg font-medium text-gray-800">Your Inventory</h3>
-        {inventory.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {inventory.map(item => (
-              <div key={item.id} className={`p-4 rounded-lg border ${getItemRarityColor(item.rarity)}`}>
-                <div className="flex items-center gap-3 mb-2">
-                  <span className="text-xl">{item.icon}</span>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <h4 className="font-medium text-gray-800">{item.name}</h4>
-                      {item.rarity && (
-                        <span className={`text-xs px-2 py-0.5 rounded ${
-                          item.rarity === 'legendary' ? 'bg-yellow-200 text-yellow-800' :
-                          item.rarity === 'rare' ? 'bg-purple-200 text-purple-800' :
-                          item.rarity === 'uncommon' ? 'bg-blue-200 text-blue-800' :
-                          'bg-gray-200 text-gray-600'
-                        }`}>
-                          {item.rarity}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm text-gray-600">x{item.quantity}</p>
-                  </div>
-                </div>
-                {item.effect && (
-                  <p className="text-sm text-emerald-600 mb-2">{item.effect}</p>
-                )}
+        <div className="p-6 h-full overflow-y-auto">
+          {activeTab === 'featured' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-bold text-gray-800">Featured Items</h2>
                 <button
-                  onClick={() => useInventoryItem(item)}
-                  disabled={item.itemType !== 'service' && item.itemType !== 'boost'}
-                  className={`w-full py-1 px-3 rounded text-sm ${
-                    item.itemType === 'service' || item.itemType === 'boost'
-                      ? 'bg-blue-500 text-white hover:bg-blue-600'
-                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  onClick={handleRefreshMarket}
+                  disabled={refreshCooldown > 0}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                    refreshCooldown > 0
+                      ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                      : 'bg-blue-500 hover:bg-blue-600 text-white hover:scale-105'
                   }`}
                 >
-                  {item.itemType === 'service' || item.itemType === 'boost' ? 'Use' : 'Decorative'}
+                  <RefreshCw className={`w-4 h-4 ${refreshCooldown > 0 ? 'animate-spin' : ''}`} />
+                  {refreshCooldown > 0 ? `Refresh in ${refreshCooldown}s` : 'Refresh Market'}
                 </button>
               </div>
-            ))}
-          </div>
-        ) : (
-          <div className="p-8 bg-gray-50 rounded-lg text-center text-gray-500">
-            <Package size={48} className="mx-auto mb-2 text-gray-300" />
-            Your inventory is empty
-          </div>
-        )}
-      </div>
-    );
-  }
 
-  function useInventoryItem(item: MarketItem) {
-    if (item.itemType === 'service' || item.itemType === 'boost') {
-      applyItemEffect(item);
-      
-      const newInventory = inventory.map(invItem => 
-        invItem.id === item.id 
-          ? { ...invItem, quantity: invItem.quantity - 1 }
-          : invItem
-      ).filter(invItem => invItem.quantity > 0);
-      
-      saveInventory(newInventory);
-    }
-  }
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <AnimatePresence>
+                  {featuredItems.map(item => renderItemCard(item))}
+                </AnimatePresence>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'browse' && (
+            <div className="space-y-6">
+              <div className="bg-white rounded-xl p-4 shadow-sm">
+                <div className="flex flex-wrap gap-4 items-center">
+                  <div className="flex-1 min-w-64">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Search items..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+                  
+                  <select
+                    value={selectedCategory}
+                    onChange={(e) => setSelectedCategory(e.target.value)}
+                    className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="all">All Categories</option>
+                    <option value="resources">Resources</option>
+                    <option value="buildings">Buildings</option>
+                    <option value="boosts">Boosts</option>
+                    <option value="decorations">Decorations</option>
+                    <option value="special">Special</option>
+                  </select>
+
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as any)}
+                    className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="popularity">Most Popular</option>
+                    <option value="price">Price: Low to High</option>
+                    <option value="rarity">Rarity: High to Low</option>
+                    <option value="newest">Newest First</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                <AnimatePresence>
+                  {filteredItems.map(item => renderItemCard(item, true))}
+                </AnimatePresence>
+              </div>
+
+              {filteredItems.length === 0 && (
+                <div className="text-center py-12">
+                  <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-500 mb-2">No items found</h3>
+                  <p className="text-gray-400">Try adjusting your search or filters</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'sell' && (
+            <div className="space-y-6">
+              <div className="bg-white rounded-xl p-6 shadow-sm text-center">
+                <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-500 mb-2">Selling Feature Coming Soon!</h3>
+                <p className="text-gray-400">
+                  Soon you'll be able to sell your extra items and resources to other players.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'history' && (
+            <div className="space-y-4">
+              {purchaseHistory.length === 0 ? (
+                <div className="bg-white rounded-xl p-6 shadow-sm text-center">
+                  <Clock className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-500 mb-2">No purchases yet</h3>
+                  <p className="text-gray-400">Your purchase history will appear here</p>
+                </div>
+              ) : (
+                purchaseHistory.map((purchase, index) => (
+                  <motion.div
+                    key={purchase.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                    className="bg-white rounded-xl p-4 shadow-sm flex items-center gap-4"
+                  >
+                    <div className="text-2xl">{purchase.item.icon}</div>
+                    <div className="flex-1">
+                      <h3 className="font-medium text-gray-800">{purchase.item.name}</h3>
+                      <p className="text-sm text-gray-500">
+                        Purchased on {new Date(purchase.purchaseDate).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1 text-yellow-600">
+                      <Coins className="w-4 h-4" />
+                      <span className="font-medium">{purchase.price}</span>
+                    </div>
+                  </motion.div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+      </motion.div>
+
+      <AnimatePresence>
+        {selectedItem && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/70 z-60 flex items-center justify-center p-4"
+            onClick={() => setSelectedItem(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold text-gray-800">{selectedItem.name}</h2>
+                <button
+                  onClick={() => setSelectedItem(null)}
+                  className="w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-lg flex items-center justify-center"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              
+              <div className="text-center mb-6">
+                <div className="text-6xl mb-4">{selectedItem.icon}</div>
+                <div className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${getItemRarityColor(selectedItem.rarity)}`}>
+                  {selectedItem.rarity?.toUpperCase()}
+                </div>
+              </div>
+
+              <p className="text-gray-600 mb-6">{selectedItem.description}</p>
+
+              {selectedItem.effect && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-6">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Zap className="w-4 h-4 text-blue-600" />
+                    <span className="font-medium text-blue-800">Special Effect</span>
+                  </div>
+                  <p className="text-sm text-blue-700">{selectedItem.effect.replace('_', ' ')}</p>
+                  {selectedItem.duration && (
+                    <p className="text-xs text-blue-600 mt-1">Duration: {selectedItem.duration} days</p>
+                  )}
+                </div>
+              )}
+
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Coins className="w-5 h-5 text-yellow-500" />
+                  <span className="text-2xl font-bold text-gray-800">
+                    {selectedItem.discount 
+                      ? Math.floor(selectedItem.price * (1 - selectedItem.discount / 100))
+                      : selectedItem.price
+                    }
+                  </span>
+                  {selectedItem.discount && (
+                    <span className="text-lg text-gray-400 line-through">{selectedItem.price}</span>
+                  )}
+                </div>
+                
+                <button
+                  onClick={() => {
+                    handlePurchaseItem(selectedItem);
+                    setSelectedItem(null);
+                  }}
+                  disabled={coins < (selectedItem.discount ? Math.floor(selectedItem.price * (1 - selectedItem.discount / 100)) : selectedItem.price)}
+                  className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
+                    coins >= (selectedItem.discount ? Math.floor(selectedItem.price * (1 - selectedItem.discount / 100)) : selectedItem.price)
+                      ? 'bg-blue-500 hover:bg-blue-600 text-white hover:scale-105'
+                      : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  }`}
+                >
+                  {coins >= (selectedItem.discount ? Math.floor(selectedItem.price * (1 - selectedItem.discount / 100)) : selectedItem.price) ? 'Purchase' : 'Not Enough Coins'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
 }

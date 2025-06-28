@@ -150,11 +150,44 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
     const numberOfPairs = 3 + difficultyLevel;
     const pointsArray: {x: number, y: number, number: number}[] = [];
     
+    const gridCells = 8;
+    const cellSize = 80 / gridCells;
+    const minDistance = 15;
+    
+    const usedPositions: {x: number, y: number}[] = [];
+    
+    const isPositionValid = (x: number, y: number) => {
+      return usedPositions.every(pos => {
+        const distance = Math.sqrt((x - pos.x) ** 2 + (y - pos.y) ** 2);
+        return distance >= minDistance;
+      });
+    };
+    
+    const generateValidPosition = () => {
+      let attempts = 0;
+      let x, y;
+      
+      do {
+        if (attempts < 20) {
+          const gridX = Math.floor(Math.random() * gridCells);
+          const gridY = Math.floor(Math.random() * gridCells);
+          x = 15 + (gridX * cellSize) + (Math.random() * cellSize * 0.6);
+          y = 15 + (gridY * cellSize) + (Math.random() * cellSize * 0.6);
+        } else {
+          x = Math.floor(Math.random() * 70) + 15;
+          y = Math.floor(Math.random() * 70) + 15;
+        }
+        attempts++;
+      } while (!isPositionValid(x, y) && attempts < 50);
+      
+      return { x, y };
+    };
+    
     for (let i = 1; i <= numberOfPairs; i++) {
       for (let j = 0; j < 2; j++) {
-        const x = Math.floor(Math.random() * 80) + 10;
-        const y = Math.floor(Math.random() * 80) + 10;
-        pointsArray.push({ x, y, number: i });
+        const position = generateValidPosition();
+        pointsArray.push({ x: position.x, y: position.y, number: i });
+        usedPositions.push(position);
       }
     }
     
@@ -165,47 +198,33 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
   }, [difficultyLevel]);
   
   const handleMemoryCardClick = useCallback((index: number) => {
-    console.log('=== MEMORY CARD CLICK START ===');
-    console.log('Clicked index:', index);
-    console.log('Current flippedCards:', flippedCards);
-    console.log('Current matchedCards:', matchedCards);
-    console.log('Is processing click:', isProcessingMemoryClick);
-    console.log('Card at index:', memoryCards[index]);
+    
     
     if (flippedCards.includes(index)) {
-      console.log('REJECTED: Card already flipped');
       return;
     }
     
     if (matchedCards.includes(index)) {
-      console.log('REJECTED: Card already matched');
       return;
     }
     
     if (isProcessingMemoryClick) {
-      console.log('REJECTED: Currently processing a click');
       return;
     }
     
     if (flippedCards.length >= 2) {
-      console.log('REJECTED: Already have 2 cards flipped');
       return;
     }
     
-    console.log('ACCEPTED: Processing card click');
     
     const newFlipped = [...flippedCards, index];
-    console.log('New flipped cards:', newFlipped);
     setFlippedCards(newFlipped);
     
     if (newFlipped.length === 1) {
-      console.log('First card flipped, ready for second card immediately');
     } else if (newFlipped.length === 2) {
-      console.log('Second card flipped, checking for match - setting processing lock');
       setIsProcessingMemoryClick(true);
       
       const [first, second] = newFlipped;
-      console.log('Comparing cards:', memoryCards[first], 'vs', memoryCards[second]);
       
       setTimeout(() => {
         if (memoryCards[first] === memoryCards[second]) {

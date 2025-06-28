@@ -5,6 +5,7 @@ export interface User {
   email: string;
   username: string;
   verified: boolean;
+  role?: 'user' | 'moderator' | 'admin';
   settings?: {
     soundEnabled?: boolean;
     musicEnabled?: boolean;
@@ -43,6 +44,26 @@ export interface User {
   createdAt?: string | Date;
   lastLogin?: string | Date;
   lastSave?: string | Date;
+  isSuspended?: boolean;
+  activeSuspension?: {
+    id: string;
+    reason: string;
+    startDate: string;
+    endDate: string;
+    issuedBy: string;
+    timeRemaining: number;
+    isPermanent: boolean;
+    canAppeal: boolean;
+    appeal: {
+      id: string;
+      reason: string;
+      status: 'pending' | 'approved' | 'denied';
+      submittedAt: string;
+      adminResponse?: string;
+    } | null;
+  } | null;
+  suspensionCount?: number;
+  warningCount?: number;
 }
 
 export interface AuthResponse {
@@ -269,19 +290,19 @@ export const logout = async (): Promise<boolean> => {
 
 export const getCurrentUser = async (): Promise<User | null> => {
   try {
-    const token = getAuthToken();
-    if (!token) {
-      console.warn('No auth token found, user must be logged in first');
-      return null;
-    }
-    
+    console.log('getCurrentUser: Making request to /api/user/me with cookie authentication');
     const response = await fetch(`${NORMALIZED_API_URL}/api/user/me`, {
       method: 'GET',
-      headers: getAuthHeaders(),
+      headers: {
+        'Content-Type': 'application/json'
+      },
       credentials: 'include'
     });
     
+    console.log('getCurrentUser: Response status:', response.status);
+    
     if (response.status === 401) {
+      console.log('getCurrentUser: Received 401, user not authenticated');
       clearAuthToken();
       sessionStorage.removeItem('neighborville_playerName');
       window.dispatchEvent(new CustomEvent('auth:unauthorized', { 
@@ -290,19 +311,39 @@ export const getCurrentUser = async (): Promise<User | null> => {
       return null;
     }
     
+    if (response.status === 403) {
+      const data = await response.json();
+      if (data.suspended && data.suspension) {
+        console.log('getCurrentUser: User is suspended:', data.suspensionType || 'user', data.suspension.reason);
+        window.dispatchEvent(new CustomEvent('user:suspended', { 
+          detail: { 
+            suspensionData: {
+              ...data.suspension,
+              type: data.suspensionType || 'user'
+            }
+          }
+        }));
+        return null;
+      }
+    }
+    
     if (!response.ok) {
+      console.log('getCurrentUser: Response not ok:', response.status, response.statusText);
       return null;
     }
     
     const data = await response.json();
+    console.log('getCurrentUser: Response data success:', data.success);
     
     if (data.success && data.user) {
+      console.log('getCurrentUser: User found:', data.user.username);
       return data.user as User;
     }
     
+    console.log('getCurrentUser: No user in response data');
     return null;
   } catch (error) {
-    console.error('Error getting current user:', error);
+    console.error('getCurrentUser: Error getting current user:', error);
     return null;
   }
 };
@@ -474,10 +515,10 @@ export const getUserSessions = async () => {
     }
     
     const data = await response.json();
-    return data.success ? data.sessions : [];
+    return data;
   } catch (error) {
     console.error('Error getting user sessions:', error);
-    return [];
+    return { success: false, sessions: [], message: 'Failed to load sessions' };
   }
 };
 
@@ -560,9 +601,27 @@ export interface PublicProfileData {
     };
     grid?: any[];
   } | null;
+  extendedProfile?: {
+    bio?: string;
+    location?: string;
+    website?: string;
+    socialLinks?: {
+      twitter?: string;
+      github?: string;
+      instagram?: string;
+      linkedin?: string;
+    };
+    interests?: string[];
+    gamePreferences?: {
+      favoriteBuilding?: string;
+      playStyle?: string;
+    };
+  } | null;
   showBio: boolean;
   showStats: boolean;
   showActivity: boolean;
+  showSocialLinks: boolean;
+  showAchievements: boolean;
 }
 
 export const getPublicProfile = async (username: string): Promise<{
@@ -572,7 +631,7 @@ export const getPublicProfile = async (username: string): Promise<{
   message?: string;
 }> => {
   try {
-    const response = await fetch(`${NORMALIZED_API_URL}/api/user/profile/${username}`, {
+    const response = await fetch(`${NORMALIZED_API_URL}/api/profile/${username}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json'
