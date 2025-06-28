@@ -1,4 +1,5 @@
 import IPSuspension from '../models/IPSuspension.js';
+import { getRealIP } from '../utils/ipUtils.js';
 
 export const checkSuspension = async (req, res, next) => {
   try {
@@ -12,7 +13,7 @@ export const checkSuspension = async (req, res, next) => {
       return next();
     }
 
-    const userIP = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+    const userIP = getRealIP(req);
     if (userIP) {
       const ipSuspensions = await IPSuspension.findActiveForIP(userIP);
       if (ipSuspensions.length > 0) {
@@ -64,7 +65,7 @@ export const checkSuspension = async (req, res, next) => {
 
 export const checkSuspensionForGame = async (req, res, next) => {
   try {
-    const userIP = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+    const userIP = getRealIP(req);
     if (userIP) {
       const ipSuspensions = await IPSuspension.findActiveForIP(userIP);
       if (ipSuspensions.length > 0) {

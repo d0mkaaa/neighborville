@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import Session from '../models/Session.js';
+import { getRealIP } from '../utils/ipUtils.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'neighborvillesecretkey';
 const isDevelopment = process.env.NODE_ENV === 'development';
@@ -65,7 +66,7 @@ export const auth = async (req, res, next) => {
     if (!session) {
       try {
         const userAgent = req.headers['user-agent'];
-        const ip = req.ip;
+        const ip = getRealIP(req);
         session = await Session.create({
           userId: decoded.userId,
           token,

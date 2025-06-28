@@ -23,6 +23,8 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173,ht
 connectMongoDB();
 connectRedis();
 
+app.set('trust proxy', true);
+
 app.use(morgan('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

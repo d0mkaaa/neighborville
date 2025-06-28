@@ -2,6 +2,7 @@ import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import Session from '../models/Session.js';
 import { redisClient } from '../config/database.js';
+import { getRealIP } from '../utils/ipUtils.js';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const MAX_REQUESTS_PER_MINUTE = 60;
@@ -71,7 +72,7 @@ export const auth = async (req, res, next) => {
     const token = req.cookies.token || 
                   (req.headers.authorization && req.headers.authorization.split(' ')[1]);
     
-    const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
+    const ip = getRealIP(req);
     const userAgent = req.headers['user-agent'] || 'unknown';
     
     console.log('Auth middleware - Request from:', ip);

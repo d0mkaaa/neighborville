@@ -27,6 +27,7 @@ import crypto from 'crypto';
 import speakeasy from 'speakeasy';
 import QRCode from 'qrcode';
 import { logger } from '../utils/logger.js';
+import { getRealIP } from '../utils/ipUtils.js';
 
 
 
@@ -684,7 +685,7 @@ router.post('/verify-login', [
     }
 
     const userAgent = req.headers['user-agent'];
-    const ip = req.ip;
+    const ip = getRealIP(req);
 
     try {
       try {
@@ -773,7 +774,7 @@ router.post('/login/2fa-verify', [
     }
 
     const userAgent = req.get('User-Agent') || 'unknown';
-    const ip = req.ip;
+    const ip = getRealIP(req);
 
     if (user.trackIP) {
       await user.trackIP(ip, userAgent);
@@ -2140,7 +2141,7 @@ router.delete('/delete-account', auth, async (req, res) => {
     
     console.log(`Account deletion requested by user ${user.username} (${user._id})`);
     console.log(`Reason: ${reason}`);
-    console.log(`IP: ${req.ip}`);
+    console.log(`IP: ${getRealIP(req)}`);
     console.log(`User Agent: ${req.get('User-Agent')}`);
 
     await deleteOtherSessions(req.user._id);
@@ -2553,7 +2554,7 @@ router.post('/verify', [
     }
     
     const userAgent = req.headers['user-agent'];
-    const ip = req.ip;
+    const ip = getRealIP(req);
     
     if (user.trackIP) {
       await user.trackIP(ip, userAgent);

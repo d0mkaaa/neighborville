@@ -218,7 +218,7 @@ router.post('/submit', auth, async (req, res) => {
       specificContent: specificContent || undefined,
       isAnonymous,
       metadata: {
-        ipAddress: req.ip,
+        ipAddress: getRealIP(req),
         userAgent: req.headers['user-agent'],
         timestamp: new Date()
       }
