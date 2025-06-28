@@ -85,7 +85,7 @@ const SuspensionModal: React.FC<SuspensionModalProps> = ({
     setAppealError('');
 
     try {
-      const response = await fetch('http://localhost:3001/api/user/appeal-suspension', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/user/appeal-suspension`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -135,7 +135,7 @@ const SuspensionModal: React.FC<SuspensionModalProps> = ({
 
       setIsDeleting(true);
       try {
-        const response = await fetch('http://localhost:3001/api/user/delete-account', {
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/user/delete-account`, {
           method: 'DELETE',
           headers: {
             'Content-Type': 'application/json'
