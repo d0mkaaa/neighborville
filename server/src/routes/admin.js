@@ -82,7 +82,6 @@ router.post('/make-admin', auth, async (req, res) => {
       });
     }
     
-    // SECURITY: Development-only self-promotion with secret key
     if (secretKey !== process.env.ADMIN_SECRET_KEY) {
       return res.status(403).json({ success: false, message: 'Invalid secret key' });
     }
@@ -149,7 +148,7 @@ router.get('/users', auth, requireModerator, async (req, res) => {
       role: user.role,
       verified: user.verified,
       createdAt: user.createdAt,
-      isSuspended: user.isSuspended(),
+      isSuspended: user.checkSuspensionStatus(),
       suspensions: user.suspensions,
       warnings: user.warnings,
       moderationStats: user.moderationStats,
@@ -209,7 +208,7 @@ router.get('/users/:userId/details', auth, requireModerator, async (req, res) =>
         role: user.role,
         verified: user.verified,
         createdAt: user.createdAt,
-        isSuspended: user.isSuspended(),
+        isSuspended: user.checkSuspensionStatus(),
         suspensions: user.suspensions,
         warnings: user.warnings,
         moderationStats: user.moderationStats,
@@ -341,7 +340,7 @@ router.put('/users/:userId/suspend', auth, requireAdmin, async (req, res) => {
       user: {
         id: user._id.toString(),
         username: user.username,
-        isSuspended: user.isSuspended()
+        isSuspended: user.checkSuspensionStatus()
       }
     });
   } catch (error) {
@@ -1655,8 +1654,6 @@ router.post('/users/:userId/message', auth, requireModerator, async (req, res) =
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
-
-
 
 router.post('/users/:userId/force-logout', auth, requireModerator, async (req, res) => {
   try {

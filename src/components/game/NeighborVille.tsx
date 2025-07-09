@@ -12,7 +12,6 @@ import NeighborUnlockModal from "./NeighborUnlockModal";
 import SidebarPanel from "../ui/SidebarPanel";
 import { Home, Users, Calendar, FileText, Zap, User, Save, Volume2, VolumeX } from "lucide-react";
 import NeighborListModal from "./NeighborListModal";
-import GameFloatingButtons from "./GameFloatingButtons";
 import SeasonalEventsPanel from "./SeasonalEventsPanel";
 import AchievementsModal from "./AchievementsModal";
 import AchievementUnlockModal from "./AchievementUnlockModal";
@@ -55,29 +54,9 @@ import AuthModal from "../auth/AuthModal";
 import Leaderboard from "../profile/Leaderboard";
 import Dropdown from "../ui/Dropdown";
 import BuildingOption from "./BuildingOption";
-import type { 
-  Building, 
-  GameProgress, 
-  TimeOfDay, 
-  WeatherType,
-  PowerGrid,
-  WaterGrid,
-  Neighbor,
-  Bill,
-  GameEvent,
-  RecentEvent,
-  Achievement,
-  CoinHistoryEntry,
-  EventOption,
-  TaxPolicy,
-  CityBudget,
-  PlayerResources,
-  ProductionQueueItem,
-  ActiveProduction
-} from "../../types/game";
+import type { Building, GameProgress, TimeOfDay, WeatherType, PowerGrid, WaterGrid, Neighbor, Bill, GameEvent, RecentEvent, Achievement, CoinHistoryEntry, EventOption, TaxPolicy, CityBudget, PlayerResources, ProductionQueueItem, ActiveProduction } from "../../types/game";
 import { ALL_BUILDINGS as initialBuildings, getBuildingsByCategory } from "../../data/buildings";
-import { neighborProfiles } from "../../data/neighbors";
-import { ACHIEVEMENTS } from "../../data/achievements";
+import { createContentManager } from "../../utils/contentManager";
 import { createDefaultPlayerResources, getResourceById, getRecipeById } from "../../data/resources";
 import { useAuth } from "../../context/AuthContext";
 import AppLayout from "../ui/AppLayout";
@@ -86,6 +65,11 @@ import ProfileSettings from "../profile/ProfileSettings";
 import ProfilePreview from '../profile/ProfilePreview';
 import UserSearch from '../profile/UserSearch';
 import GameWiki from './GameWiki';
+import UnifiedChatWindow from '../chat/UnifiedChatWindow';
+import ChatToggleButton from '../chat/ChatToggleButton';
+
+import socketService from '../../services/socketService';
+
 
 type ProductionQueues = Map<number, ProductionQueueItem[]>;
 type ActiveProductions = Map<number, ActiveProduction>;
@@ -143,8 +127,11 @@ export default function NeighborVille({
   const [tutorialStep, setTutorialStep] = useState(1);
   const [activeTab, setActiveTab] = useState('buildings');
   const [autoSaving, setAutoSaving] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [lastSaveTime, setLastSaveTime] = useState<Date | null>(null);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [showChat, setShowChat] = useState(false);
+  const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
 
   const [weatherForecast, setWeatherForecast] = useState<WeatherType[]>([]);
   const [showWeatherForecast, setShowWeatherForecast] = useState(false);
@@ -172,7 +159,7 @@ export default function NeighborVille({
   const [buildingSearchTerm, setBuildingSearchTerm] = useState('');
   const [musicEnabled, setMusicEnabled] = useState<boolean | null>(null);
   const [showMusicModal, setShowMusicModal] = useState(false);
-  const [showSocialFeed, setShowSocialFeed] = useState(true);
+  const [showSocialFeed, setShowSocialFeed] = useState(false);
   const [soundVolume, setSoundVolume] = useState(0.5);
   const [isTabVisible, setIsTabVisible] = useState(true);
   const [wasManuallyPaused, setWasManuallyPaused] = useState(false);
@@ -200,9 +187,10 @@ export default function NeighborVille({
 
   const { user, isAuthenticated, setShowLogin } = useAuth();
 
+  const contentManager = useMemo(() => createContentManager(), []);
   const [buildings, setBuildings] = useState<Building[]>(initialBuildings);
-  const [neighbors, setNeighbors] = useState<Neighbor[]>(neighborProfiles);
-  const [achievements, setAchievements] = useState<Achievement[]>(ACHIEVEMENTS);
+  const [neighbors, setNeighbors] = useState<Neighbor[]>(contentManager.getNeighbors());
+  const [achievements, setAchievements] = useState<Achievement[]>(contentManager.getAchievements());
   const [seenAchievements, setSeenAchievements] = useState<string[]>([]);
   const [bills, setBills] = useState<Bill[]>([]);
   const [taxPolicies, setTaxPolicies] = useState<TaxPolicy[]>(DEFAULT_TAX_POLICIES);
@@ -253,7 +241,7 @@ export default function NeighborVille({
     gameStateLoaded: false
   });
 
-  const addNotification = (message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info', autoRemove: boolean = true) => {
+  const addNotification = useCallback((message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info', autoRemove: boolean = true) => {
     setNotifications(prev => {
       const existingNotification = prev.find(n => n.message === message && n.type === type);
       
@@ -277,23 +265,43 @@ export default function NeighborVille({
       const updatedNotifications = [...prev, newNotification];
       return updatedNotifications.length > 5 ? updatedNotifications.slice(-5) : updatedNotifications;
     });
-  };
+  }, []);
+
+  const removeNotification = useCallback((id: string) => {
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  }, []);
 
   const saveGameCallback = useCallback(async (buildingCompleted?: Building | string, isAutoSave: boolean = false) => {
     if (!user) {
       console.warn('Cannot save game: user not authenticated');
-      setShowAuthModal(true);
+      if (!isAutoSave) {
+        setShowAuthModal(true);
+      }
+      return;
+    }
+    
+    if (!playerName || playerName.trim() === '') {
+      console.log('Skipping save: playerName not set yet');
+      return;
+    }
+
+    if (isSaving) {
+      console.log('Save already in progress, skipping this request');
       return;
     }
 
     const now = Date.now();
     const lastSaveTimestamp = sessionStorage.getItem('neighborville_last_save_timestamp');
 
-    if (isAutoSave && !shouldSaveGame(lastSaveTimestamp, 60000)) {
-      return;
+    if (isAutoSave && lastSaveTimestamp) {
+      const timeSinceLastSave = now - parseInt(lastSaveTimestamp);
+      if (timeSinceLastSave < 60000) {
+        return;
+      }
     }
 
     setAutoSaving(true);
+    setIsSaving(true);
 
     const gameState: GameProgress = {
       playerName,
@@ -344,16 +352,21 @@ export default function NeighborVille({
       lastAutoSave: Date.now()
     };
 
+    const saveType = isAutoSave ? 'auto' : 'manual';
+    
     try {
       if (isAutoSave) {
         sessionStorage.setItem('neighborville_last_save_timestamp', now.toString());
       }
 
-      const saveType = isAutoSave ? 'auto' : 'manual';
+      const buildingCount = gameState.grid.filter(b => b !== null).length;
+      console.log(`💾 ${saveType.toUpperCase()} SAVE: Saving ${playerName} - ${gameState.neighborhoodName} (${buildingCount} buildings, grid size: ${gameState.grid.length})`);
+      
       const saveResult = await saveNeighborhoodToServer(gameState);
 
       if (saveResult) {
         setLastSaveTime(new Date());
+        console.log(`✅ ${saveType.toUpperCase()} SAVE SUCCESS: Game saved successfully`);
         if (!isAutoSave) {
           if (typeof buildingCompleted === 'object' && buildingCompleted !== null) {
             addNotification(`${buildingCompleted.name} built and saved!`, 'success');
@@ -362,26 +375,30 @@ export default function NeighborVille({
           }
         }
       } else {
+        console.error(`❌ ${saveType.toUpperCase()} SAVE FAILED: Save result was false`);
         if (!isAutoSave) {
           addNotification('Failed to save game. Please try again.', 'warning');
         }
       }
     } catch (error) {
+      console.error(`❌ ${saveType} SAVE ERROR:`, error);
       if (!isAutoSave) {
         addNotification('Failed to save game', 'error');
       }
-      console.error('Error saving game:', error);
     } finally {
       setAutoSaving(false);
+      setIsSaving(false);
     }
   }, [playerName, coins, day, level, experience, grid, gridSize, neighbors, 
       achievements, gameTime, gameMinutes, timeOfDay, recentEvents, bills, 
       energyRate, totalEnergyUsage, lastBillDay, coinHistory, weather, powerGrid, waterGrid, 
-      taxPolicies, cityBudget, playerResources, productionQueues, user]);
+      taxPolicies, cityBudget, playerResources, productionQueues, user, isSaving]);
 
   const initializeNewGame = useCallback(() => {
     const name = initialGameState?.playerName || "Mayor";
     setPlayerName(name);
+    const neighborhoodNameToSet = initialGameState?.neighborhoodName || "Unnamed City";
+    setNeighborhoodName(neighborhoodNameToSet);
     const startingCoins = 2000;
     setCoins(startingCoins);
     setDay(1);
@@ -408,15 +425,64 @@ export default function NeighborVille({
       description: 'Initial funds',
       timestamp: Date.now()
     }]);
-  }, [initialGameState]);
+  }, [initialGameState, user]);
 
-  const loadGameStateRef = useRef((state: GameProgress, forceReload: boolean = false) => {
+  useEffect(() => {
+    return () => {
+      console.log('🔌 Component unmounting, disconnecting socket');
+      socketService.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
+    const connectSocket = async () => {
+      if (isAuthenticated && user?.id && !socketService.isSocketConnected()) {
+        console.log('🔌 Setting up stable socket connection for user:', user.username);
+        socketService.connect();
+        
+        const { getCurrentJWTToken } = await import('../../services/userService');
+        const token = await getCurrentJWTToken();
+        console.log('🔑 Retrieved JWT token for socket auth:', token ? 'TOKEN_PRESENT' : 'NO_TOKEN');
+        if (token) {
+          console.log('🔑 Calling socketService.authenticate...');
+          socketService.authenticate(token);
+        } else {
+          console.warn('⚠️ No JWT token available for socket authentication');
+        }
+      }
+    };
+    
+    connectSocket();
+  }, [isAuthenticated, user?.id]);
+
+  useEffect(() => {
+    if (initialGameState) {
+      loadGameState(initialGameState);
+    } else {
+      loadNeighborhoodFromServer().then(result => {
+        if (result.success && result.gameData) {
+          loadGameState(result.gameData);
+          if (onLoadGame) {
+            onLoadGame(result.gameData);
+          }
+        } else {
+          initializeNewGame();
+        }
+      }).catch(error => {
+        console.error('Error loading game:', error);
+        initializeNewGame();
+      });
+    }
+  }, []);
+
+  const loadGameState = (state: GameProgress, forceReload: boolean = false) => {
     if (initFlags.current.gameStateLoaded && !forceReload) {
       return;
     }
 
     const batchedUpdates = {
       playerName: state.playerName || "",
+      neighborhoodName: state.neighborhoodName || "Unnamed City",
       coins: state.coins || 2000,
       day: state.day || 1,
       level: state.level || 1,
@@ -464,19 +530,23 @@ export default function NeighborVille({
           resourcesObject[resourceId] = quantity;
         });
         return resourcesObject;
-      })()
+      })(),
+      neighbors: state.neighbors || contentManager.getNeighbors(),
+      achievements: state.achievements || contentManager.getAchievements(),
+      seenAchievements: state.seenAchievements || [],
+              productionQueues: state.productionQueues ? new Map(Object.entries(state.productionQueues)) : new Map(),
+        activeProductions: state.activeProductions ? new Map(Object.entries(state.activeProductions)) : new Map()
     };
 
-    const savedGameTime = batchedUpdates.gameTime;
-
     setPlayerName(batchedUpdates.playerName);
+    setNeighborhoodName(batchedUpdates.neighborhoodName);
     setCoins(batchedUpdates.coins);
     setDay(batchedUpdates.day);
     setLevel(batchedUpdates.level);
     setExperience(batchedUpdates.experience);
     setGrid(batchedUpdates.grid);
     setGridSize(batchedUpdates.gridSize);
-    setGameTime(savedGameTime);
+    setGameTime(batchedUpdates.gameTime);
     setGameMinutes(batchedUpdates.gameMinutes);
     setTimeOfDay(batchedUpdates.timeOfDay);
     setBills(batchedUpdates.bills);
@@ -491,62 +561,14 @@ export default function NeighborVille({
     setTaxPolicies(batchedUpdates.taxPolicies);
     setCityBudget(batchedUpdates.cityBudget);
     setPlayerResources(batchedUpdates.playerResources);
+    setNeighbors(batchedUpdates.neighbors);
+    setAchievements(batchedUpdates.achievements);
+    setSeenAchievements(batchedUpdates.seenAchievements);
+    setProductionQueues(batchedUpdates.productionQueues);
+    setActiveProductions(batchedUpdates.activeProductions);
 
-    if (state.productionQueues) {
-      const loadedQueues = new Map<number, ProductionQueueItem[]>();
-      Object.entries(state.productionQueues).forEach(([buildingIndexStr, queue]) => {
-        const buildingIndex = parseInt(buildingIndexStr);
-        loadedQueues.set(buildingIndex, queue);
-      });
-      setProductionQueues(loadedQueues);
-    } else {
-      setProductionQueues(new Map());
-    }
-
-    const currentLevel = state.level || 1;
-    const unlockedBuildings = initialBuildings.map(building => ({
-      ...building,
-      unlocked: building.levelRequired ? currentLevel >= building.levelRequired : true
-    }));
-
-    setBuildings(unlockedBuildings);
-
-    const loadedNeighbors = neighborProfiles.map(neighbor => {
-      const savedNeighbor = state.neighbors?.find(n => n.id === neighbor.id);
-      return savedNeighbor || neighbor;
-    });
-
-    setNeighbors(loadedNeighbors);
-
-    const loadedAchievements = ACHIEVEMENTS.map(baseAchievement => ({
-      ...baseAchievement,
-      completed: state.completedAchievements?.includes(baseAchievement.id) || false
-    }));
-
-    setAchievements(loadedAchievements);
-
-    if (state.seenAchievements) {
-      setSeenAchievements(state.seenAchievements);
-    }
-
-    gameTimeRef.current = savedGameTime;
-
-    if (!initFlags.current.gameStateLoaded) {
-      initFlags.current.gameStateLoaded = true;
-    }
-
-    if (forceReload) {
-      addNotification(`Loaded save: ${state.playerName} (Day ${state.day})`, 'success');
-    }
-
-    console.log(`Game loaded with time ${savedGameTime}:00, ready for weather generation`);
-  });
-
-  const gameTimeRef = useRef<number>(8);
-
-  const loadGameState = (state: GameProgress, forceReload: boolean = false) => {
-    if (!state) return;
-    loadGameStateRef.current(state, forceReload);
+    initFlags.current.gameStateLoaded = true;
+    addNotification('Game loaded successfully!', 'success');
   };
 
   useEffect(() => {
@@ -634,11 +656,11 @@ export default function NeighborVille({
       return;
     }
 
-    if (user?.username && !playerName) {
-      console.log('AUTH: Setting playerName from user in NeighborVille:', user.username);
+    if (user?.username && !playerName && !initFlags.current.gameStateLoaded) {
+      console.log('AUTH: Setting initial playerName from user in NeighborVille:', user.username);
       setPlayerName(user.username);
     }
-  }, [isAuthenticated, user, setShowLogin, playerName]);
+  }, [isAuthenticated, user, setShowLogin]);
 
   const calculateEnergyUsage = useCallback((currentGrid = grid) => {
     let usage = 0;
@@ -651,33 +673,11 @@ export default function NeighborVille({
   }, [grid]);
 
   useEffect(() => {
-    if (initialGameState) {
-      loadGameState(initialGameState);
-    } else {
-      initializeNewGame();
-    }
-
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      saveGameCallback(undefined, true);
-
-      e.preventDefault();
-      e.returnValue = "You have unsaved progress. Are you sure you want to leave?";
-      return e.returnValue;
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-    };
-  }, [initialGameState, saveGameCallback]);
-
-  useEffect(() => {
     if (initFlags.current.gameStateLoaded) {
-      console.log(`Weather useEffect: Generating forecast for day ${day} with time ${gameTime}:00`);
+      console.log(`Weather useEffect: Generating forecast for day ${day}`);
       generateWeatherForecast();
     }
-  }, [day, initFlags.current.gameStateLoaded, gameTime]);
+  }, [day]);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -704,7 +704,7 @@ export default function NeighborVille({
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [timePaused, wasManuallyPaused, addNotification]);
+  }, [timePaused, wasManuallyPaused]);
 
   useEffect(() => {
     if (!timePaused) {
@@ -847,7 +847,7 @@ export default function NeighborVille({
   };
 
   const generateWeatherForecast = () => {
-    console.log(`Generating weather forecast for day ${day}`);
+    console.log(`Generating realistic weather forecast for day ${day}`);
 
     if (!initFlags.current.gameStateLoaded) {
       console.log('Weather forecast generation skipped - game not fully loaded yet');
@@ -855,23 +855,137 @@ export default function NeighborVille({
     }
 
     const currentTime = gameTime;
-
     const newForecast: WeatherType[] = [];
-    const seed = day * 100;
+    
+    const getSeason = (day: number): 'spring' | 'summer' | 'autumn' | 'winter' => {
+      const dayInYear = day % 365;
+      if (dayInYear < 90) return 'spring';
+      if (dayInYear < 180) return 'summer';
+      if (dayInYear < 270) return 'autumn';
+      return 'winter';
+    };
 
+    const season = getSeason(day);
+    
+    const climateZone = 'temperate';
+    
+    const getSeasonalWeatherWeights = (season: string, timeOfDay: string) => {
+      const baseWeights = {
+        spring: {
+          morning: { sunny: 0.4, cloudy: 0.35, rainy: 0.2, stormy: 0.05, snowy: 0.0 },
+          day: { sunny: 0.5, cloudy: 0.25, rainy: 0.2, stormy: 0.05, snowy: 0.0 },
+          evening: { sunny: 0.35, cloudy: 0.4, rainy: 0.2, stormy: 0.05, snowy: 0.0 },
+          night: { sunny: 0.0, cloudy: 0.6, rainy: 0.3, stormy: 0.1, snowy: 0.0 }
+        },
+        summer: {
+          morning: { sunny: 0.7, cloudy: 0.2, rainy: 0.08, stormy: 0.02, snowy: 0.0 },
+          day: { sunny: 0.75, cloudy: 0.15, rainy: 0.07, stormy: 0.03, snowy: 0.0 },
+          evening: { sunny: 0.6, cloudy: 0.25, rainy: 0.1, stormy: 0.05, snowy: 0.0 },
+          night: { sunny: 0.0, cloudy: 0.5, rainy: 0.35, stormy: 0.15, snowy: 0.0 }
+        },
+        autumn: {
+          morning: { sunny: 0.3, cloudy: 0.45, rainy: 0.2, stormy: 0.05, snowy: 0.0 },
+          day: { sunny: 0.4, cloudy: 0.35, rainy: 0.2, stormy: 0.05, snowy: 0.0 },
+          evening: { sunny: 0.25, cloudy: 0.5, rainy: 0.2, stormy: 0.05, snowy: 0.0 },
+          night: { sunny: 0.0, cloudy: 0.55, rainy: 0.35, stormy: 0.1, snowy: 0.0 }
+        },
+        winter: {
+          morning: { sunny: 0.25, cloudy: 0.4, rainy: 0.15, stormy: 0.05, snowy: 0.15 },
+          day: { sunny: 0.35, cloudy: 0.35, rainy: 0.15, stormy: 0.05, snowy: 0.1 },
+          evening: { sunny: 0.2, cloudy: 0.45, rainy: 0.15, stormy: 0.05, snowy: 0.15 },
+          night: { sunny: 0.0, cloudy: 0.5, rainy: 0.2, stormy: 0.1, snowy: 0.2 }
+        }
+      };
+      
+      return baseWeights[season]?.[timeOfDay] || baseWeights.spring.day;
+    };
+
+    const getTemperatureRange = (season: string, hour: number): { min: number, max: number } => {
+      const baseTemps = {
+        spring: { min: 45, max: 70 },
+        summer: { min: 65, max: 90 },
+        autumn: { min: 40, max: 75 },
+        winter: { min: 20, max: 50 }
+      };
+      
+      const dailyVariation = 15;
+      const hourlyTemp = Math.sin((hour - 6) * Math.PI / 12) * dailyVariation;
+      
+      const seasonTemp = baseTemps[season] || baseTemps.spring;
+      return {
+        min: seasonTemp.min + hourlyTemp - 5,
+        max: seasonTemp.max + hourlyTemp + 5
+      };
+    };
+
+    let lastWeather: WeatherType = weather || 'sunny';
+    const weatherPersistence = 0.7;
+    
     for (let i = 0; i < 24; i++) {
-      const weatherIndex = Math.floor(((seed + i * 13) % 100) / 20);
-      const weatherTypes: WeatherType[] = ['sunny', 'cloudy', 'rainy', 'stormy', 'snowy'];
-      newForecast.push(weatherTypes[weatherIndex]);
+      const hour = (currentTime + i) % 24;
+      const timeOfDay = hour >= 5 && hour < 10 ? 'morning' :
+                       hour >= 10 && hour < 17 ? 'day' :
+                       hour >= 17 && hour < 21 ? 'evening' : 'night';
+      
+             const weights = getSeasonalWeatherWeights(season, timeOfDay) as Record<string, number>;
+       const tempRange = getTemperatureRange(season, hour);
+       
+       if (tempRange.max > 35) {
+         const snowProbability = weights.snowy || 0;
+         weights.snowy = 0;
+         const redistribution = snowProbability / 4;
+         weights.cloudy = (weights.cloudy || 0) + redistribution * 2;
+         weights.rainy = (weights.rainy || 0) + redistribution;
+         weights.sunny = (weights.sunny || 0) + redistribution;
+       }
+      
+      let selectedWeather: WeatherType;
+      
+      if (i > 0 && Math.random() < weatherPersistence) {
+        selectedWeather = lastWeather;
+      } else {
+        const rand = Math.random();
+        let cumulative = 0;
+        selectedWeather = 'cloudy';
+        
+        for (const [weatherType, weight] of Object.entries(weights)) {
+          cumulative += weight;
+          if (rand < cumulative) {
+            selectedWeather = weatherType as WeatherType;
+            break;
+          }
+        }
+      }
+      
+      if (i > 0) {
+        const prevWeather = newForecast[i - 1];
+        
+        if (prevWeather === 'sunny' && selectedWeather === 'stormy') {
+          selectedWeather = 'cloudy';
+        }
+        
+        if (prevWeather === 'stormy' && selectedWeather === 'sunny') {
+          selectedWeather = 'cloudy';
+        }
+        
+        if (prevWeather !== 'snowy' && prevWeather !== 'cloudy' && selectedWeather === 'snowy') {
+          if (Math.random() < 0.5) {
+            selectedWeather = 'cloudy';
+          }
+        }
+      }
+      
+      newForecast.push(selectedWeather);
+      lastWeather = selectedWeather;
     }
 
-    console.log(`New 24-hour forecast generated: ${newForecast.join(', ')}`);
+    console.log(`New realistic 24-hour forecast (${season}): ${newForecast.join(', ')}`);
     setWeatherForecast(newForecast);
 
     const currentHour = currentTime % 24;
     if (newForecast.length > currentHour) {
       const newWeather = newForecast[currentHour];
-      console.log(`Setting current weather to ${newWeather} based on forecast hour ${currentHour}`);
+      console.log(`Setting current weather to ${newWeather} based on realistic forecast hour ${currentHour}`);
       setWeather(newWeather);
     }
   };
@@ -977,7 +1091,7 @@ export default function NeighborVille({
         }
 
         if (canGenerate) {
-          let income = building.income / 24;
+          let income = building.income / 6;
 
           if (building.id === 'cafe' && newTime >= 6 && newTime <= 11) {
             income *= 1.5;
@@ -1063,7 +1177,7 @@ export default function NeighborVille({
     }
     
     addNotification(`Started continuous production: ${productionName}`, 'success', true);
-  }, [gameTime, gameMinutes, activeProductions, addNotification]);
+      }, [gameTime, gameMinutes, activeProductions]);
 
   const stopProduction = useCallback((buildingIndex: number) => {
     const production = activeProductions.get(buildingIndex);
@@ -1089,7 +1203,7 @@ export default function NeighborVille({
     }
 
     addNotification(`Stopped production: ${productionName} (${production.cycleCount} cycles completed)`, 'info', true);
-  }, [activeProductions, addNotification]);
+      }, [activeProductions]);
 
   const getActiveProductionForBuilding = useCallback((buildingIndex: number) => {
     return activeProductions.get(buildingIndex) || null;
@@ -1163,6 +1277,71 @@ export default function NeighborVille({
       }, 10);
 
       addToCoinHistory(building.cost, `Purchased ${building.name}`, 'expense');
+      
+      setTimeout(() => {
+        const immediateGameState = {
+          playerName: playerName || 'Mayor',
+          neighborhoodName: neighborhoodName || 'Unnamed City',
+          coins: newCoins,
+          day,
+          level,
+          experience,
+          grid: newGrid,
+          gridSize,
+          neighborProgress: neighbors.reduce((progress, neighbor) => {
+            progress[neighbor.id.toString()] = {
+              unlocked: neighbor.unlocked || false,
+              hasHome: neighbor.hasHome || false,
+              houseIndex: neighbor.houseIndex,
+              satisfaction: neighbor.satisfaction
+            };
+            return progress;
+          }, {} as { [neighborId: string]: { unlocked: boolean; hasHome: boolean; houseIndex?: number; satisfaction?: number } }),
+          completedAchievements: achievements.filter(a => a.completed).map(a => a.id),
+          seenAchievements: seenAchievements,
+          neighbors,
+          achievements,
+          events: [],
+          gameTime,
+          gameMinutes,
+          timeOfDay,
+          recentEvents,
+          bills,
+          energyRate,
+          totalEnergyUsage,
+          lastBillDay,
+          coinHistory,
+          weather,
+          powerGrid,
+          waterGrid,
+          taxPolicies,
+          cityBudget,
+          playerResources,
+          productionQueues: (() => {
+            const queuesObj: { [buildingIndex: string]: ProductionQueueItem[] } = {};
+            productionQueues.forEach((queue, buildingIndex) => {
+              queuesObj[buildingIndex.toString()] = queue;
+            });
+            return queuesObj;
+          })(),
+          xpHistory: [],
+          lastAutoSave: Date.now()
+        };
+        
+        const buildingCount = immediateGameState.grid.filter(b => b !== null).length;
+        console.log(`🏗️ BUILDING PLACED SAVE: Saving ${playerName} - ${immediateGameState.neighborhoodName} (${buildingCount} buildings after placing ${building.name})`);
+        
+        saveNeighborhoodToServer(immediateGameState).then(saveResult => {
+          if (saveResult) {
+            console.log(`✅ BUILDING SAVE SUCCESS: ${building.name} built and saved!`);
+            setLastSaveTime(new Date());
+          } else {
+            console.error(`❌ BUILDING SAVE FAILED: Failed to save after building ${building.name}`);
+          }
+        }).catch(error => {
+          console.error(`❌ BUILDING SAVE ERROR:`, error);
+        });
+      }, 100);
     } catch (error) {
       console.error('Error in handleBuildingComplete:', error);
       addNotification('Failed to complete building construction', 'error');
@@ -1174,13 +1353,14 @@ export default function NeighborVille({
     gameMinutes,
     addNotification,
     addToCoinHistory,
-    calculateEnergyUsage
+    calculateEnergyUsage,
+    saveGameCallback
   ]);
 
   const handleXPGain = useCallback((amount: number, source: string, description: string) => {
     setExperience(prev => prev + amount);
     addNotification(`+${amount} XP from ${source}: ${description}`, 'success');
-  }, [addNotification]);
+  }, []);
 
   const handleBuildingManage = (building: Building, index: number) => {
     setShowBuildingInfo({ building, index });
@@ -1206,7 +1386,10 @@ export default function NeighborVille({
     setCoins(coins + Math.floor(buildingToDelete.cost! * 0.5));
 
     addNotification(`Demolished ${buildingToDelete.name} for ${Math.floor(buildingToDelete.cost! * 0.5)} coins`, 'info');
-    saveGame();
+    
+    setTimeout(() => {
+      saveGameCallback(undefined, true);
+    }, 100);
   };
 
   const handleMoveBuilding = (fromIndex: number) => {
@@ -1261,6 +1444,10 @@ export default function NeighborVille({
     addNotification(`Upgraded ${building.name} with ${selectedUpgrade.name}!`, 'success');
 
     addToCoinHistory(selectedUpgrade.cost, `Upgrade: ${selectedUpgrade.name} for ${building.name}`, 'expense');
+    
+    setTimeout(() => {
+      saveGameCallback(undefined, true);
+    }, 100);
   };
 
   const handleDemolishBuilding = (gridIndex: number) => {
@@ -1649,6 +1836,10 @@ export default function NeighborVille({
         setShowBuildingInfo({building: updatedBuilding, index: numericHouseIndex});
       }
     }
+    
+    setTimeout(() => {
+      saveGameCallback(undefined, true);
+    }, 100);
   };
 
   const handleRemoveResident = (neighborId: string | number) => {
@@ -1681,14 +1872,17 @@ export default function NeighborVille({
     setGrid(updatedGrid);
 
     addNotification(`${neighbor.name} moved out`, 'info');
-    saveGame();
+    
+    setTimeout(() => {
+      saveGameCallback(undefined, true);
+    }, 100);
   };
 
   const handleCollectIncome = (gridIndex: number, amount: number) => {
     const building = grid[gridIndex];
     if (!building) return;
 
-    const COLLECTION_COOLDOWN = 24 * 60 * 1000;
+    const COLLECTION_COOLDOWN = 24 * 60 * 60 * 1000;
     const currentTime = Date.now();
 
     if (building.lastCollectedIncome && currentTime - building.lastCollectedIncome < COLLECTION_COOLDOWN) {
@@ -1752,7 +1946,7 @@ export default function NeighborVille({
   }, [experience, level]);
 
   const checkForNewUnlocks = () => {
-    neighborProfiles.forEach(profile => {
+    contentManager.getNeighbors().forEach(profile => {
       const current = neighbors.find(n => n.id === profile.id);
 
       if (current && !current.unlocked && current.unlockCondition) {
@@ -1787,16 +1981,33 @@ export default function NeighborVille({
 
   useEffect(() => {
     const autoSaveInterval = setInterval(() => {
-      saveGameCallback(undefined, true);
-    }, 600000);
+      if (user && playerName && playerName.trim() !== '') {
+        saveGameCallback(undefined, true);
+      }
+    }, 120000);
     return () => clearInterval(autoSaveInterval);
-  }, [saveGameCallback]);
+  }, [user, playerName]);
 
   useEffect(() => {
-    if (playerName && day > 1 && day % 5 === 0) {
-      saveGameCallback(undefined, true);
+    if (!playerName || playerName.trim() === '') {
+      return;
     }
-  }, [day, playerName, saveGameCallback]);
+    
+    const currentGameMinutes = gameTime * 60 + gameMinutes;
+    const lastHourlyAutoSave = localStorage.getItem(`neighborville_lastHourlyAutoSave_${playerName}`);
+    const lastHourlyTime = lastHourlyAutoSave ? parseInt(lastHourlyAutoSave) : 0;
+    
+    if (currentGameMinutes > 0 && Math.floor(currentGameMinutes / 60) > Math.floor(lastHourlyTime / 60)) {
+      console.log(`🕐 Hourly auto-save triggered! Game hour: ${Math.floor(currentGameMinutes / 60)}`);
+      
+      saveGameCallback(undefined, true).then(() => {
+        localStorage.setItem(`neighborville_lastHourlyAutoSave_${playerName}`, currentGameMinutes.toString());
+        addNotification(`📁 Hourly progress saved automatically! (Hour ${Math.floor(currentGameMinutes / 60)})`, 'success');
+      }).catch((error) => {
+        console.error('Hourly auto-save failed:', error);
+      });
+    }
+  }, [gameTime, gameMinutes, playerName]);
 
   const handleEnableMusic = async (enable: boolean) => {
     setMusicEnabled(enable);
@@ -1932,10 +2143,26 @@ export default function NeighborVille({
 
   const handleViewProfile = (username: string) => {
     console.log('Viewing profile for:', username);
-
-    addNotification(`Viewing ${username}'s profile coming soon!`, 'info');
-
+    
     setShowLeaderboard(false);
+    setShowUserSearch(false);
+    
+    setSelectedProfile({
+      id: username,
+      username: username,
+      neighborhood: {
+        name: `${username}'s city`,
+        buildings: [],
+        neighbors: [],
+        stats: {
+          totalHappiness: 0,
+          totalIncome: 0,
+          totalResidents: 0,
+          totalBuildings: 0
+        }
+      }
+    });
+    setShowPublicProfile(true);
   };
 
   const handleLogout = () => {
@@ -1961,7 +2188,64 @@ export default function NeighborVille({
     }
   };
 
-  const saveGame = () => {
+  const saveGame = async () => {
+    if (!playerName || playerName.trim() === '') {
+      console.log('Skipping save: playerName not set yet');
+      return false;
+    }
+    
+    const neighborProgress: { [neighborId: string]: { unlocked: boolean; hasHome: boolean; houseIndex?: number; satisfaction?: number; } } = {};
+    neighbors.forEach(n => {
+      neighborProgress[n.id.toString()] = {
+        unlocked: n.unlocked || false,
+        hasHome: n.hasHome || false,
+        houseIndex: n.houseIndex,
+        satisfaction: n.satisfaction
+      };
+    });
+
+    const gameData: GameProgress = {
+      playerName,
+      neighborhoodName,
+      coins,
+      day,
+      level,
+      experience,
+      gridSize,
+      grid,
+      neighborProgress,
+      completedAchievements: achievements.filter(a => a.completed).map(a => a.id),
+      seenAchievements,
+      gameTime,
+      gameMinutes,
+      timeOfDay,
+      recentEvents,
+      bills,
+      energyRate,
+      totalEnergyUsage,
+      lastBillDay,
+      weather,
+      powerGrid,
+      waterGrid,
+      taxPolicies,
+      cityBudget,
+      playerResources,
+      productionQueues: Object.fromEntries(productionQueues),
+      activeProductions: Object.fromEntries(activeProductions),
+      neighbors,
+      achievements,
+      saveTimestamp: Date.now(),
+      saveId: undefined
+    };
+
+    const saved = await saveNeighborhoodToServer(gameData);
+    if (saved) {
+      addNotification('Game saved successfully!', 'success');
+      setLastSaveTime(new Date());
+    } else {
+      addNotification('Failed to save game', 'error');
+    }
+    return saved;
   };
 
   const getSeasonalBonus = (building: Building) => {
@@ -2098,7 +2382,7 @@ export default function NeighborVille({
     });
 
     setAchievements(updatedAchievements);
-  }, [achievements, grid, day, coins, gridSize, neighbors, level, seenAchievements, addNotification]);
+  }, [achievements, grid, day, coins, gridSize, neighbors, level, seenAchievements]);
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -2121,98 +2405,99 @@ export default function NeighborVille({
         
         const timeSteps = Math.min(timeMissed, 60);
         
-        for (let step = 0; step < timeSteps; step++) {
-          setTimeout(() => {
-            const currentTime = TimeService.getCurrentTime(gameTime, gameMinutes);
-            const updatedQueues = new Map(productionQueues);
-            let resourcesChanged = false;
+        const processBackgroundProduction = () => {
+          const currentTime = TimeService.getCurrentTime(gameTime, gameMinutes);
+          
+          setProductionQueues(currentQueues => {
+            const updatedQueues = new Map(currentQueues);
             let queuesChanged = false;
-            const newResources = { ...playerResources };
 
-            updatedQueues.forEach((queue, buildingIndex) => {
-              const completedItems: string[] = [];
+            setPlayerResources(currentResources => {
+              const newResources = { ...currentResources };
+              let resourcesChanged = false;
 
-              queue.forEach((item) => {
-                if (item.status === 'active' && currentTime.totalMinutes >= item.completionTime) {
-                  let outputs: { resourceId: string; quantity: number }[] = [];
-                  let xpReward = 0;
-                  const building = grid[buildingIndex];
+              updatedQueues.forEach((queue, buildingIndex) => {
+                const completedItems: string[] = [];
 
-                  if (item.recipeId.startsWith('extract_')) {
-                    const resourceId = item.recipeId.replace('extract_', '');
-                    if (building?.produces) {
-                      const production = building.produces.find(p => p.resourceId === resourceId);
-                      if (production) {
-                        outputs = [{ resourceId: production.resourceId, quantity: production.quantity }];
-                        xpReward = Math.ceil(production.quantity / 2);
+                queue.forEach((item) => {
+                  if (item.status === 'active' && currentTime.totalMinutes >= item.completionTime) {
+                    let outputs: { resourceId: string; quantity: number }[] = [];
+                    const building = grid[buildingIndex];
+
+                    if (item.recipeId.startsWith('extract_')) {
+                      const resourceId = item.recipeId.replace('extract_', '');
+                      if (building?.produces) {
+                        const production = building.produces.find(p => p.resourceId === resourceId);
+                        if (production) {
+                          outputs = [{ resourceId: production.resourceId, quantity: production.quantity }];
+                        }
+                      }
+                    } else {
+                      const recipe = getRecipeById(item.recipeId);
+                      if (recipe) {
+                        outputs = recipe.outputs;
                       }
                     }
-                  } else {
-                    const recipe = getRecipeById(item.recipeId);
-                    if (recipe) {
-                      outputs = recipe.outputs;
-                      xpReward = recipe.xpReward;
+
+                    if (outputs.length > 0) {
+                      outputs.forEach(output => {
+                        const oldAmount = newResources[output.resourceId] || 0;
+                        newResources[output.resourceId] = oldAmount + output.quantity;
+                        resourcesChanged = true;
+                      });
+
+                      completedItems.push(item.id);
                     }
                   }
+                });
 
-                  if (outputs.length > 0) {
-                    outputs.forEach(output => {
-                      const oldAmount = newResources[output.resourceId] || 0;
-                      newResources[output.resourceId] = oldAmount + output.quantity;
-                      resourcesChanged = true;
-                    });
+                if (completedItems.length > 0) {
+                  const updatedQueue = queue.filter(item => !completedItems.includes(item.id));
 
-                    handleXPGain(xpReward, 'production', `Background production completed`);
-                    completedItems.push(item.id);
+                  const building = grid[buildingIndex];
+                  if (building?.produces && building.produces.length > 0 && updatedQueue.length === 0) {
+                    const firstProduction = building.produces[0];
+                    const recipeId = `extract_${firstProduction.resourceId}`;
+                    
+                    const newItem: ProductionQueueItem = {
+                      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                      recipeId,
+                      buildingIndex,
+                      startTime: currentTime.totalMinutes,
+                      completionTime: currentTime.totalMinutes + TimeService.calculateProductionTime(firstProduction.timeMinutes, timeSpeed),
+                      status: 'active',
+                      progress: 0
+                    };
+                    
+                    updatedQueue.push(newItem);
                   }
+
+                  updatedQueues.set(buildingIndex, updatedQueue);
+                  queuesChanged = true;
                 }
               });
 
-              if (completedItems.length > 0) {
-                const updatedQueue = queue.filter(item => !completedItems.includes(item.id));
-
-                const building = grid[buildingIndex];
-                if (building?.produces && building.produces.length > 0 && updatedQueue.length === 0) {
-                  const firstProduction = building.produces[0];
-                  const recipeId = `extract_${firstProduction.resourceId}`;
-                  
-                  const newItem: ProductionQueueItem = {
-                    id: `${Date.now()}-${step}-${Math.random().toString(36).substr(2, 9)}`,
-                    recipeId,
-                    buildingIndex,
-                    startTime: currentTime.totalMinutes,
-                    completionTime: currentTime.totalMinutes + TimeService.calculateProductionTime(firstProduction.timeMinutes, timeSpeed),
-                    status: 'active',
-                    progress: 0
-                  };
-                  
-                  updatedQueue.push(newItem);
-                }
-
-                updatedQueues.set(buildingIndex, updatedQueue);
-                queuesChanged = true;
-              }
+              return resourcesChanged ? newResources : currentResources;
             });
 
-            if (resourcesChanged) {
-              setPlayerResources(newResources);
-            }
+            return queuesChanged ? updatedQueues : currentQueues;
+          });
+        };
 
-            if (queuesChanged) {
-              setProductionQueues(updatedQueues);
-            }
-
-          }, step * 50);
+        for (let step = 0; step < timeSteps; step++) {
+          setTimeout(processBackgroundProduction, step * 50);
         }
 
         if (timeSteps > 10) {
-          addNotification(`Processed ${timeSteps} seconds of background production`, 'info');
+          setTimeout(() => {
+            addNotification(`Processed ${timeSteps} seconds of background production`, 'info');
+          }, 0);
         }
       }
     }
 
     setLastActiveTime(null);
-  }, [isTabVisible, lastActiveTime, timePaused, gameTime, gameMinutes, timeSpeed]);
+  }, [isTabVisible, timePaused]);
 
   useEffect(() => {
     if (activeProductions.size === 0) return;
@@ -2220,75 +2505,79 @@ export default function NeighborVille({
     const syncInterval = setInterval(() => {
       const currentTime = TimeService.getCurrentTime(gameTime, gameMinutes);
       let hasChanges = false;
-      let newResources = { ...playerResources };
-      const updatedProductions = new Map(activeProductions);
+      
+      setPlayerResources(currentResources => {
+        let newResources = { ...currentResources };
+        let resourcesChanged = false;
+        
+        setActiveProductions(currentProductions => {
+          const updatedProductions = new Map(currentProductions);
+          let productionsChanged = false;
 
-      updatedProductions.forEach((production, buildingIndex) => {
-        if (!production.isActive) return;
+          updatedProductions.forEach((production, buildingIndex) => {
+            if (!production.isActive) return;
 
-        const building = grid[buildingIndex];
-        if (!building) return;
+            const building = grid[buildingIndex];
+            if (!building) return;
 
-        let cycleDuration = 0;
-        let outputs: { resourceId: string; quantity: number }[] = [];
-        let xpReward = 0;
-        let productionName = '';
+            let cycleDuration = 0;
+            let outputs: { resourceId: string; quantity: number }[] = [];
+            let productionName = '';
 
-        if (production.recipeId.startsWith('extract_')) {
-          const resourceId = production.recipeId.replace('extract_', '');
-          if (building.produces) {
-            const productionData = building.produces.find(p => p.resourceId === resourceId);
-            if (productionData) {
-              cycleDuration = TimeService.calculateProductionTime(productionData.timeMinutes, timeSpeed);
-              outputs = [{ resourceId: productionData.resourceId, quantity: productionData.quantity }];
-              xpReward = Math.ceil(productionData.quantity / 2);
-              const resource = getResourceById(resourceId);
-              productionName = `${resource?.name || resourceId}`;
+            if (production.recipeId.startsWith('extract_')) {
+              const resourceId = production.recipeId.replace('extract_', '');
+              if (building.produces) {
+                const productionData = building.produces.find(p => p.resourceId === resourceId);
+                if (productionData) {
+                  cycleDuration = TimeService.calculateProductionTime(productionData.timeMinutes, timeSpeed);
+                  outputs = [{ resourceId: productionData.resourceId, quantity: productionData.quantity }];
+                  const resource = getResourceById(resourceId);
+                  productionName = `${resource?.name || resourceId}`;
+                }
+              }
+            } else {
+              const recipe = getRecipeById(production.recipeId);
+              if (recipe) {
+                cycleDuration = TimeService.calculateProductionTime(recipe.productionTime, timeSpeed);
+                outputs = recipe.outputs;
+                productionName = recipe.name;
+              }
             }
-          }
-        } else {
-          const recipe = getRecipeById(production.recipeId);
-          if (recipe) {
-            cycleDuration = TimeService.calculateProductionTime(recipe.productionTime, timeSpeed);
-            outputs = recipe.outputs;
-            xpReward = recipe.xpReward;
-            productionName = recipe.name;
-          }
-        }
 
-        const nextCompletionTime = production.lastCompletionTime + cycleDuration;
-        if (currentTime.totalMinutes >= nextCompletionTime && cycleDuration > 0) {
-          outputs.forEach(output => {
-            const oldAmount = newResources[output.resourceId] || 0;
-            newResources[output.resourceId] = oldAmount + output.quantity;
-            console.log(`🔄 Continuous production: +${output.quantity} ${output.resourceId} (${oldAmount} -> ${newResources[output.resourceId]})`);
+            const nextCompletionTime = production.lastCompletionTime + cycleDuration;
+            if (currentTime.totalMinutes >= nextCompletionTime && cycleDuration > 0) {
+              outputs.forEach(output => {
+                const oldAmount = newResources[output.resourceId] || 0;
+                newResources[output.resourceId] = oldAmount + output.quantity;
+                resourcesChanged = true;
+              });
+
+              production.lastCompletionTime = nextCompletionTime;
+              production.cycleCount += 1;
+
+              if (production.cycleCount % 5 === 0) {
+                setTimeout(() => {
+                  addNotification(
+                    `🔄 ${productionName}: ${production.cycleCount} cycles completed`, 
+                    'info'
+                  );
+                }, 0);
+              }
+
+              productionsChanged = true;
+            }
           });
 
-          handleXPGain(xpReward, 'production', `Produced ${productionName}`);
+          return productionsChanged ? updatedProductions : currentProductions;
+        });
 
-          production.lastCompletionTime = nextCompletionTime;
-          production.cycleCount += 1;
-
-          if (production.cycleCount % 5 === 0) {
-            addNotification(
-              `🔄 ${productionName}: ${production.cycleCount} cycles completed`, 
-              'info'
-            );
-          }
-
-          hasChanges = true;
-        }
+        return resourcesChanged ? newResources : currentResources;
       });
-
-      if (hasChanges) {
-        setPlayerResources(newResources);
-        setActiveProductions(updatedProductions);
-      }
 
     }, 1000);
 
     return () => clearInterval(syncInterval);
-  }, [activeProductions, playerResources, grid, gameTime, gameMinutes, timeSpeed, addNotification, handleXPGain]);
+  }, [gameTime, gameMinutes, timeSpeed, grid]);
 
   const handleShowProductionManager = () => {
     console.log(`🏭 OPENING PRODUCTION MODAL - Active productions:`, Array.from(activeProductions.entries()));
@@ -2350,6 +2639,72 @@ export default function NeighborVille({
   const handleShowUserSearch = () => {
     setShowUserSearch(true);
   };
+
+  const handleOpenChat = () => {
+    setShowChat(true);
+    setHasUnreadMessages(false);
+  };
+
+  const handleCloseChat = () => {
+    setShowChat(false);
+    setHasUnreadMessages(false);
+  };
+
+  const handleToggleChat = () => {
+    setShowChat(!showChat);
+  };
+
+  const handleMessageNotification = (message: any) => {
+    if (message.sender._id !== user?.id) {
+      setHasUnreadMessages(true);
+      addNotification(`New message from ${message.sender.username}`, 'info');
+    }
+  };
+
+  useEffect(() => {
+    const autoSaveInterval = setInterval(() => {
+      if (!timePaused && !autoSaving) {
+        setAutoSaving(true);
+        saveGame().finally(() => {
+          setAutoSaving(false);
+        });
+      }
+    }, 5 * 60 * 1000);
+
+    return () => clearInterval(autoSaveInterval);
+  }, [timePaused, autoSaving]);
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!autoSaving) {
+        saveGame();
+      }
+      e.preventDefault();
+      e.returnValue = "You have unsaved progress. Are you sure you want to leave?";
+      return e.returnValue;
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [autoSaving]);
+
+  useEffect(() => {
+    if (timePaused && !autoSaving) {
+      setAutoSaving(true);
+      saveGame().finally(() => {
+        setAutoSaving(false);
+      });
+    }
+  }, [timePaused]);
+
+  useEffect(() => {
+    if (!autoSaving) {
+      setAutoSaving(true);
+      saveGame().finally(() => {
+        setAutoSaving(false);
+      });
+    }
+  }, [grid]);
 
   return (
     <AppLayout 
@@ -2433,7 +2788,7 @@ export default function NeighborVille({
 
         <NotificationSystem 
           notifications={notifications}
-          removeNotification={(id) => setNotifications(prev => prev.filter(n => n.id !== id))}
+          removeNotification={removeNotification}
         />
 
         <NeighborSocialFeed
@@ -2442,6 +2797,13 @@ export default function NeighborVille({
           onClose={() => setShowSocialFeed(false)}
           currentDay={day}
           timeOfDay={timeOfDay}
+          weather={weather}
+          coins={coins}
+          happiness={neighbors.reduce((sum, n) => sum + (n.satisfaction || 0), 0) / Math.max(1, neighbors.filter(n => n.unlocked && n.hasHome).length)}
+          powerGrid={powerGrid}
+          waterGrid={waterGrid}
+          recentEvents={recentEvents}
+          neighborhoodName={neighborhoodName}
         />
 
         <div className="container mx-auto px-4 py-4">
@@ -2653,7 +3015,12 @@ export default function NeighborVille({
           </div>
         </div>
 
-
+        {!showChat && (
+          <ChatToggleButton
+            onClick={handleToggleChat}
+            unreadMessages={hasUnreadMessages ? 1 : 0}
+          />
+        )}
 
         <AnimatePresence>
           {(autoSaving || lastSaveTime) && (
@@ -2783,8 +3150,8 @@ export default function NeighborVille({
           onStartFresh={async () => {
             try {
               const result = await startFreshNeighborhood();
-              if (result.success && result.gameData) {
-                loadGameState(result.gameData, true);
+              if (result) {
+                loadGameState(result, true);
                 addNotification('Started a fresh neighborhood!', 'success');
               } else {
                 addNotification('Failed to start fresh neighborhood', 'error');
@@ -3203,7 +3570,7 @@ export default function NeighborVille({
         {showPublicProfile && selectedProfile && (
           <PublicProfileModal
             onClose={() => setShowPublicProfile(false)}
-            profile={selectedProfile}
+            username={selectedProfile.username}
           />
         )}
 
@@ -3288,7 +3655,6 @@ export default function NeighborVille({
             onClose={() => setShowUserSearch(false)}
             onViewProfile={(username) => {
               console.log('Viewing profile for:', username);
-              setShowUserSearch(false);
             }}
           />
         )}
@@ -3299,6 +3665,41 @@ export default function NeighborVille({
             onClose={() => setShowWiki(false)}
           />
         )}
+
+        {showSocialFeed && (
+  <ModalWrapper 
+    isOpen={showSocialFeed} 
+    onClose={() => setShowSocialFeed(false)} 
+    title="Neighborhood Social Feed"
+  >
+    <NeighborSocialFeed
+      neighbors={neighbors}
+      grid={grid}
+      onClose={() => setShowSocialFeed(false)}
+      currentDay={day}
+      timeOfDay={timeOfDay}
+      weather={weather}
+      coins={coins}
+      happiness={neighbors.reduce((sum, n) => sum + (n.satisfaction || 0), 0) / Math.max(1, neighbors.filter(n => n.unlocked && n.hasHome).length)}
+      powerGrid={powerGrid}
+      waterGrid={waterGrid}
+      recentEvents={recentEvents}
+      neighborhoodName={neighborhoodName}
+    />
+  </ModalWrapper>
+        )}
+
+        <AnimatePresence>
+          {showChat && (
+            <UnifiedChatWindow
+              onClose={handleCloseChat}
+              onMessageNotification={handleMessageNotification}
+              addNotification={addNotification}
+            />
+          )}
+        </AnimatePresence>
+
+
       </AppLayout>
     );
   }

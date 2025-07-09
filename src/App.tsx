@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import AppLayout from './components/ui/AppLayout';
@@ -19,17 +19,25 @@ import { useSuspensionCheck } from './hooks/useSuspensionCheck';
 import TermsOfService from './components/legal/TermsOfService';
 import PrivacyPolicy from './components/legal/PrivacyPolicy';
 import GameWiki from './components/game/GameWiki';
+import { ToastContainer } from './components/ui/Toast';
+import './App.css';
+import { NORMALIZED_API_URL } from './config/apiConfig';
 
 const AUTO_SAVE_INTERVAL = 5 * 60 * 1000;
 
 function App() {
   return (
     <Router>
-      <Routes>
-        <Route path="/tos" element={<TermsOfService />} />
-        <Route path="/privacy" element={<PrivacyPolicy />} />
-        <Route path="/" element={<GameApp />} />
-      </Routes>
+      <div className="App">
+        <AppLayout>
+          <Routes>
+            <Route path="/tos" element={<TermsOfService />} />
+            <Route path="/privacy" element={<PrivacyPolicy />} />
+            <Route path="/" element={<GameApp />} />
+          </Routes>
+        </AppLayout>
+        <ToastContainer />
+      </div>
     </Router>
   );
 }
@@ -107,73 +115,93 @@ function GameApp() {
     }, 500);
   };
   
-  const handleStartGame = (playerName: string, neighborhoodName?: string) => {
+  const handleStartGame = async (playerName: string, neighborhoodName?: string) => {
     if (isSuspended) {
       console.warn('Attempted to start game while suspended');
       return;
     }
     
-    const newGameProgress: GameProgress = {
-      playerName,
-      neighborhoodName: neighborhoodName || 'Unnamed City',
-      coins: 2000,
-      day: 1,
-      level: 1,
-      experience: 0,
-      grid: Array(64).fill(null),
-      gridSize: 16,
-      neighborProgress: {},
-      completedAchievements: [],
-      seenAchievements: [],
-      neighbors: [],
-      achievements: [],
-      events: [],
-      gameTime: 12,
-      gameMinutes: 0,
-      timeOfDay: 'day',
-      recentEvents: [],
-      bills: [],
-      energyRate: 2,
-      totalEnergyUsage: 0,
-      lastBillDay: 0,
-      coinHistory: [{
-        id: crypto.randomUUID(),
-        day: 1,
-        balance: 2000,
-        amount: 0,
-        type: 'income',
-        description: 'Initial balance',
-        timestamp: Date.now()
-      }],
-      weather: 'sunny',
-      powerGrid: {
-        totalPowerProduction: 0,
-        totalPowerConsumption: 0,
-        connectedBuildings: [],
-        powerOutages: []
-      },
-      waterGrid: {
-        totalWaterProduction: 0,
-        totalWaterConsumption: 0,
-        connectedBuildings: [],
-        waterShortages: []
-      },
-      playerResources: {
-        wood: 10,
-        stone: 10,
-        iron_ore: 5
-      },
-      taxPolicies: []
-    };
-    setGameProgress(newGameProgress);
-    setGameStarted(true);
-    setGameLoaded(false);
-    
-    if (isAuthenticated) {
-      saveGameToServer(newGameProgress).catch(error => {
-        console.error('Error saving initial game state:', error);
-      });
+    if (!isAuthenticated) {
+      console.warn('Cannot start game: user not authenticated');
+      setShowAuth(true);
+      return;
     }
+    
+    try {
+      setGameLoading(true);
+      
+      const response = await fetch(`${NORMALIZED_API_URL}/api/user/game/initialize`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(await getAuthHeaders())
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          playerName: playerName.trim(),
+          neighborhoodName: neighborhoodName?.trim() || 'My City'
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (result.success && result.gameData) {
+        console.log('New game initialized successfully:', result.saveId);
+        setGameProgress(result.gameData);
+        setGameStarted(true);
+        setGameLoaded(false);
+      } else {
+        console.error('Failed to initialize game:', result.message);
+        
+        if (response.status === 409) {
+          console.log('User has existing game data, loading instead...');
+          await handleLoadExistingGame();
+        } else {
+          throw new Error(result.message || 'Failed to initialize game');
+        }
+      }
+    } catch (error) {
+      console.error('Error starting new game:', error);
+      setGameLoading(false);
+    } finally {
+      setGameLoading(false);
+    }
+  };
+  
+  const handleLoadExistingGame = async () => {
+    try {
+      const response = await fetch(`${NORMALIZED_API_URL}/api/user/game/start`, {
+        method: 'GET',
+        headers: await getAuthHeaders(),
+        credentials: 'include'
+      });
+      
+      const result = await response.json();
+      
+      if (result.success && result.gameData) {
+        console.log('Loaded existing game data:', result.saveId);
+        setGameProgress(result.gameData);
+        setGameStarted(true);
+        setGameLoaded(true);
+      } else {
+        throw new Error('No game data available');
+      }
+    } catch (error) {
+      console.error('Error loading existing game:', error);
+      throw error;
+    }
+  };
+
+  const getAuthHeaders = async () => {
+    const token = document.cookie
+      .split('; ')
+      .find(row => row.startsWith('neighborville_auth='))
+      ?.split('=')[1];
+    
+    return {
+      'Content-Type': 'application/json',
+      ...(token && { 'Authorization': `Bearer ${token}` })
+    };
   };
   
   const handleLoadGame = (savedGameProgress: GameProgress) => {
@@ -267,7 +295,7 @@ function GameApp() {
   
   const handleDeleteAccount = async () => {
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/user/delete-account`, {
+      const response = await fetch(`${NORMALIZED_API_URL}/api/user/delete-account`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json'

@@ -1,5 +1,6 @@
 import type { GameProgress } from '../types/game';
-import { API_URL } from '../config/apiConfig';
+import { NORMALIZED_API_URL } from '../config/apiConfig';
+import { logger } from '../utils/logger';
 
 const getAuthHeaders = (): HeadersInit => {
   return {
@@ -10,21 +11,21 @@ const getAuthHeaders = (): HeadersInit => {
 export const saveGameToServer = async (gameData: GameProgress): Promise<boolean> => {
   try {
     if (!gameData.playerName) {
-      console.error('Cannot save game without player name');
+      logger.error('Cannot save game without player name');
       return false;
     }
 
     if (!gameData.saveId) {
-      gameData.saveId = `save-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+      gameData.saveId = `save_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 15)}_${Math.random().toString(36).substring(2, 10)}`;
     }
     
     if (!gameData.saveTimestamp) {
       gameData.saveTimestamp = Date.now();
     }
 
-    console.log(`Attempting to save game to server at ${API_URL}/api/user/game/save`);
+    console.log(`Attempting to save game to server at ${NORMALIZED_API_URL}/api/user/game/save`);
     
-    const saveResult = await fetch(`${API_URL}/api/user/game/save`, {
+    const saveResult = await fetch(`${NORMALIZED_API_URL}/api/user/game/save`, {
       method: 'POST',
       headers: getAuthHeaders(),
       credentials: 'include',
@@ -56,9 +57,9 @@ export const saveGameToServer = async (gameData: GameProgress): Promise<boolean>
 
 export const loadGameFromServer = async (): Promise<{gameData: GameProgress | null, lastSave: Date | null}> => {
   try {
-    console.log(`Attempting to load game from server at ${API_URL}/api/user/game/load`);
+    console.log(`Attempting to load game from server at ${NORMALIZED_API_URL}/api/user/game/load`);
     
-    const response = await fetch(`${API_URL}/api/user/game/load`, {
+    const response = await fetch(`${NORMALIZED_API_URL}/api/user/game/load`, {
       method: 'GET',
       headers: getAuthHeaders(),
       credentials: 'include',
@@ -113,9 +114,9 @@ export const loadGameFromServer = async (): Promise<{gameData: GameProgress | nu
 
 export const loadSpecificSaveFromServer = async (saveId: string): Promise<{gameData: GameProgress | null, lastSave: Date | null}> => {
   try {
-    console.log(`Attempting to load specific save from server at ${API_URL}/api/user/game/save/${encodeURIComponent(saveId)}`);
+    console.log(`Attempting to load specific save from server at ${NORMALIZED_API_URL}/api/user/game/save/${encodeURIComponent(saveId)}`);
     
-    const response = await fetch(`${API_URL}/api/user/game/save/${encodeURIComponent(saveId)}`, {
+    const response = await fetch(`${NORMALIZED_API_URL}/api/user/game/save/${encodeURIComponent(saveId)}`, {
       method: 'GET',
       headers: getAuthHeaders(),
       credentials: 'include',
@@ -163,9 +164,9 @@ export const loadSpecificSaveFromServer = async (saveId: string): Promise<{gameD
 
 export const getAllSavesFromServer = async (): Promise<{id: string, playerName: string, timestamp: number, data: GameProgress}[]> => {
   try {
-    console.log(`Attempting to get saves from server at ${API_URL}/api/user/game/saves`);
+    console.log(`Attempting to get saves from server at ${NORMALIZED_API_URL}/api/user/game/saves`);
     
-    const response = await fetch(`${API_URL}/api/user/game/saves`, {
+    const response = await fetch(`${NORMALIZED_API_URL}/api/user/game/saves`, {
       method: 'GET',
       headers: getAuthHeaders(),
       credentials: 'include',
@@ -193,9 +194,9 @@ export const getAllSavesFromServer = async (): Promise<{id: string, playerName: 
 
 export const deleteSaveFromServer = async (saveId: string): Promise<boolean> => {
   try {
-    console.log(`Attempting to delete save from server at ${API_URL}/api/user/game/save/${encodeURIComponent(saveId)}`);
+    console.log(`Attempting to delete save from server at ${NORMALIZED_API_URL}/api/user/game/save/${encodeURIComponent(saveId)}`);
     
-    const response = await fetch(`${API_URL}/api/user/game/save/${encodeURIComponent(saveId)}`, {
+    const response = await fetch(`${NORMALIZED_API_URL}/api/user/game/save/${encodeURIComponent(saveId)}`, {
       method: 'DELETE',
       headers: getAuthHeaders(),
       credentials: 'include',
@@ -216,13 +217,95 @@ export const deleteSaveFromServer = async (saveId: string): Promise<boolean> => 
   }
 };
 
-export const shouldSaveGame = (lastSaveTimestamp: string | null, minInterval: number = 300000): boolean => {
-  if (!lastSaveTimestamp) return true;
+const MIN_AUTOSAVE_INTERVAL = 120000;
+
+let lastAutoSave = 0;
+
+export const shouldSaveGame = (gameData: GameProgress | null): boolean => {
+  if (!gameData) {
+    return false;
+  }
   
   const now = Date.now();
-  const lastSave = parseInt(lastSaveTimestamp, 10);
   
-  return (now - lastSave) > minInterval;
+  if (now - lastAutoSave < MIN_AUTOSAVE_INTERVAL) {
+    return false;
+  }
+  
+  if (gameData.lastAutoSave && now - gameData.lastAutoSave < MIN_AUTOSAVE_INTERVAL) {
+    return false;
+  }
+  
+  lastAutoSave = now;
+  return true;
+};
+
+export const getGameSaveStats = (gameData: GameProgress) => {
+  return {
+    lastSave: gameData.saveTimestamp ? new Date(gameData.saveTimestamp) : null,
+    timeSinceLastSave: gameData.saveTimestamp ? Date.now() - gameData.saveTimestamp : null,
+    saveId: gameData.saveId || null
+  };
+};
+
+export const validateGameData = (gameData: GameProgress): boolean => {
+  if (!gameData || typeof gameData !== 'object') {
+    console.error('Invalid game data: not an object');
+    return false;
+  }
+  
+  const requiredFields = [
+    'playerName',
+    'neighborhoodName',
+    'coins',
+    'day',
+    'level',
+    'experience',
+    'grid',
+    'gridSize'
+  ];
+  
+  for (const field of requiredFields) {
+    if (!(field in gameData)) {
+      console.error(`Invalid game data: missing required field '${field}'`);
+      return false;
+    }
+  }
+  
+  if (!Array.isArray(gameData.grid)) {
+    console.error('Invalid game data: grid is not an array');
+    return false;
+  }
+  
+  if (gameData.grid.length !== gameData.gridSize * gameData.gridSize) {
+    console.error('Invalid game data: grid size mismatch');
+    return false;
+  }
+  
+  return true;
+};
+
+export const shouldSaveOnAction = (action: string): boolean => {
+  const criticalActions = [
+    'build',
+    'demolish',
+    'upgrade',
+    'move',
+    'connect',
+    'disconnect',
+    'assign_resident',
+    'remove_resident',
+    'pay_bill',
+    'collect_income',
+    'complete_achievement',
+    'unlock_neighbor',
+    'level_up',
+    'change_name',
+    'change_policy',
+    'change_budget'
+  ];
+  
+  return criticalActions.includes(action);
 };
 
 export const hasUnsavedChanges = async (): Promise<boolean> => {

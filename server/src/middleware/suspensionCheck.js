@@ -38,7 +38,7 @@ export const checkSuspension = async (req, res, next) => {
       }
     }
 
-    if (req.user && req.user.isSuspended()) {
+    if (req.user && req.user.checkSuspensionStatus()) {
       const activeSuspension = req.user.suspensions.find(s => s.isActive);
       
       return res.status(403).json({
@@ -90,7 +90,7 @@ export const checkSuspensionForGame = async (req, res, next) => {
       }
     }
 
-    if (req.user && req.user.isSuspended()) {
+    if (req.user && req.user.checkSuspensionStatus()) {
       const activeSuspension = req.user.suspensions.find(s => s.isActive);
       
       return res.status(403).json({

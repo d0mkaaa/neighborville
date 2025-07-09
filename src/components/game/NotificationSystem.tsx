@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { AlertTriangle, CheckCircle, XCircle, Info, X, Zap, Coins, Factory, Heart } from "lucide-react";
+import { AlertTriangle, CheckCircle, XCircle, Info, X, Zap, Coins, Factory, Heart, MessageCircle, Shield, Clock } from "lucide-react";
 import type { NotificationType } from "../../types/game";
 
 export interface ExtendedNotification extends NotificationType {
@@ -50,6 +50,16 @@ function NotificationItem({ notification, onClose }: NotificationItemProps) {
     const getIcon = () => {
     const message = notification.message.toLowerCase();
     
+    if (message.includes('message') || message.includes('chat') || message.includes('conversation') || message.includes('dm')) {
+      return <MessageCircle className="text-white" size={20} />;
+    }
+    if (message.includes('banned') || message.includes('muted') || message.includes('blocked') || message.includes('inappropriate')) {
+      return <Shield className="text-white" size={20} />;
+    }
+    if (message.includes('rate limit') || message.includes('wait') || message.includes('slow down') || message.includes('too fast')) {
+      return <Clock className="text-white" size={20} />;
+    }
+
     if (message.includes('coin') || message.includes('income') || message.includes('earn') || message.includes('spend')) {
       return <Coins className="text-white" size={20} />;
     }

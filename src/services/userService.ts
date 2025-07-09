@@ -1,4 +1,4 @@
-import { NORMALIZED_API_URL } from '../config/apiConfig';
+import { NORMALIZED_API_URL, buildApiEndpoint } from '../config/apiConfig';
 
 export interface User {
   id: string;
@@ -200,7 +200,7 @@ export const register = async (
   username?: string
 ): Promise<AuthResponse> => {
   try {
-    const response = await fetch(`${NORMALIZED_API_URL}/api/user/register`, {
+    const response = await fetch(buildApiEndpoint('/api/user/register'), {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify({
@@ -225,7 +225,7 @@ export const login = async (
   password: string
 ): Promise<AuthResponse> => {
   try {
-    const checkUser = await fetch(`${NORMALIZED_API_URL}/api/user/check-registered`, {
+    const checkUser = await fetch(buildApiEndpoint('/api/user/check-registered'), {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify({ email })
@@ -242,7 +242,7 @@ export const login = async (
       }
     }
     
-    const response = await fetch(`${NORMALIZED_API_URL}/api/user/login`, {
+    const response = await fetch(buildApiEndpoint('/api/user/login'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -272,7 +272,7 @@ export const login = async (
 
 export const logout = async (): Promise<boolean> => {
   try {
-    const response = await fetch(`${NORMALIZED_API_URL}/api/user/logout`, {
+    const response = await fetch(buildApiEndpoint('/api/user/logout'), {
       method: 'POST',
       headers: getAuthHeaders(),
       credentials: 'include'
@@ -288,60 +288,44 @@ export const logout = async (): Promise<boolean> => {
   }
 };
 
-export const getCurrentUser = async (): Promise<User | null> => {
+export const getCurrentJWTToken = async (): Promise<string | null> => {
   try {
-    console.log('getCurrentUser: Making request to /api/user/me with cookie authentication');
-    const response = await fetch(`${NORMALIZED_API_URL}/api/user/me`, {
+    const response = await fetch(buildApiEndpoint('/api/user/token'), {
       method: 'GET',
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/json'
-      },
-      credentials: 'include'
-    });
-    
-    console.log('getCurrentUser: Response status:', response.status);
-    
-    if (response.status === 401) {
-      console.log('getCurrentUser: Received 401, user not authenticated');
-      clearAuthToken();
-      sessionStorage.removeItem('neighborville_playerName');
-      window.dispatchEvent(new CustomEvent('auth:unauthorized', { 
-        detail: { message: 'Authentication required' }
-      }));
-      return null;
-    }
-    
-    if (response.status === 403) {
-      const data = await response.json();
-      if (data.suspended && data.suspension) {
-        console.log('getCurrentUser: User is suspended:', data.suspensionType || 'user', data.suspension.reason);
-        window.dispatchEvent(new CustomEvent('user:suspended', { 
-          detail: { 
-            suspensionData: {
-              ...data.suspension,
-              type: data.suspensionType || 'user'
-            }
-          }
-        }));
-        return null;
       }
-    }
-    
+    });
+
     if (!response.ok) {
-      console.log('getCurrentUser: Response not ok:', response.status, response.statusText);
-      return null;
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
-    
+
     const data = await response.json();
-    console.log('getCurrentUser: Response data success:', data.success);
-    
-    if (data.success && data.user) {
-      console.log('getCurrentUser: User found:', data.user.username);
-      return data.user as User;
-    }
-    
-    console.log('getCurrentUser: No user in response data');
+    return data.token;
+  } catch (error) {
+    console.error('getCurrentJWTToken: Error getting JWT token:', error);
     return null;
+  }
+};
+
+export const getCurrentUser = async (): Promise<User | null> => {
+  try {
+    const response = await fetch(buildApiEndpoint('/api/user/me'), {
+      method: 'GET',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.user;
   } catch (error) {
     console.error('getCurrentUser: Error getting current user:', error);
     return null;
@@ -352,7 +336,7 @@ export const checkRegisteredEmail = async (
   email: string
 ): Promise<{ exists: boolean; message?: string }> => {
   try {
-    const response = await fetch(`${NORMALIZED_API_URL}/api/user/check-registered`, {
+    const response = await fetch(buildApiEndpoint('/api/user/check-registered'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -377,7 +361,7 @@ export const verifyEmail = async (
   username?: string
 ): Promise<{ success: boolean; user?: any; message?: string; isNewRegistration?: boolean }> => {
   try {
-    const response = await fetch(`${NORMALIZED_API_URL}/api/user/verify`, {
+    const response = await fetch(buildApiEndpoint('/api/user/verify'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -419,7 +403,7 @@ export const resendVerification = async (
   email: string
 ): Promise<boolean> => {
   try {
-    const response = await fetch(`${NORMALIZED_API_URL}/api/user/resend-verification`, {
+    const response = await fetch(buildApiEndpoint('/api/user/resend-verification'), {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify({
@@ -440,7 +424,7 @@ export const updateUserSettings = async (
   settings: any
 ): Promise<boolean> => {
   try {
-    const response = await fetch(`${NORMALIZED_API_URL}/api/user/${userId}/settings`, {
+    const response = await fetch(buildApiEndpoint(`/api/user/${userId}/settings`), {
       method: 'PUT',
       headers: getAuthHeaders(),
       body: JSON.stringify({
@@ -463,7 +447,7 @@ export const updateUser = async (
   try {
     const { username, ...allowedUpdates } = userData;
     
-    const response = await fetch(`${NORMALIZED_API_URL}/api/user/${userId}`, {
+    const response = await fetch(buildApiEndpoint(`/api/user/${userId}`), {
       method: 'PUT',
       headers: getAuthHeaders(),
       body: JSON.stringify(allowedUpdates)
@@ -479,7 +463,7 @@ export const updateUser = async (
 
 export const getUserProfile = async (): Promise<User | null> => {
   try {
-    const response = await fetch(`${NORMALIZED_API_URL}/api/user/profile`, {
+    const response = await fetch(buildApiEndpoint('/api/user/profile'), {
       method: 'GET',
       headers: getAuthHeaders(),
       credentials: 'include'
@@ -504,7 +488,7 @@ export const getUserProfile = async (): Promise<User | null> => {
 
 export const getUserSessions = async () => {
   try {
-    const response = await fetch(`${NORMALIZED_API_URL}/api/user/sessions`, {
+    const response = await fetch(buildApiEndpoint('/api/user/sessions'), {
       method: 'GET',
       headers: getAuthHeaders(),
       credentials: 'include'
@@ -551,7 +535,7 @@ export const getLeaderboard = async (
 ): Promise<LeaderboardResponse> => {
   try {
     const response = await fetch(
-      `${NORMALIZED_API_URL}/api/user/leaderboard?sort=${sort}&page=${page}&limit=${limit}`,
+      buildApiEndpoint(`/api/user/leaderboard?sort=${sort}&page=${page}&limit=${limit}`),
       {
         method: 'GET',
         credentials: 'include',
@@ -590,6 +574,7 @@ export interface PublicProfileData {
   lastActive: string;
   gameData: {
     playerName: string;
+    neighborhoodName?: string;
     day: number;
     level: number;
     happiness: number;
@@ -631,7 +616,7 @@ export const getPublicProfile = async (username: string): Promise<{
   message?: string;
 }> => {
   try {
-    const response = await fetch(`${NORMALIZED_API_URL}/api/profile/${username}`, {
+    const response = await fetch(buildApiEndpoint(`/api/profile/${username}`), {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json'
@@ -639,12 +624,19 @@ export const getPublicProfile = async (username: string): Promise<{
     });
     
     if (!response.ok) {
-      const error = await response.json();
-      return {
-        success: false,
-        isPrivate: error.isPrivate || false,
-        message: error.message || `Failed to fetch profile: ${response.status}`
-      };
+      try {
+        const error = await response.json();
+        return {
+          success: false,
+          isPrivate: error.isPrivate || false,
+          message: error.message || `Failed to fetch profile: ${response.status}`
+        };
+      } catch {
+        return {
+          success: false,
+          message: `Failed to fetch profile: ${response.status}`
+        };
+      }
     }
     
     const data = await response.json();
@@ -667,7 +659,7 @@ export const checkAuthenticationStatus = async (): Promise<{
   saveCount?: number;
 }> => {
   try {
-    const response = await fetch(`${NORMALIZED_API_URL}/api/user/auth-check`, {
+    const response = await fetch(buildApiEndpoint('/api/user/auth-check'), {
       method: 'GET',
       headers: getAuthHeaders(),
       credentials: 'include'
@@ -719,7 +711,7 @@ export interface LegalAcceptanceResponse {
 
 export const updateLegalAcceptance = async (acceptance: LegalAcceptanceRequest): Promise<LegalAcceptanceResponse> => {
   try {
-    const response = await fetch(`${NORMALIZED_API_URL}/api/user/legal-acceptance`, {
+    const response = await fetch(buildApiEndpoint('/api/user/legal-acceptance'), {
       method: 'POST',
       headers: getAuthHeaders(),
       credentials: 'include',
@@ -747,7 +739,7 @@ export const updateLegalAcceptance = async (acceptance: LegalAcceptanceRequest):
 
 export const getLegalAcceptance = async (): Promise<LegalAcceptanceResponse> => {
   try {
-    const response = await fetch(`${NORMALIZED_API_URL}/api/user/legal-acceptance`, {
+    const response = await fetch(buildApiEndpoint('/api/user/legal-acceptance'), {
       method: 'GET',
       headers: getAuthHeaders(),
       credentials: 'include'
@@ -806,4 +798,30 @@ export const getTokenExpiryDate = (): Date | null => {
 export const isTokenExpired = (): boolean => {
   const expiryDate = getTokenExpiryDate();
   return expiryDate ? expiryDate <= new Date() : true;
+};
+
+export const check2FAStatus = async (email: string): Promise<{ enabled: boolean; verified: boolean }> => {
+  try {
+    console.log('userService: Calling check-2fa-status with email:', email);
+    console.log('userService: Request body:', { email });
+    
+    const response = await fetch(buildApiEndpoint('/api/user/check-2fa-status'), {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ email })
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error checking 2FA status:', error);
+    throw error;
+  }
 };

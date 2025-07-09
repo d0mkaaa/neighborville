@@ -39,7 +39,11 @@ export default function NeighborhoodManager({
   onShowLogin,
   addNotification
 }: NeighborhoodManagerProps) {
-  const [neighborhoodName, setNeighborhoodName] = useState(gameData.neighborhoodName || 'Unnamed City');
+  const actualNeighborhoodName = gameData.neighborhoodName && gameData.neighborhoodName.trim() 
+    ? gameData.neighborhoodName 
+    : 'Unnamed City';
+  
+  const [neighborhoodName, setNeighborhoodName] = useState(actualNeighborhoodName);
   const [isEditing, setIsEditing] = useState(false);
   const [showStartFreshModal, setShowStartFreshModal] = useState(false);
   const [showNeighborhoodCreation, setShowNeighborhoodCreation] = useState(false);
@@ -51,9 +55,12 @@ export default function NeighborhoodManager({
 
   useEffect(() => {
     if (isOpen) {
-      setNeighborhoodName(gameData.neighborhoodName || 'Unnamed City');
+      const currentName = gameData.neighborhoodName && gameData.neighborhoodName.trim() 
+        ? gameData.neighborhoodName 
+        : 'Unnamed City';
+      setNeighborhoodName(currentName);
     }
-  }, [isOpen, gameData.neighborhoodName, gameData.playerName]);
+  }, [isOpen, gameData.neighborhoodName]);
 
   const handleUpdateName = async () => {
     if (!neighborhoodName.trim()) {
@@ -260,7 +267,10 @@ export default function NeighborhoodManager({
                   <button
                     onClick={() => {
                       setIsEditing(false);
-                      setNeighborhoodName(gameData.neighborhoodName || 'Unnamed City');
+                      const currentName = gameData.neighborhoodName && gameData.neighborhoodName.trim() 
+                        ? gameData.neighborhoodName 
+                        : 'Unnamed City';
+                      setNeighborhoodName(currentName);
                     }}
                     className="px-4 py-3 text-gray-600 hover:bg-gray-100 rounded-xl transition-colors duration-200"
                   >
@@ -269,7 +279,9 @@ export default function NeighborhoodManager({
                 </div>
               ) : (
                 <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-2xl p-6">
-                  <h2 className="text-3xl font-bold text-gray-800 mb-2">{gameData.neighborhoodName}</h2>
+                  <h2 className="text-3xl font-bold text-gray-800 mb-2">
+                    {actualNeighborhoodName}
+                  </h2>
                   <p className="text-emerald-700 font-medium flex items-center">
                     <Calendar size={16} className="mr-2" />
                     Founded {new Date(foundedDate).toLocaleDateString()}

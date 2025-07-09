@@ -70,7 +70,7 @@ router.get('/:username', async (req, res) => {
     
     let publicGameData = null;
     if (user.gameData) {
-      const { playerName, day, level, happiness, grid, neighbors } = user.gameData;
+      const { playerName, neighborhoodName, day, level, happiness, grid, neighbors } = user.gameData;
       
       const buildingCount = grid ? grid.filter(b => b !== null).length : 0;
       const neighborCount = neighbors ? neighbors.filter(n => n.hasHome).length : 0;
@@ -78,6 +78,7 @@ router.get('/:username', async (req, res) => {
       
       publicGameData = {
         playerName,
+        neighborhoodName,
         day,
         level,
         happiness,

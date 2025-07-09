@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Save, 
@@ -22,9 +22,12 @@ import {
   CheckSquare,
   CloudLightning
 } from 'lucide-react';
-import { saveGameToServer, getAllSavesFromServer, deleteSaveFromServer, loadSpecificSaveFromServer } from '../../services/gameService';
+import { gameAPI } from '../../utils/api';
+import { validateGameData, shouldSaveGame, getGameSaveStats } from '../../services/gameService';
 import { checkAuthenticationStatus } from '../../services/userService';
 import type { GameProgress } from '../../types/game';
+import { Toast } from '../ui/Toast';
+import { GlassCard } from '../ui/GlassCard';
 
 interface SaveItem {
   key: string;
@@ -45,6 +48,9 @@ interface SaveManagerProps {
   lastServerSaveTime?: Date | null;
   onShowLogin?: () => void;
   addNotification?: (message: string, type: string) => void;
+  onSaveComplete: (savedData: GameProgress) => void;
+  onLoadComplete: (loadedData: GameProgress) => void;
+  autoSaveEnabled?: boolean;
 }
 
 export default function SaveManager({ 
@@ -57,7 +63,10 @@ export default function SaveManager({
   isAuthenticated: propIsAuthenticated,
   lastServerSaveTime,
   onShowLogin,
-  addNotification
+  addNotification,
+  onSaveComplete,
+  onLoadComplete,
+  autoSaveEnabled = true
 }: SaveManagerProps) {
   const [saveName, setSaveName] = useState('');
   const [cloudSaves, setCloudSaves] = useState<SaveItem[]>([]);
@@ -70,6 +79,10 @@ export default function SaveManager({
   const [selectedSaves, setSelectedSaves] = useState<string[]>([]);
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const [saves, setSaves] = useState<GameProgress[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saveStats, setSaveStats] = useState<ReturnType<typeof getGameSaveStats> | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -95,31 +108,50 @@ export default function SaveManager({
     verifyAuth();
   }, []);
 
+  useEffect(() => {
+    fetchSaves();
+  }, []);
+
+  useEffect(() => {
+    if (gameData) {
+      setSaveStats(getGameSaveStats(gameData));
+    }
+  }, [gameData]);
+
+  useEffect(() => {
+    if (!autoSaveEnabled || !gameData) return;
+
+    if (shouldSaveGame(gameData)) {
+      handleSave(true);
+    }
+  }, [gameData, autoSaveEnabled]);
+
   const loadCloudSaves = async () => {
     if (!isAuthenticated || isGuest) return;
     
     setIsLoadingCloudSaves(true);
     try {
-      const saves = await getAllSavesFromServer();
-      console.log('Loaded cloud saves:', saves);
+      const saveList = await gameAPI.listSaves();
+      console.log('Loaded cloud saves:', saveList);
       
-      const formattedSaves: SaveItem[] = saves.map(save => ({
-        key: save.id,
-        name: save.data?.playerName || `Save ${save.id.slice(0, 8)}`,
-        date: new Date(save.timestamp).toLocaleDateString('en-US', {
+      const formattedSaves: SaveItem[] = saveList.map(save => ({
+        key: save.saveId,
+        name: save.neighborhoodName || `Save ${save.saveId.slice(0, 8)}`,
+        date: new Date(save.saveTimestamp).toLocaleDateString('en-US', {
           year: 'numeric',
           month: 'short',
           day: 'numeric',
           hour: '2-digit',
           minute: '2-digit'
         }),
-        timestamp: save.timestamp,
-        data: save.data
+        timestamp: save.saveTimestamp,
+        data: save
       }));
       
       formattedSaves.sort((a, b) => b.timestamp - a.timestamp);
       
       setCloudSaves(formattedSaves);
+      setSaves(saveList);
     } catch (error) {
       console.error('Error loading cloud saves:', error);
       addNotification?.('Failed to load cloud saves', 'error');
@@ -168,7 +200,7 @@ export default function SaveManager({
           saveName: saveName.trim() || 'Unnamed City',
           saveTimestamp: Date.now()
         };
-        success = await saveGameToServer(saveData);
+        success = await gameAPI.saveGame(saveData);
       }
       
       setServerSaveSuccess(success);
@@ -200,7 +232,7 @@ export default function SaveManager({
     setLoadingSave(id);
     try {
       const startTime = performance.now();
-      const success = await deleteSaveFromServer(id);
+      const success = await gameAPI.deleteSave(id);
       const endTime = performance.now();
       console.log(`Cloud save deletion took ${Math.round(endTime - startTime)}ms`);
       
@@ -232,10 +264,10 @@ export default function SaveManager({
     setLoadingSave(id);
     try {
       console.log(`Loading specific save with ID: ${id}`);
-      const { gameData: loadedGameData } = await loadSpecificSaveFromServer(id);
+      const loadedData = await gameAPI.loadGame(id);
       
-      if (loadedGameData) {
-        onLoadGame(loadedGameData);
+      if (loadedData) {
+        onLoadGame(loadedData);
         onClose();
         addNotification?.('Game loaded successfully!', 'success');
       } else {
@@ -286,7 +318,7 @@ export default function SaveManager({
           const batch = cloudToDelete.slice(i, i + batchSize);
           
           const results = await Promise.allSettled(
-            batch.map(id => deleteSaveFromServer(id))
+            batch.map(id => gameAPI.deleteSave(id))
           );
           
           results.forEach((result, index) => {
@@ -349,6 +381,82 @@ export default function SaveManager({
       buildings: saveData.grid?.filter(Boolean).length || 0,
       neighbors: saveData.neighborProgress ? Object.keys(saveData.neighborProgress).length : 0
     };
+  };
+
+  const fetchSaves = async () => {
+    try {
+      setLoading(true);
+      const saveList = await gameAPI.listSaves();
+      setSaves(saveList);
+    } catch (err) {
+      setError('Failed to fetch saves');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSave = async (isAutoSave = false) => {
+    try {
+      if (!validateGameData(gameData)) {
+        throw new Error('Invalid game data');
+      }
+
+      setLoading(true);
+      const savedData = await gameAPI.saveGame({
+        ...gameData,
+        saveTimestamp: Date.now(),
+        isAutoSave
+      });
+
+      onSaveComplete(savedData);
+      await fetchSaves();
+      
+      if (!isAutoSave) {
+        Toast.success('Game saved successfully!');
+      }
+    } catch (err) {
+      setError('Failed to save game');
+      Toast.error('Failed to save game');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLoad = async (saveId: string) => {
+    try {
+      setLoading(true);
+      const loadedData = await gameAPI.loadGame(saveId);
+      
+      if (!validateGameData(loadedData)) {
+        throw new Error('Invalid save data');
+      }
+
+      onLoadComplete(loadedData);
+      Toast.success('Game loaded successfully!');
+    } catch (err) {
+      setError('Failed to load game');
+      Toast.error('Failed to load game');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async (saveId: string) => {
+    try {
+      setLoading(true);
+      await gameAPI.deleteSave(saveId);
+      await fetchSaves();
+      Toast.success('Save deleted successfully!');
+    } catch (err) {
+      setError('Failed to delete save');
+      Toast.error('Failed to delete save');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -490,7 +598,7 @@ export default function SaveManager({
                       <Cloud size={16} />
                       <span>Cloud Saves</span>
                       <span className="ml-1 bg-gray-100 text-gray-700 px-1.5 py-0.5 text-xs rounded-full">
-                        {cloudSaves.length}
+                        {saves.length}
                       </span>
                     </div>
                   </div>
@@ -545,7 +653,7 @@ export default function SaveManager({
                           <p>Sign in to access your cloud saves</p>
                         </div>
                       </div>
-                    ) : cloudSaves.length === 0 ? (
+                    ) : saves.length === 0 ? (
                       <div className="p-8 text-center text-gray-500">
                         <div className="flex flex-col items-center">
                           <Cloud size={32} className="text-gray-400 mb-2" />
@@ -554,25 +662,25 @@ export default function SaveManager({
                       </div>
                     ) : (
                       <div className="divide-y divide-gray-100">
-                        {cloudSaves.map((save) => {
-                          const stats = getSaveStats(save.data);
+                        {saves.map((save) => {
+                          const stats = getSaveStats(save);
                           return (
                             <div 
-                              key={save.key} 
+                              key={save.saveId} 
                               className={`p-4 flex items-center hover:bg-gray-50 transition-colors ${
-                                isSelectMode && selectedSaves.includes(save.key) ? 'bg-blue-50' : ''
+                                isSelectMode && selectedSaves.includes(save.saveId) ? 'bg-blue-50' : ''
                               }`}
                             >
                               {isSelectMode ? (
                                 <div 
-                                  onClick={() => toggleSelectSave(save.key)}
+                                  onClick={() => toggleSelectSave(save.saveId)}
                                   className={`w-5 h-5 border rounded mr-3 flex items-center justify-center cursor-pointer ${
-                                    selectedSaves.includes(save.key) 
+                                    selectedSaves.includes(save.saveId) 
                                       ? 'bg-blue-500 border-blue-500 text-white' 
                                       : 'border-gray-300'
                                   }`}
                                 >
-                                  {selectedSaves.includes(save.key) && <CheckCircle size={14} />}
+                                  {selectedSaves.includes(save.saveId) && <CheckCircle size={14} />}
                                 </div>
                               ) : (
                                 <div className="mr-3 text-blue-500">
@@ -582,15 +690,15 @@ export default function SaveManager({
                               
                               <div 
                                 className="flex-1 cursor-pointer" 
-                                onClick={() => !isSelectMode && loadingSave !== save.key && handleLoadCloudSave(save.key)}
+                                onClick={() => !isSelectMode && loadingSave !== save.saveId && handleLoad(save.saveId)}
                               >
                                 <div className="flex items-center justify-between mb-2">
                                   <div className="font-semibold text-gray-800 text-sm">
-                                    {save.name}
+                                    {save.neighborhoodName}
                                   </div>
                                   <div className="text-xs text-gray-500 flex items-center gap-1">
                                     <Clock size={12} />
-                                    {formatTimeAgo(save.timestamp)}
+                                    {formatTimeAgo(save.saveTimestamp)}
                                   </div>
                                 </div>
                                 
@@ -629,17 +737,17 @@ export default function SaveManager({
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    if (!isSelectMode && loadingSave !== save.key) {
-                                      handleLoadCloudSave(save.key);
+                                    if (!isSelectMode && loadingSave !== save.saveId) {
+                                      handleLoad(save.saveId);
                                     }
                                   }}
-                                  disabled={loadingSave === save.key || isSelectMode}
+                                  disabled={loadingSave === save.saveId || isSelectMode}
                                   className={`p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors ${
-                                    (loadingSave === save.key || isSelectMode) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                                    (loadingSave === save.saveId || isSelectMode) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
                                   }`}
                                   title="Load save"
                                 >
-                                  {loadingSave === save.key ? (
+                                  {loadingSave === save.saveId ? (
                                     <Loader2 size={16} className="animate-spin" />
                                   ) : (
                                     <Download size={16} />
@@ -650,9 +758,9 @@ export default function SaveManager({
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      handleDeleteCloudSave(save.key);
+                                      handleDelete(save.saveId);
                                     }}
-                                    disabled={loadingSave === save.key}
+                                    disabled={loadingSave === save.saveId}
                                     className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
                                     title="Delete save"
                                   >

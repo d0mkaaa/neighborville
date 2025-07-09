@@ -1,25 +1,90 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 
 const userSchema = new mongoose.Schema({
   username: {
     type: String,
     required: true,
+    unique: true,
     trim: true,
     minlength: 3,
     maxlength: 30
   },
   email: {
     type: String,
-    required: true,
+    required: false,
     unique: true,
+    sparse: true,
     trim: true,
-    lowercase: true
+    lowercase: true,
+    match: [/^([\w-\.]+@([\w-]+\.)+[\w-]{2,4})?$/, 'Please enter a valid email']
   },
   password: {
     type: String,
-    required: false,
-    minlength: 8
+    required: true,
+    minlength: 6
+  },
+  isGuest: {
+    type: Boolean,
+    default: false
+  },
+  isSuspended: {
+    type: Boolean,
+    default: false
+  },
+  suspensionReason: {
+    type: String,
+    default: null
+  },
+  suspensionExpiry: {
+    type: Date,
+    default: null
+  },
+  lastLogin: {
+    type: Date,
+    default: Date.now
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now
+  },
+  gameSaves: [{
+    id: {
+      type: String,
+      required: true,
+      index: true
+    },
+    playerName: {
+      type: String,
+      required: true
+    },
+    data: {
+      type: mongoose.Schema.Types.Mixed,
+      required: true,
+      validate: {
+        validator: function(data) {
+          return data && typeof data === 'object' && 
+                 data.grid && Array.isArray(data.grid) &&
+                 data.playerName && typeof data.playerName === 'string';
+        },
+        message: 'Invalid game save data structure'
+      }
+    },
+    timestamp: {
+      type: Number,
+      required: true,
+      index: true
+    },
+    saveType: {
+      type: String,
+      enum: ['manual', 'auto'],
+      default: 'manual'
+    }
+  }],
+  lastSave: {
+    type: Date,
+    default: null
   },
   verified: {
     type: Boolean,
@@ -137,31 +202,6 @@ const userSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.Mixed,
     default: null
   },
-  gameSaves: {
-    type: [
-      {
-        id: String,
-        playerName: String,
-        data: mongoose.Schema.Types.Mixed,
-        timestamp: Number,
-        saveType: String,
-        version: String
-      }
-    ],
-    default: []
-  },
-  lastSave: {
-    type: Date,
-    default: null
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now
-  },
-  lastLogin: {
-    type: Date,
-    default: Date.now
-  },
   ipHistory: [{
     ip: String,
     firstSeen: { type: Date, default: Date.now },
@@ -228,21 +268,29 @@ const userSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 userSchema.pre('save', async function(next) {
-  if (!this.isModified('password')) {
-    return next();
+  if (this.isModified('password')) {
+    this.password = await bcrypt.hash(this.password, 10);
   }
-  
-  try {
-    const salt = await bcrypt.genSalt(10);
-    this.password = await bcrypt.hash(this.password, salt);
-    next();
-  } catch (error) {
-    next(error);
-  }
+  next();
 });
 
+userSchema.methods.generateAuthToken = function() {
+  const token = jwt.sign(
+    { _id: this._id.toString() },
+    process.env.JWT_SECRET || 'your-secret-key',
+    { expiresIn: '7d' }
+  );
+  return token;
+};
+
 userSchema.methods.comparePassword = async function(candidatePassword) {
-  return await bcrypt.compare(candidatePassword, this.password);
+  return bcrypt.compare(candidatePassword, this.password);
+};
+
+userSchema.methods.toJSON = function() {
+  const user = this.toObject();
+  delete user.password;
+  return user;
 };
 
 userSchema.methods.calculateProfileCompletion = function() {
@@ -273,13 +321,6 @@ userSchema.methods.isModerator = function() {
 
 userSchema.methods.canModerate = function() {
   return this.role === 'admin' || this.role === 'moderator';
-};
-
-userSchema.methods.isSuspended = function() {
-  const activeSuspension = this.suspensions.find(s => 
-    s.isActive && s.endDate && new Date() < s.endDate
-  );
-  return !!activeSuspension;
 };
 
 userSchema.methods.getActiveSuspension = function() {
@@ -537,6 +578,14 @@ userSchema.methods.disableTwoFactor = function() {
   return this.save();
 };
 
+userSchema.methods.checkSuspensionStatus = function() {
+  const now = new Date();
+  return this.isSuspended || (
+    this.suspensionExpiry && 
+    this.suspensionExpiry > now
+  );
+};
+
 userSchema.methods.toProfile = function() {
   const activeSuspension = this.getActiveSuspension();
   
@@ -555,7 +604,7 @@ userSchema.methods.toProfile = function() {
     lastLogin: this.lastLogin,
     lastSave: this.lastSave,
     profileCompletion: this.calculateProfileCompletion(),
-    isSuspended: this.isSuspended(),
+    isSuspended: this.checkSuspensionStatus(),
     activeSuspension: activeSuspension ? {
       id: activeSuspension._id,
       reason: activeSuspension.reason,

@@ -2,10 +2,84 @@ import express from 'express';
 import { auth } from '../middleware/auth.js';
 import { checkSuspensionForGame } from '../middleware/suspensionCheck.js';
 import { findUserById } from '../services/userService.js';
+import saveService from '../services/saveService.js';
+import gameInitService from '../services/gameInitializationService.js';
 import { execSync } from 'child_process';
 import fs from 'fs';
 
 const router = express.Router();
+
+router.post('/user/game/initialize', auth, checkSuspensionForGame, async (req, res) => {
+  try {
+    const { playerName, neighborhoodName } = req.body;
+    
+    if (!playerName || typeof playerName !== 'string' || playerName.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Player name is required'
+      });
+    }
+    
+    const hasExisting = await gameInitService.hasExistingSaves(req.user._id);
+    
+    if (hasExisting) {
+      return res.status(409).json({
+        success: false,
+        message: 'User already has existing game data'
+      });
+    }
+    
+    const result = await gameInitService.initializeNewGame(
+      req.user._id, 
+      playerName, 
+      neighborhoodName || 'My City', 
+      req
+    );
+    
+    return res.json({
+      success: result.success,
+      gameData: result.gameData,
+      saveId: result.saveId,
+      message: result.message
+    });
+    
+  } catch (error) {
+    console.error('Game initialization error:', error);
+    
+    if (error.message.includes('name')) {
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+    
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to initialize game'
+    });
+  }
+});
+
+router.get('/user/game/start', auth, checkSuspensionForGame, async (req, res) => {
+  try {
+    const result = await gameInitService.getStartingGameState(req.user._id, req);
+    
+    return res.json({
+      success: result.success,
+      gameData: result.gameData,
+      isExisting: result.isExisting,
+      saveId: result.saveId,
+      message: result.message
+    });
+    
+  } catch (error) {
+    console.error('Get starting game state error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to get game state'
+    });
+  }
+});
 
 router.post('/user/game/active-save/:id', auth, checkSuspensionForGame, async (req, res) => {
   try {
@@ -286,6 +360,125 @@ router.get('/updates', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to get update logs'
+    });
+  }
+});
+
+router.post('/user/game/save', auth, checkSuspensionForGame, async (req, res) => {
+  try {
+    const { gameData, saveType = 'manual' } = req.body;
+    
+    if (!gameData) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Missing game data' 
+      });
+    }
+    
+    const result = await saveService.saveGame(req.user._id, gameData, saveType, req);
+    
+    return res.json({
+      success: true,
+      saveId: result.saveId,
+      timestamp: result.timestamp,
+      message: result.message
+    });
+    
+  } catch (error) {
+    console.error('Save operation error:', error);
+    
+    if (error.message.includes('validation')) {
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+    
+    if (error.message.includes('conflict') || error.message.includes('in progress')) {
+      return res.status(409).json({
+        success: false,
+        message: error.message
+      });
+    }
+    
+    return res.status(500).json({
+      success: false,
+      message: 'Save operation failed'
+    });
+  }
+});
+
+router.get('/user/game/load', auth, checkSuspensionForGame, async (req, res) => {
+  try {
+    const result = await saveService.getLatestSave(req.user._id, req);
+    
+    return res.json({
+      success: result.success,
+      gameData: result.gameData,
+      lastSave: result.lastSave,
+      saveId: result.saveId
+    });
+  } catch (error) {
+    console.error('Error loading game:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error loading game'
+    });
+  }
+});
+
+router.get('/user/game/save/:saveId', auth, checkSuspensionForGame, async (req, res) => {
+  try {
+    const { saveId } = req.params;
+    const result = await saveService.loadSave(req.user._id, saveId, req);
+    
+    return res.json({
+      success: result.success,
+      gameData: result.gameData,
+      lastSave: result.lastSave,
+      saveId: result.saveId,
+      message: result.message
+    });
+  } catch (error) {
+    console.error('Error loading specific save:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error loading save'
+    });
+  }
+});
+
+router.get('/user/game/saves', auth, checkSuspensionForGame, async (req, res) => {
+  try {
+    const result = await saveService.getAllSaves(req.user._id, req);
+    
+    return res.json({
+      success: result.success,
+      saves: result.saves
+    });
+  } catch (error) {
+    console.error('Error getting saves:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error getting saves'
+    });
+  }
+});
+
+router.delete('/user/game/save/:saveId', auth, checkSuspensionForGame, async (req, res) => {
+  try {
+    const { saveId } = req.params;
+    const result = await saveService.deleteSave(req.user._id, saveId, req);
+    
+    return res.json({
+      success: result.success,
+      message: result.message
+    });
+  } catch (error) {
+    console.error('Error deleting save:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error deleting save'
     });
   }
 });

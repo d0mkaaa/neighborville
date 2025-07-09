@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, type ReactNode } from 'react';
-import Toast from '../components/ui/Toast';
+import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import ToastComponent from '../components/ui/Toast';
 
 interface ToastData {
   id: string;
@@ -38,6 +38,10 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
     const newToast: ToastData = { id, message, type, duration };
     
     setToasts(prev => [...prev, newToast]);
+    
+    setTimeout(() => {
+      removeToast(id);
+    }, duration);
   };
 
   const removeToast = (id: string) => {
@@ -55,10 +59,9 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
       <div className="fixed top-4 right-4 z-[10000] space-y-2">
         {toasts.map((toast, index) => (
           <div key={toast.id} style={{ transform: `translateY(${index * 80}px)` }}>
-            <Toast
+            <ToastComponent
               message={toast.message}
               type={toast.type}
-              duration={toast.duration}
               onClose={() => removeToast(toast.id)}
             />
           </div>

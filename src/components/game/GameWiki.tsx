@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Search, X, Home, Building2, DollarSign, Zap, Users, 
   Settings, Trophy, Lightbulb, BookOpen, HelpCircle,
-  ChevronRight, Star, Wrench, TreePine, Heart
+  ChevronRight, Star, Wrench, TreePine, Heart, CircuitBoard
 } from 'lucide-react';
 import ModalWrapper from '../ui/ModalWrapper';
 
@@ -159,6 +159,88 @@ const wikiSections: WikiSection[] = [
             <li>• Closer connections are more efficient</li>
             <li>• Plan your layout to minimize connection costs</li>
             <li>• Upgrade utilities as your city grows</li>
+          </ul>
+        </div>
+      </div>
+    )
+  },
+  {
+    id: 'circuit-mastery',
+    title: 'Circuit Builder Mastery',
+    icon: <CircuitBoard size={20} />,
+    category: 'advanced',
+    content: (
+      <div className="space-y-4">
+        <h3 className="text-xl font-bold text-gray-800 mb-3">Circuit Builder Expert Guide ⚡</h3>
+        
+        <p className="text-gray-700 leading-relaxed">
+          Master the art of circuit building to unlock bonus rewards and become an electrical engineering expert!
+        </p>
+        
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+          <h4 className="font-semibold text-amber-800 mb-2">🔌 Components Guide:</h4>
+          <div className="grid gap-2 text-sm">
+            <div className="flex items-center gap-3">
+              <span className="font-mono bg-green-100 text-green-800 px-2 py-1 rounded text-xs">⚡</span>
+              <span className="text-amber-700"><strong>Power Source:</strong> Starting point - generates electricity</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="font-mono bg-red-100 text-red-800 px-2 py-1 rounded text-xs">🎯</span>
+              <span className="text-amber-700"><strong>Target:</strong> End point - must receive power to complete circuit</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="font-mono bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs">─</span>
+              <span className="text-amber-700"><strong>Wires:</strong> Conduct electricity between components</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="font-mono bg-purple-100 text-purple-800 px-2 py-1 rounded text-xs">R</span>
+              <span className="text-amber-700"><strong>Resistor:</strong> Controls current flow - creates strategic routing</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="font-mono bg-indigo-100 text-indigo-800 px-2 py-1 rounded text-xs">C</span>
+              <span className="text-amber-700"><strong>Capacitor:</strong> Stores energy - enables complex pathways</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="font-mono bg-teal-100 text-teal-800 px-2 py-1 rounded text-xs">L</span>
+              <span className="text-amber-700"><strong>Inductor:</strong> Magnetic field component - advanced routing</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="font-mono bg-orange-100 text-orange-800 px-2 py-1 rounded text-xs">S</span>
+              <span className="text-amber-700"><strong>Switch:</strong> Controls circuit flow - creates conditional paths</span>
+            </div>
+          </div>
+        </div>
+        
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <h4 className="font-semibold text-blue-800 mb-2">🧠 Strategic Placement:</h4>
+          <ul className="text-blue-700 space-y-1 text-sm">
+            <li>• <strong>Plan Your Path:</strong> Think about the shortest route from power to target</li>
+            <li>• <strong>Component Order Matters:</strong> Place resistors before capacitors for optimal flow</li>
+            <li>• <strong>Use Components Wisely:</strong> Each component has limited quantity - don't waste them!</li>
+            <li>• <strong>Consider Efficiency:</strong> Fewer components used = higher bonus rewards</li>
+            <li>• <strong>Wire Management:</strong> Connect components systematically to avoid confusion</li>
+          </ul>
+        </div>
+        
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <h4 className="font-semibold text-green-800 mb-2">🏆 Mastery Tips:</h4>
+          <ul className="text-green-700 space-y-1 text-sm">
+            <li>• <strong>Perfect Solutions:</strong> Complete with minimum components for bonus coins</li>
+            <li>• <strong>Advanced Patterns:</strong> Learn common circuit patterns for complex puzzles</li>
+            <li>• <strong>Resource Management:</strong> Save rare components for difficult sections</li>
+            <li>• <strong>Path Optimization:</strong> Multiple valid solutions exist - find the most efficient</li>
+            <li>• <strong>Progressive Complexity:</strong> Difficulty increases with building level</li>
+          </ul>
+        </div>
+        
+        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+          <h4 className="font-semibold text-purple-800 mb-2">⚠️ Common Mistakes:</h4>
+          <ul className="text-purple-700 space-y-1 text-sm">
+            <li>• Placing components without wires to connect them</li>
+            <li>• Using too many components when a simpler solution exists</li>
+            <li>• Forgetting that electricity must flow from power source to target</li>
+            <li>• Not planning the route before placing expensive components</li>
+            <li>• Ignoring component inventory limits</li>
           </ul>
         </div>
       </div>

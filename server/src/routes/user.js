@@ -28,6 +28,7 @@ import speakeasy from 'speakeasy';
 import QRCode from 'qrcode';
 import { logger } from '../utils/logger.js';
 import { getRealIP } from '../utils/ipUtils.js';
+import saveService from '../services/saveService.js';
 
 
 
@@ -231,7 +232,7 @@ router.get('/suspension-status', auth, async (req, res) => {
   try {
     const user = await User.findById(req.user._id).populate('suspensions.issuedBy', 'username');
     
-    if (!user.isSuspended()) {
+    if (!user.checkSuspensionStatus()) {
       return res.status(200).json({
         success: true,
         suspended: false,
@@ -858,6 +859,16 @@ router.post('/logout', auth, async (req, res) => {
   }
 });
 
+router.get('/token', auth, async (req, res) => {
+  try {
+    const token = req.session.token;
+    res.json({ success: true, token });
+  } catch (error) {
+    console.error('Error getting user token:', error);
+    res.status(500).json({ success: false, message: 'Error retrieving token' });
+  }
+});
+
 router.get('/me', auth, async (req, res) => {
   try {
     res.status(200).json({
@@ -1040,63 +1051,30 @@ router.put('/profile', auth, [
 
 router.post('/game/save', auth, checkSuspensionForGame, async (req, res) => {
   try {
-    const { gameData } = req.body;
+    const { gameData, saveType = 'manual' } = req.body;
     
     if (!gameData) {
       return res.status(400).json({ success: false, message: 'No game data provided' });
     }
     
-    const user = await findUserById(req.user._id);
-    
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-    
-    if (user._id.toString() !== req.user._id.toString()) {
-      console.error(`Security violation: User ${req.user._id} attempted to save data for user ${user._id}`);
-      return res.status(403).json({ success: false, message: 'Unauthorized access to user data' });
-    }
-    
-    user.gameData = gameData;
-    user.lastSave = new Date();
-    
-    if (!user.gameSaves) {
-      user.gameSaves = [];
-    }
-    
-    const saveId = gameData.saveId || `save-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-    
-    const existingIndex = user.gameSaves.findIndex(save => save.id === saveId);
-    
-    const saveEntry = {
-      id: saveId,
-      playerName: gameData.playerName || 'Unknown',
-      data: gameData,
-      timestamp: gameData.saveTimestamp || Date.now(),
-      saveType: 'manual',
-      version: gameData.version || '1.0'
-    };
-    
-    if (existingIndex >= 0) {
-      user.gameSaves[existingIndex] = saveEntry;
-    } else {
-      user.gameSaves.push(saveEntry);
-    }
-    
-    if (user.gameSaves.length > 30) {
-      user.gameSaves.sort((a, b) => b.timestamp - a.timestamp);
-      user.gameSaves = user.gameSaves.slice(0, 30);
-    }
-    
-    await user.save();
+    const result = await saveService.saveGame(req.user._id, gameData, saveType, req);
     
     res.status(200).json({
       success: true,
-      message: 'Game data saved successfully',
-      lastSave: user.lastSave
+      message: result.message,
+      lastSave: new Date(result.timestamp),
+      saveId: result.saveId
     });
   } catch (error) {
-    console.error('Error in /game/save route:', error);
+    console.error('Error in legacy /game/save route:', error);
+    
+    if (error.message.includes('validation')) {
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+    
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -1280,27 +1258,16 @@ router.get('/game/save/:id', auth, checkSuspensionForGame, async (req, res) => {
 
 router.get('/game/load', auth, checkSuspensionForGame, async (req, res) => {
   try {
-    const user = await findUserById(req.user._id);
-    
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-    
-    if (user._id.toString() !== req.user._id.toString()) {
-      console.error(`Security violation: User ${req.user._id} attempted to access data for user ${user._id}`);
-      return res.status(403).json({ success: false, message: 'Unauthorized access to user data' });
-    }
-    
-    user.lastLogin = new Date();
-    await user.save();
+    const result = await saveService.getLatestSave(req.user._id, req);
     
     res.status(200).json({
-      success: true,
-      gameData: user.gameData || null,
-      lastSave: user.lastSave || null
+      success: result.success,
+      gameData: result.gameData,
+      lastSave: result.lastSave,
+      saveId: result.saveId
     });
   } catch (error) {
-    console.error('Error in /game/load route:', error);
+    console.error('Error in legacy /game/load route:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -1324,29 +1291,24 @@ router.post('/neighborhood/save', auth, checkSuspensionForGame, async (req, res)
     
     gameData.lastAutoSave = Date.now();
     
-    const user = await findUserById(req.user._id);
-    
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-    
-    if (user._id.toString() !== req.user._id.toString()) {
-      console.error(`Security violation: User ${req.user._id} attempted to save data for user ${user._id}`);
-      return res.status(403).json({ success: false, message: 'Unauthorized access to user data' });
-    }
-    
-    user.gameData = gameData;
-    user.lastSave = new Date();
-    
-    await user.save();
+    const result = await saveService.saveGame(req.user._id, gameData, 'manual', req);
     
     res.status(200).json({
       success: true,
       message: 'Neighborhood saved successfully',
-      lastSave: user.lastSave
+      lastSave: new Date(result.timestamp),
+      saveId: result.saveId
     });
   } catch (error) {
-    console.error('Error in /neighborhood/save route:', error);
+    console.error('Error in legacy /neighborhood/save route:', error);
+    
+    if (error.message.includes('validation')) {
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+    
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -1957,6 +1919,41 @@ router.post('/admin/setup', async (req, res) => {
     });
   } catch (error) {
     console.error('Error in POST /admin/setup route:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+router.get('/online', auth, async (req, res) => {
+  try {
+    const SocketService = (await import('../services/socketService.js')).default;
+    const socketService = global.socketService;
+    
+    let onlineUsers = [];
+    if (socketService) {
+      const onlineUserIds = socketService.getOnlineUsers();
+      console.log('📊 Getting online users, found:', onlineUserIds.length);
+      
+      if (onlineUserIds.length > 0) {
+        const users = await User.find({ 
+          _id: { $in: onlineUserIds } 
+        }).select('_id username gameData.level');
+        
+        onlineUsers = users.map(user => ({
+          id: user._id.toString(),
+          username: user.username,
+          level: user.gameData?.level || 1
+        }));
+      }
+    }
+    
+    res.status(200).json({
+      success: true,
+      onlineUsers: onlineUsers.map(u => u.id),
+      onlineUserDetails: onlineUsers,
+      count: onlineUsers.length
+    });
+  } catch (error) {
+    console.error('Error in /online route:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });

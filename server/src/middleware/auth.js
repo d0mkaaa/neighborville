@@ -47,7 +47,9 @@ const checkRateLimit = async (userId, ip) => {
 
 const logSecurityAction = async (userId, action, ip, userAgent, isSuccess) => {
   try {
-    console.log(`SECURITY_LOG: User=${userId} Action=${action} IP=${ip} Success=${isSuccess} UserAgent=${userAgent}`);
+    if (!isSuccess) {
+      console.log(`SECURITY_LOG: User=${userId} Action=${action} IP=${ip} Success=${isSuccess} UserAgent=${userAgent}`);
+    }
     
     if (redisClient.isReady) {
       const logEntry = JSON.stringify({
@@ -69,15 +71,12 @@ const logSecurityAction = async (userId, action, ip, userAgent, isSuccess) => {
 
 export const auth = async (req, res, next) => {
   try {
-    const token = req.cookies.token || 
+    const token = req.cookies.neighborville_auth || 
+                  req.cookies.token || 
                   (req.headers.authorization && req.headers.authorization.split(' ')[1]);
     
     const ip = getRealIP(req);
     const userAgent = req.headers['user-agent'] || 'unknown';
-    
-    console.log('Auth middleware - Request from:', ip);
-    console.log('Auth middleware - Cookies:', req.cookies);
-    console.log('Auth middleware - Authorization header:', req.headers.authorization ? 'Present' : 'Not present');
     
     const requestOrigin = req.headers.origin;
     const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost').split(',');
@@ -89,44 +88,34 @@ export const auth = async (req, res, next) => {
     }
     
     if (!token) {
-      console.log('Auth middleware - No token found');
       return res.status(401).json({ success: false, message: 'Authentication required' });
     }
     
-    console.log('Auth middleware - Token found:', token.substring(0, 10) + '...');
-    
     const decoded = verifyToken(token);
     if (!decoded) {
-      console.log('Auth middleware - Token verification failed');
       await logSecurityAction('unknown', 'INVALID_TOKEN', ip, userAgent, false);
       return res.status(401).json({ success: false, message: 'Invalid or expired token' });
     }
     
-    console.log('Auth middleware - Token verified for user ID:', decoded.userId);
-    
     const user = await User.findById(decoded.userId).populate('suspensions.issuedBy', 'username');
     if (!user) {
-      console.log('Auth middleware - User not found for ID:', decoded.userId);
       await logSecurityAction(decoded.userId, 'USER_NOT_FOUND', ip, userAgent, false);
       return res.status(401).json({ success: false, message: 'User not found' });
     }
     
     const session = await Session.findOne({ token, userId: decoded.userId });
     if (!session) {
-      console.log('Auth middleware - Session not found for token');
       await logSecurityAction(decoded.userId, 'SESSION_NOT_FOUND', ip, userAgent, false);
       return res.status(401).json({ success: false, message: 'Session not found' });
     }
     
     if (!session.isValid()) {
-      console.log('Auth middleware - Session is invalid or expired');
       await logSecurityAction(decoded.userId, 'SESSION_EXPIRED', ip, userAgent, false);
       return res.status(401).json({ success: false, message: 'Session expired' });
     }
     
     const withinRateLimit = await checkRateLimit(decoded.userId, ip);
     if (!withinRateLimit) {
-      console.log(`Auth middleware - Rate limit exceeded for user ${decoded.userId}`);
       await logSecurityAction(decoded.userId, 'RATE_LIMIT_EXCEEDED', ip, userAgent, false);
       return res.status(429).json({ success: false, message: 'Too many requests. Please try again later.' });
     }
@@ -153,8 +142,6 @@ export const auth = async (req, res, next) => {
       }
     }
     
-    console.log('Auth middleware - Authentication successful for user:', user.username || user.email);
-    
     session.lastActive = new Date();
     await session.save();
     
@@ -171,7 +158,8 @@ export const auth = async (req, res, next) => {
 
 export const optionalAuth = async (req, res, next) => {
   try {
-    const token = req.cookies.token || 
+    const token = req.cookies.neighborville_auth || 
+                  req.cookies.token || 
                   (req.headers.authorization && req.headers.authorization.split(' ')[1]);
     
     if (!token) {

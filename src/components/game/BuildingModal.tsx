@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Hammer, Shuffle, Brain, CheckCircle, Timer, Share2, Zap, Package, AlertTriangle } from "lucide-react";
+import { X, Hammer, Shuffle, Brain, CheckCircle, Timer, Share2, Zap, Package, AlertTriangle, Sparkles, Star, Target, Clock } from "lucide-react";
 import type { Building } from "../../types/game";
 import { getResourceById, getRecipesByBuilding } from "../../data/resources";
 
-type PuzzleType = 'memory' | 'sequence' | 'connect';
+type PuzzleType = 'memory' | 'sequence' | 'connect' | 'circuit' | 'pattern' | 'reaction';
 
 type BuildingModalProps = {
   building: Building;
@@ -35,7 +35,7 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
   }, [building, selectedIndex, onComplete, onClose]);
 
   const [puzzleType] = useState<PuzzleType>(() => {
-    const allTypes: PuzzleType[] = ['memory', 'sequence', 'connect'];
+    const allTypes: PuzzleType[] = ['memory', 'sequence', 'connect', 'circuit', 'pattern', 'reaction'];
     
     const completedPuzzleKey = `completed_puzzles_${building.id}`;
     const storedCompletedPuzzles = localStorage.getItem(completedPuzzleKey);
@@ -76,8 +76,33 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
   const [completedConnections, setCompletedConnections] = useState<number>(0);
   const [requiredConnections, setRequiredConnections] = useState<number>(5);
   
+  const [circuitGrid, setCircuitGrid] = useState<{
+    type: 'empty' | 'power' | 'target' | 'wire' | 'component';
+    component?: 'resistor' | 'capacitor' | 'led' | 'switch';
+    powered?: boolean;
+    connected?: boolean;
+    id: number;
+  }[]>([]);
+  const [circuitSize, setCircuitSize] = useState<number>(5);
+  const [selectedCircuitTile, setSelectedCircuitTile] = useState<number | null>(null);
+  const [circuitComponents, setCircuitComponents] = useState<{type: string, count: number}[]>([]);
+  const [selectedComponentType, setSelectedComponentType] = useState<string | null>(null);
+  const [circuitPhase, setCircuitPhase] = useState<'planning' | 'building'>('planning');
+  const [circuitPowered, setCircuitPowered] = useState<boolean>(false);
+  const [patternSequence, setPatternSequence] = useState<string[]>([]);
+  const [playerPattern, setPlayerPattern] = useState<string[]>([]);
+  const [patternShowTime, setPatternShowTime] = useState<number>(0);
+  const [reactionTargets, setReactionTargets] = useState<{id: number, x: number, y: number, active: boolean}[]>([]);
+  const [reactionScore, setReactionScore] = useState<number>(0);
+  const [reactionTimeLeft, setReactionTimeLeft] = useState<number>(0);
+  const [gameStartTime, setGameStartTime] = useState<number>(0);
+  const [perfectScore, setPerfectScore] = useState<boolean>(false);
+  const [reactionGameActive, setReactionGameActive] = useState<boolean>(false);
+  const [totalTargetsSpawned, setTotalTargetsSpawned] = useState<number>(0);
+  const [hitEffects, setHitEffects] = useState<{id: number, x: number, y: number}[]>([]);
+  
   const [attempts, setAttempts] = useState(0);
-  const maxAttempts = puzzleType === 'memory' ? 999 : 3 + difficultyLevel;
+  const maxAttempts = puzzleType === 'memory' ? 999 : puzzleType === 'reaction' ? 1 : 3 + difficultyLevel;
 
   const getResourceCosts = useCallback(() => {
     if (building.productionType && building.id) {
@@ -133,7 +158,7 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
 
   useEffect(() => {
     if (puzzleType === 'memory') {
-      const baseItems = ['🔨', '🪚', '🧹', '🔧'];
+      const baseItems = ['🔨', '🪚', '🧹', '🔧', '⚙️', '🗜️', '📏', '✂️'];
       const items = baseItems.slice(0, 2 + difficultyLevel);
       const shuffled = [...items, ...items].sort(() => Math.random() - 0.5);
       setMemoryCards(shuffled);
@@ -143,6 +168,12 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
       setSequence(seq);
     } else if (puzzleType === 'connect') {
       initializeConnectPuzzle();
+    } else if (puzzleType === 'circuit') {
+      initializeCircuitPuzzle();
+    } else if (puzzleType === 'pattern') {
+      initializePatternPuzzle();
+    } else if (puzzleType === 'reaction') {
+      initializeReactionPuzzle();
     }
   }, [puzzleType, difficultyLevel]);
   
@@ -195,6 +226,158 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
     
     setConnectPoints(shuffled);
     setRequiredConnections(numberOfPairs);
+  }, [difficultyLevel]);
+
+  const initializeCircuitPuzzle = useCallback(() => {
+    const size = 5 + difficultyLevel;
+    setCircuitSize(size);
+    setSelectedCircuitTile(null);
+    setSelectedComponentType(null);
+    setCircuitPhase('planning');
+    setCircuitPowered(false);
+    
+    const grid: {
+      type: 'empty' | 'power' | 'target' | 'wire' | 'component';
+      component?: 'resistor' | 'capacitor' | 'led' | 'switch';
+      powered?: boolean;
+      connected?: boolean;
+      id: number;
+    }[] = Array.from({ length: size * size }, (_, i) => ({
+      type: 'empty',
+      powered: false,
+      connected: false,
+      id: i
+    }));
+    
+    grid[0] = {
+      type: 'power' as const,
+      powered: true,
+      connected: true,
+      id: 0
+    };
+    
+    const targetIndex = size * size - 1;
+    grid[targetIndex] = {
+      type: 'target' as const,
+      powered: false,
+      connected: false,
+      id: targetIndex
+    };
+    
+    const availableComponents = [];
+    
+    availableComponents.push({ type: 'resistor', count: 2 + difficultyLevel });
+    availableComponents.push({ type: 'capacitor', count: 1 + difficultyLevel });
+    
+    if (difficultyLevel >= 2) {
+      availableComponents.push({ type: 'led', count: 1 });
+    }
+    if (difficultyLevel >= 3) {
+      availableComponents.push({ type: 'switch', count: 1 });
+    }
+    
+    setCircuitComponents(availableComponents);
+    setCircuitGrid(grid);
+  }, [difficultyLevel]);
+
+  const initializePatternPuzzle = useCallback(() => {
+    const colors = ['🔴', '🟢', '🔵', '🟡', '🟠', '🟣'];
+    const patternLength = 4 + difficultyLevel;
+    const pattern = Array.from({ length: patternLength }, () => 
+      colors[Math.floor(Math.random() * Math.min(4 + difficultyLevel, colors.length))]
+    );
+    setPatternSequence(pattern);
+    setPlayerPattern([]);
+    setPatternShowTime(2000 + difficultyLevel * 500);
+    
+    setTimeout(() => {
+      setPatternShowTime(0);
+    }, 2000 + difficultyLevel * 500);
+  }, [difficultyLevel]);
+
+  const initializeReactionPuzzle = useCallback(() => {
+    console.log('🎯 Initializing reaction puzzle...');
+    
+    setReactionTargets([]);
+    setHitEffects([]);
+    setReactionScore(0);
+    setTotalTargetsSpawned(0);
+    setPerfectScore(false);
+    
+    const gameDuration = 10 + difficultyLevel * 5;
+    setReactionTimeLeft(gameDuration);
+    setGameStartTime(Date.now());
+    
+    setTimeout(() => {
+      console.log('🎯 Starting reaction game!');
+      setReactionGameActive(true);
+      
+      let spawnInterval: number;
+      let gameTimer: number;
+      let countdownTimer: number;
+      
+      const spawnTarget = () => {
+        setReactionGameActive(current => {
+          if (!current) return current;
+          
+          const id = Math.random();
+          setReactionTargets(prev => [...prev, {
+            id,
+            x: Math.random() * 80 + 10,
+            y: Math.random() * 80 + 10,
+            active: true
+          }]);
+          
+          setTotalTargetsSpawned(prev => {
+            const newCount = prev + 1;
+            console.log(`🎯 Target spawned! Total: ${newCount}`);
+            return newCount;
+          });
+          
+          setTimeout(() => {
+            setReactionTargets(prev => prev.filter(t => t.id !== id));
+          }, 2000 + Math.random() * 1000);
+          
+          return current;
+        });
+      };
+      
+      spawnTarget();
+      spawnInterval = window.setInterval(spawnTarget, 800 - difficultyLevel * 100);
+      
+      countdownTimer = window.setInterval(() => {
+        setReactionTimeLeft(prev => {
+          if (prev <= 1) {
+            console.log('🎯 Time up! Ending game...');
+            setReactionGameActive(false);
+            clearInterval(spawnInterval);
+            clearInterval(countdownTimer);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      
+      gameTimer = window.setTimeout(() => {
+        console.log('🎯 Game duration reached! Ending game...');
+        setReactionGameActive(false);
+        clearInterval(spawnInterval);
+        clearInterval(countdownTimer);
+        setReactionTimeLeft(0);
+      }, gameDuration * 1000);
+      
+      const cleanup = () => {
+        console.log('🎯 Cleaning up reaction game...');
+        setReactionGameActive(false);
+        clearInterval(spawnInterval);
+        clearInterval(countdownTimer);
+        clearTimeout(gameTimer);
+      };
+      
+      (window as any).reactionGameCleanup = cleanup;
+      
+    }, 100);
+    
   }, [difficultyLevel]);
   
   const handleMemoryCardClick = useCallback((index: number) => {
@@ -419,6 +602,267 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
       setSelectedPoint(null);
     }
   }, [selectedPoint, requiredConnections, puzzleType, connectPoints, connectLines, maxAttempts]);
+
+  const handleCircuitTileClick = useCallback((index: number) => {
+    const currentTile = circuitGrid[index];
+    
+    if (currentTile.type === 'power' || currentTile.type === 'target') {
+      return;
+    }
+    
+    const newGrid = [...circuitGrid];
+    
+    if (currentTile.type === 'empty') {
+      if (selectedComponentType) {
+        const canPlace = validateComponentPlacement(selectedComponentType, index, circuitGrid);
+        
+        if (!canPlace) {
+          return;
+        }
+        
+        const componentIndex = circuitComponents.findIndex(c => c.type === selectedComponentType);
+        if (componentIndex === -1 || circuitComponents[componentIndex].count === 0) {
+          return;
+        }
+        
+        newGrid[index] = {
+          ...currentTile,
+          type: 'component',
+          component: selectedComponentType as 'resistor' | 'capacitor' | 'led' | 'switch'
+        };
+        
+        const newComponents = [...circuitComponents];
+        newComponents[componentIndex].count--;
+        setCircuitComponents(newComponents);
+        
+      } else {
+        newGrid[index] = {
+          ...currentTile,
+          type: 'wire'
+        };
+      }
+    } else if (currentTile.type === 'wire' || currentTile.type === 'component') {
+      if (currentTile.type === 'component' && currentTile.component) {
+        const newComponents = [...circuitComponents];
+        const existingComponent = newComponents.find(c => c.type === currentTile.component);
+        if (existingComponent) {
+          existingComponent.count++;
+        } else {
+          newComponents.push({ type: currentTile.component, count: 1 });
+        }
+        setCircuitComponents(newComponents);
+      }
+      
+      newGrid[index] = {
+        ...currentTile,
+        type: 'empty',
+        component: undefined
+      };
+    }
+    
+    setCircuitGrid(newGrid);
+    
+    checkCircuitComplete(newGrid);
+  }, [circuitGrid, circuitComponents, selectedComponentType]);
+
+  const validateComponentPlacement = useCallback((componentType: string, index: number, grid: typeof circuitGrid) => {
+    
+    const row = Math.floor(index / circuitSize);
+    const col = index % circuitSize;
+    
+    const distanceFromPower = row + col;
+    
+    const existingComponents = grid.filter(tile => tile.type === 'component').map(tile => tile.component);
+    
+    switch (componentType) {
+      case 'resistor':
+        return true;
+        
+      case 'capacitor':
+        const hasResistor = existingComponents.includes('resistor');
+        if (!hasResistor && distanceFromPower < 2) {
+          return false;
+        }
+        return true;
+        
+      case 'led':
+        return existingComponents.includes('resistor');
+        
+      case 'switch':
+        return distanceFromPower <= circuitSize;
+        
+      default:
+        return true;
+    }
+  }, [circuitSize]);
+
+  const checkCircuitComplete = useCallback((grid: typeof circuitGrid) => {
+    const size = circuitSize;
+    const visited = new Set<number>();
+    const queue = [0];
+    
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      if (visited.has(current)) continue;
+      visited.add(current);
+      
+      const currentTile = grid[current];
+      if (currentTile.type === 'target') {
+        const completedPuzzleKey = `completed_puzzles_${buildingRef.current.id}`;
+        const storedPuzzles = localStorage.getItem(completedPuzzleKey);
+        let completedPuzzles: PuzzleType[] = [];
+        
+        try {
+          completedPuzzles = storedPuzzles ? JSON.parse(storedPuzzles) : [];
+        } catch (e) {
+          console.error('Error parsing completed puzzles:', e);
+        }
+        
+        if (!completedPuzzles.includes(puzzleType)) {
+          completedPuzzles.push(puzzleType);
+          localStorage.setItem(completedPuzzleKey, JSON.stringify(completedPuzzles));
+        }
+        
+        setTimeout(() => setPhase('complete'), 500);
+        return;
+      }
+      
+      if (currentTile.type === 'wire' || currentTile.type === 'component' || currentTile.type === 'power') {
+        const row = Math.floor(current / size);
+        const col = current % size;
+        
+        const neighbors = [
+          row > 0 ? current - size : -1,
+          row < size - 1 ? current + size : -1,
+          col > 0 ? current - 1 : -1,
+          col < size - 1 ? current + 1 : -1
+        ].filter(n => n >= 0 && n < grid.length);
+        
+        for (const neighbor of neighbors) {
+          const neighborTile = grid[neighbor];
+          if ((neighborTile.type === 'wire' || neighborTile.type === 'component' || neighborTile.type === 'target') && !visited.has(neighbor)) {
+            queue.push(neighbor);
+          }
+        }
+      }
+    }
+  }, [circuitSize, puzzleType]);
+
+  const handlePatternColorClick = useCallback((color: string) => {
+    const newPlayerPattern = [...playerPattern, color];
+    setPlayerPattern(newPlayerPattern);
+    
+    if (newPlayerPattern[newPlayerPattern.length - 1] !== patternSequence[newPlayerPattern.length - 1]) {
+      setAttempts(prev => {
+        const newAttempts = prev + 1;
+        if (newAttempts >= maxAttempts) {
+          closeCallbackRef.current();
+        }
+        return newAttempts;
+      });
+      setPlayerPattern([]);
+    } else if (newPlayerPattern.length === patternSequence.length) {
+      const completedPuzzleKey = `completed_puzzles_${buildingRef.current.id}`;
+      const storedPuzzles = localStorage.getItem(completedPuzzleKey);
+      let completedPuzzles: PuzzleType[] = [];
+      
+      try {
+        completedPuzzles = storedPuzzles ? JSON.parse(storedPuzzles) : [];
+      } catch (e) {
+        console.error('Error parsing completed puzzles:', e);
+      }
+      
+      if (!completedPuzzles.includes(puzzleType)) {
+        completedPuzzles.push(puzzleType);
+        localStorage.setItem(completedPuzzleKey, JSON.stringify(completedPuzzles));
+      }
+      
+      setTimeout(() => setPhase('complete'), 500);
+    }
+  }, [playerPattern, patternSequence, puzzleType, maxAttempts]);
+
+  const handleReactionTargetClick = useCallback((targetId: number, x: number, y: number) => {
+    if (!reactionGameActive) return;
+    
+    const effectId = Date.now() + Math.random();
+    setHitEffects(prev => [...prev, { id: effectId, x, y }]);
+    
+    setTimeout(() => {
+      setHitEffects(prev => prev.filter(effect => effect.id !== effectId));
+    }, 1000);
+    
+    setReactionTargets(prev => prev.filter(t => t.id !== targetId));
+    setReactionScore(prev => prev + 1);
+  }, [reactionGameActive]);
+
+  useEffect(() => {
+    if (puzzleType !== 'reaction' || reactionGameActive || reactionTimeLeft > 0 || totalTargetsSpawned === 0) {
+      return;
+    }
+    
+    console.log(`Reaction game ended: ${reactionScore} hits out of ${totalTargetsSpawned} targets spawned`);
+    
+    const minTargetsNeeded = Math.max(5, Math.ceil(totalTargetsSpawned * 0.6));
+    const perfectTargetsNeeded = Math.ceil(totalTargetsSpawned * 0.8);
+    
+    console.log(`Need ${minTargetsNeeded} for completion, ${perfectTargetsNeeded} for perfect`);
+    
+    if (reactionScore >= perfectTargetsNeeded) {
+      console.log('Perfect score achieved!');
+      setPerfectScore(true);
+      
+      const completedPuzzleKey = `completed_puzzles_${buildingRef.current.id}`;
+      const storedPuzzles = localStorage.getItem(completedPuzzleKey);
+      let completedPuzzles: PuzzleType[] = [];
+      
+      try {
+        completedPuzzles = storedPuzzles ? JSON.parse(storedPuzzles) : [];
+      } catch (e) {
+        console.error('Error parsing completed puzzles:', e);
+      }
+      
+      if (!completedPuzzles.includes(puzzleType)) {
+        completedPuzzles.push(puzzleType);
+        localStorage.setItem(completedPuzzleKey, JSON.stringify(completedPuzzles));
+      }
+      
+      setTimeout(() => setPhase('complete'), 1500);
+    } else if (reactionScore >= minTargetsNeeded) {
+      console.log('Good score - game completed!');
+      
+      const completedPuzzleKey = `completed_puzzles_${buildingRef.current.id}`;
+      const storedPuzzles = localStorage.getItem(completedPuzzleKey);
+      let completedPuzzles: PuzzleType[] = [];
+      
+      try {
+        completedPuzzles = storedPuzzles ? JSON.parse(storedPuzzles) : [];
+      } catch (e) {
+        console.error('Error parsing completed puzzles:', e);
+      }
+      
+      if (!completedPuzzles.includes(puzzleType)) {
+        completedPuzzles.push(puzzleType);
+        localStorage.setItem(completedPuzzleKey, JSON.stringify(completedPuzzles));
+      }
+      
+      setTimeout(() => setPhase('complete'), 1500);
+    } else {
+      console.log('Score too low - trying again');
+      setAttempts(prev => {
+        const newAttempts = prev + 1;
+        if (newAttempts >= maxAttempts) {
+          console.log('Max attempts reached - closing modal');
+          closeCallbackRef.current();
+        } else {
+          setTimeout(() => {
+            setReactionTargets([]);
+            initializeReactionPuzzle();
+          }, 2000);
+        }
+        return newAttempts;
+      });
+    }
+  }, [reactionGameActive, reactionTimeLeft, reactionScore, totalTargetsSpawned, puzzleType, maxAttempts, initializeReactionPuzzle]);
   
   useEffect(() => {
     if (phase !== 'building') return;
@@ -476,13 +920,30 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
         initial={{ scale: 0.9, opacity: 0, y: 20 }}
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.9, opacity: 0, y: 20 }}
-        className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[85vh] overflow-hidden"
+        className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[85vh] overflow-hidden border border-gray-100"
+        style={{
+          backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(100,116,139,0.05) 1px, transparent 0)',
+          backgroundSize: '20px 20px'
+        }}
       >
-        <div className="p-4 bg-gradient-to-r from-emerald-500 to-teal-600 text-white flex justify-between items-center">
-          <h2 className="text-lg font-medium lowercase">building {building.name}</h2>
-          <button onClick={closeCallbackRef.current} className="text-white/80 hover:text-white">
+        <div className="p-4 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 text-white flex justify-between items-center shadow-lg">
+          <div className="flex items-center gap-2">
+            <motion.div
+              animate={{ rotate: [0, 10, -10, 0] }}
+              transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+            >
+              <Hammer size={20} className="text-white" />
+            </motion.div>
+            <h2 className="text-lg font-bold">Building {building.name}</h2>
+          </div>
+          <motion.button 
+            whileHover={{ scale: 1.1, rotate: 90 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={closeCallbackRef.current} 
+            className="text-white/80 hover:text-white transition-colors p-1 hover:bg-white/20 rounded-full"
+          >
             <X size={20} />
-          </button>
+          </motion.button>
         </div>
         
         <div className="p-6">
@@ -496,12 +957,28 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
                 exit={{ opacity: 0 }}
                 className="text-center"
               >
-                <div className="w-20 h-20 mx-auto mb-4 rounded-full flex items-center justify-center"
-                     style={{ backgroundColor: building.color + '20' }}>
-                  <Hammer size={32} style={{ color: building.color }} />
+                <div className="w-20 h-20 mx-auto mb-4 rounded-full flex items-center justify-center bg-gradient-to-br from-emerald-400 to-teal-500 shadow-lg">
+                  <Hammer size={32} className="text-white" />
                 </div>
-                <h3 className="text-lg font-medium text-gray-800 mb-2">ready to build?</h3>
-                <p className="text-gray-600 mb-4">complete a puzzle to start construction</p>
+                <h3 className="text-xl font-bold text-gray-800 mb-2">Ready to Build!</h3>
+                <div className="mb-4 p-3 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-200">
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    {puzzleType === 'memory' && <><Brain size={18} className="text-green-500" /> <span className="font-medium text-green-700">Memory Game</span></>}
+                    {puzzleType === 'sequence' && <><Zap size={18} className="text-blue-500" /> <span className="font-medium text-blue-700">Sequence Game</span></>}
+                    {puzzleType === 'connect' && <><Share2 size={18} className="text-purple-500" /> <span className="font-medium text-purple-700">Connect Game</span></>}
+                    {puzzleType === 'circuit' && <><Zap size={18} className="text-amber-500" /> <span className="font-medium text-amber-700">Circuit Builder</span></>}
+                    {puzzleType === 'pattern' && <><Brain size={18} className="text-purple-500" /> <span className="font-medium text-purple-700">Pattern Memory</span></>}
+                    {puzzleType === 'reaction' && <><Target size={18} className="text-red-500" /> <span className="font-medium text-red-700">Reaction Challenge</span></>}
+                  </div>
+                  <p className="text-xs text-center text-gray-600">
+                    {puzzleType === 'memory' && 'Match construction tools to unlock building'}
+                    {puzzleType === 'sequence' && 'Repeat the sequence shown to you'}
+                    {puzzleType === 'connect' && 'Connect matching numbered points'}
+                    {puzzleType === 'circuit' && 'Connect components to power the circuit'}
+                    {puzzleType === 'pattern' && 'Memorize and repeat the color pattern'}
+                    {puzzleType === 'reaction' && 'Click targets as fast as possible!'}
+                  </p>
+                </div>
                 
                 <div className="space-y-3 mb-6">
                   <div className={`p-3 rounded-lg border ${
@@ -757,6 +1234,372 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
                 </p>
               </motion.div>
             )}
+
+            {phase === 'puzzle' && puzzleType === 'circuit' && (
+              <motion.div
+                key="circuit"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+              >
+                <h3 className="text-lg font-medium text-gray-800 mb-4 text-center flex items-center justify-center gap-2">
+                  <Zap size={20} className="text-amber-500" />
+                  Strategic Circuit Builder
+                </h3>
+                <p className="text-sm text-gray-600 mb-4 text-center">
+                  Plan your circuit strategically! (attempts: {attempts}/{maxAttempts})
+                </p>
+                
+                <div className="mb-4 p-3 bg-amber-50 rounded-lg border border-amber-200">
+                  <p className="text-xs text-amber-700 mb-2 font-medium">Select Component to Place:</p>
+                  <div className="flex gap-2 flex-wrap mb-2">
+                    <button
+                      onClick={() => setSelectedComponentType(null)}
+                      className={`px-3 py-1 rounded text-xs font-medium transition-all ${
+                        selectedComponentType === null 
+                          ? 'bg-blue-500 text-white' 
+                          : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                      }`}
+                    >
+                      Wire (─)
+                    </button>
+                    {circuitComponents.map((comp, idx) => (
+                      <button
+                        key={idx}
+                        disabled={comp.count === 0}
+                        onClick={() => setSelectedComponentType(comp.type)}
+                        className={`px-3 py-1 rounded text-xs font-medium transition-all flex items-center gap-1 ${
+                          selectedComponentType === comp.type 
+                            ? 'bg-amber-500 text-white' 
+                            : comp.count > 0
+                            ? 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                            : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        }`}
+                      >
+                        <span className="font-mono">
+                          {comp.type === 'resistor' ? 'R' :
+                           comp.type === 'capacitor' ? 'C' :
+                           comp.type === 'led' ? 'L' : 'S'}
+                        </span>
+                        <span>{comp.type}</span>
+                        <span className="text-xs">×{comp.count}</span>
+                      </button>
+                    ))}
+                  </div>
+                  {selectedComponentType && (
+                    <div className="text-xs text-amber-600 bg-amber-100 rounded px-2 py-1">
+                      <strong>Tip:</strong> {
+                        selectedComponentType === 'resistor' ? 'Place near power source to control current flow' :
+                        selectedComponentType === 'capacitor' ? 'Best placed after resistors for energy storage' :
+                        selectedComponentType === 'led' ? 'Requires resistor in circuit for protection' :
+                        'Effective for controlling circuit activation'
+                      }
+                    </div>
+                  )}
+                </div>
+                
+                <div 
+                  className="grid gap-1 mb-4 mx-auto bg-slate-900 p-3 rounded-lg"
+                  style={{ 
+                    gridTemplateColumns: `repeat(${circuitSize}, 1fr)`,
+                    width: 'fit-content'
+                  }}
+                >
+                  {circuitGrid.map((tile, index) => {
+                    const canPlace = selectedComponentType ? 
+                      validateComponentPlacement(selectedComponentType, index, circuitGrid) : 
+                      true;
+                    
+                    return (
+                      <motion.div
+                        key={index}
+                        whileHover={{ scale: canPlace ? 1.05 : 1 }}
+                        whileTap={{ scale: canPlace ? 0.95 : 1 }}
+                        onClick={() => handleCircuitTileClick(index)}
+                        className={`w-8 h-8 rounded border cursor-pointer flex items-center justify-center text-xs font-bold transition-all ${
+                          tile.type === 'power' 
+                            ? 'bg-green-500 text-white border-green-400 shadow-lg shadow-green-300' 
+                            : tile.type === 'target' 
+                            ? 'bg-red-500 text-white border-red-400' 
+                            : tile.type === 'wire' 
+                            ? 'bg-blue-400 text-white border-blue-300' 
+                            : tile.type === 'component' 
+                            ? 'bg-amber-500 text-white border-amber-400' 
+                            : selectedComponentType && !canPlace
+                            ? 'bg-red-800 border-red-600 cursor-not-allowed opacity-50'
+                            : selectedComponentType && canPlace
+                            ? 'bg-slate-700 border-amber-400 hover:bg-slate-600'
+                            : 'bg-slate-800 border-slate-600 hover:bg-slate-700'
+                        }`}
+                      >
+                        {tile.type === 'power' && '⚡'}
+                        {tile.type === 'target' && '🎯'}
+                        {tile.type === 'wire' && '─'}
+                        {tile.type === 'component' && tile.component && (
+                          tile.component === 'resistor' ? 'R' :
+                          tile.component === 'capacitor' ? 'C' :
+                          tile.component === 'led' ? 'L' : 'S'
+                        )}
+                      </motion.div>
+                    );
+                  })}
+                </div>
+                
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                  <h4 className="text-sm font-semibold text-blue-800 mb-2">🧠 Strategic Rules:</h4>
+                  <div className="text-xs text-blue-700 space-y-1">
+                    <div>• <strong>Resistors (R):</strong> Control current - place first, closer to power</div>
+                    <div>• <strong>Capacitors (C):</strong> Store energy - place after resistors</div>
+                    <div>• <strong>LEDs (L):</strong> Need current limiting - require resistor in circuit</div>
+                    <div>• <strong>Switches (S):</strong> Control flow - most effective near power source</div>
+                  </div>
+                </div>
+                
+                <div className="text-center space-y-1">
+                  <p className="text-xs text-gray-500">
+                    {selectedComponentType ? 
+                      `Placing: ${selectedComponentType.toUpperCase()} components` : 
+                      'Placing: WIRE connections'
+                    }
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    Connect ⚡ (power) to 🎯 (target) following component order rules
+                  </p>
+                </div>
+              </motion.div>
+            )}
+
+            {phase === 'puzzle' && puzzleType === 'pattern' && (
+              <motion.div
+                key="pattern"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+              >
+                <h3 className="text-lg font-medium text-gray-800 mb-4 text-center flex items-center justify-center gap-2">
+                  <Brain size={20} className="text-purple-500" />
+                  pattern memory
+                </h3>
+                <p className="text-sm text-gray-600 mb-4 text-center">
+                  memorize and repeat the pattern (attempts: {attempts}/{maxAttempts})
+                </p>
+                
+                {patternShowTime > 0 ? (
+                  <div className="mb-4">
+                    <div className="flex justify-center gap-2 mb-3">
+                      {patternSequence.map((color, index) => (
+                        <motion.div
+                          key={index}
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                          transition={{ delay: index * 0.2 }}
+                          className="w-12 h-12 rounded-full flex items-center justify-center text-xl"
+                        >
+                          {color}
+                        </motion.div>
+                      ))}
+                    </div>
+                    <p className="text-sm text-center text-purple-600 font-medium">
+                      Memorize this pattern...
+                    </p>
+                  </div>
+                ) : (
+                  <div className="mb-4">
+                    <div className="flex justify-center gap-2 mb-3">
+                      {playerPattern.map((color, index) => (
+                        <div key={index} className="w-8 h-8 rounded-full flex items-center justify-center text-lg">
+                          {color}
+                        </div>
+                      ))}
+                      {playerPattern.length < patternSequence.length && (
+                        <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
+                          <span className="text-gray-400">?</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      {['🔴', '🟢', '🔵', '🟡', '🟠', '🟣'].slice(0, 4 + difficultyLevel).map((color) => (
+                        <motion.button
+                          key={color}
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.9 }}
+                          onClick={() => handlePatternColorClick(color)}
+                          className="w-12 h-12 rounded-full flex items-center justify-center text-xl hover:ring-2 hover:ring-purple-300 transition-all"
+                        >
+                          {color}
+                        </motion.button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {patternShowTime > 0 && (
+                  <button
+                    onClick={() => setPatternShowTime(0)}
+                    className="w-full py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600"
+                  >
+                    I've memorized it!
+                  </button>
+                )}
+              </motion.div>
+            )}
+
+            {phase === 'puzzle' && puzzleType === 'reaction' && (
+              <motion.div
+                key="reaction"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+              >
+                <h3 className="text-lg font-medium text-gray-800 mb-4 text-center flex items-center justify-center gap-2">
+                  <Target size={20} className="text-red-500" />
+                  reaction time
+                </h3>
+                <div className="text-center mb-4">
+                  <div className="flex items-center justify-center gap-4 mb-2">
+                    <div className="flex items-center gap-1">
+                      <Clock size={16} className={reactionTimeLeft <= 3 ? "text-red-500" : "text-blue-500"} />
+                      <span className={`text-sm font-medium ${reactionTimeLeft <= 3 ? "text-red-600" : ""}`}>
+                        {reactionTimeLeft}s
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Star size={16} className="text-yellow-500" />
+                      <span className="text-sm font-medium">{reactionScore} hits</span>
+                    </div>
+                    {totalTargetsSpawned > 0 && (
+                      <div className="flex items-center gap-1">
+                        <Target size={16} className="text-purple-500" />
+                        <span className="text-sm text-purple-600">{totalTargetsSpawned} spawned</span>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {reactionGameActive ? (
+                    <p className="text-sm text-gray-600">
+                      Click the targets as fast as you can!
+                    </p>
+                  ) : reactionTimeLeft === 0 ? (
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium text-gray-800">Game Over!</p>
+                      {totalTargetsSpawned > 0 && (
+                        <div className="text-xs text-gray-600">
+                          <div>Hit Rate: {Math.round((reactionScore / totalTargetsSpawned) * 100)}%</div>
+                          <div>
+                            {reactionScore >= Math.ceil(totalTargetsSpawned * 0.8) ? (
+                              <span className="text-green-600 font-medium">🎉 Perfect! Excellent reflexes!</span>
+                            ) : reactionScore >= Math.max(5, Math.ceil(totalTargetsSpawned * 0.6)) ? (
+                              <span className="text-blue-600 font-medium">✅ Good job! Completed!</span>
+                            ) : (
+                              <span className="text-red-600">❌ Need {Math.max(5, Math.ceil(totalTargetsSpawned * 0.6)) - reactionScore} more hits</span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-600">
+                      Get ready... Game starting soon!
+                    </p>
+                  )}
+                </div>
+                
+                <div 
+                  className="relative bg-gradient-to-br from-slate-100 to-slate-200 rounded-lg h-80 mb-4 overflow-hidden"
+                  style={{ touchAction: 'none' }}
+                >
+                  {reactionTargets.map((target) => (
+                    <motion.div
+                      key={target.id}
+                      initial={{ scale: 0, rotate: 0 }}
+                      animate={{ scale: 1, rotate: 360 }}
+                      exit={{ scale: 0 }}
+                      whileHover={{ scale: 1.2 }}
+                      onClick={() => handleReactionTargetClick(target.id, target.x, target.y)}
+                      className="absolute w-10 h-10 rounded-full bg-gradient-to-br from-red-400 to-red-600 cursor-pointer flex items-center justify-center text-white font-bold shadow-lg hover:shadow-xl transition-all"
+                      style={{
+                        left: `${target.x}%`,
+                        top: `${target.y}%`,
+                        transform: 'translate(-50%, -50%)',
+                        zIndex: 10
+                      }}
+                    >
+                      <Target size={16} />
+                    </motion.div>
+                  ))}
+                  
+                  {hitEffects.map((effect) => (
+                    <motion.div
+                      key={effect.id}
+                      initial={{ scale: 0, opacity: 1 }}
+                      animate={{ scale: 2, opacity: 0 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.8, ease: "easeOut" }}
+                      className="absolute w-10 h-10 rounded-full pointer-events-none flex items-center justify-center"
+                      style={{
+                        left: `${effect.x}%`,
+                        top: `${effect.y}%`,
+                        transform: 'translate(-50%, -50%)',
+                        zIndex: 5
+                      }}
+                    >
+                      <div className="text-2xl font-bold text-green-500">+1</div>
+                    </motion.div>
+                  ))}
+                  
+                  {!reactionGameActive && reactionTimeLeft === 0 && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded-lg"
+                      style={{ zIndex: 20 }}
+                    >
+                      <div className="text-center text-white">
+                        <div className="text-4xl mb-2">⏰</div>
+                        <div className="text-xl font-bold">Time's Up!</div>
+                        <div className="text-sm opacity-75">
+                          {reactionScore >= Math.max(5, Math.ceil(totalTargetsSpawned * 0.6)) ? 
+                            "Processing results..." : 
+                            attempts < maxAttempts ? "Get ready for next attempt..." : "Game Over"
+                          }
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                  
+                  {reactionGameActive && reactionTimeLeft <= 3 && reactionTimeLeft > 0 && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="absolute inset-0 pointer-events-none flex items-center justify-center"
+                      style={{ zIndex: 15 }}
+                    >
+                      <motion.div
+                        animate={{ scale: [1, 1.2, 1] }}
+                        transition={{ duration: 0.5, repeat: Infinity }}
+                        className="text-6xl font-bold text-red-500 text-center"
+                        style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.5)' }}
+                      >
+                        {reactionTimeLeft}
+                      </motion.div>
+                    </motion.div>
+                  )}
+                  
+                  {reactionTargets.length === 0 && reactionTimeLeft > 3 && reactionGameActive && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="text-gray-400 text-center">
+                        <Target size={32} className="mx-auto mb-2" />
+                        <p className="text-sm">Targets will appear...</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                
+                <p className="text-xs text-gray-500 text-center">
+                  Click the red targets as they appear!
+                </p>
+              </motion.div>
+            )}
             
             {phase === 'complete' && (
               <motion.div
@@ -766,12 +1609,51 @@ export default function BuildingModal({ building, onClose, onComplete, selectedI
                 transition={{ type: "spring", damping: 12 }}
                 className="text-center py-4"
               >
-                <div className="w-20 h-20 mx-auto mb-4 rounded-full flex items-center justify-center bg-green-100">
-                  <CheckCircle size={32} className="text-green-500" />
-                </div>
+                <motion.div 
+                  className="w-20 h-20 mx-auto mb-4 rounded-full flex items-center justify-center bg-gradient-to-br from-green-400 to-emerald-500 shadow-lg"
+                  animate={{ 
+                    rotate: [0, 5, -5, 0],
+                    scale: [1, 1.1, 1]
+                  }}
+                  transition={{ 
+                    duration: 0.6,
+                    repeat: 2
+                  }}
+                >
+                  <CheckCircle size={32} className="text-white" />
+                </motion.div>
                 
-                <h3 className="text-xl font-medium text-gray-800 mb-2">Ready to Build!</h3>
-                <p className="text-gray-600 mb-4">Puzzle completed! Ready to construct your {building.name}</p>
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3 }}
+                  className="mb-4"
+                >
+                  <h3 className="text-2xl font-bold text-gray-800 mb-2 flex items-center justify-center gap-2">
+                    <Sparkles size={24} className="text-yellow-500" />
+                    Puzzle Complete!
+                    <Sparkles size={24} className="text-yellow-500" />
+                  </h3>
+                  <div className="mb-3 p-3 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
+                    <div className="flex items-center justify-center gap-2 mb-1">
+                      {puzzleType === 'memory' && <Brain size={16} className="text-green-500" />}
+                      {puzzleType === 'sequence' && <Zap size={16} className="text-blue-500" />}
+                      {puzzleType === 'connect' && <Share2 size={16} className="text-purple-500" />}
+                      {puzzleType === 'circuit' && <Zap size={16} className="text-amber-500" />}
+                      {puzzleType === 'pattern' && <Brain size={16} className="text-purple-500" />}
+                      {puzzleType === 'reaction' && <Target size={16} className="text-red-500" />}
+                      <span className="font-semibold text-green-700 capitalize">{puzzleType} Challenge Mastered!</span>
+                    </div>
+                    <p className="text-sm text-center text-green-600">
+                      {attempts === 0 && perfectScore && '🎯 Perfect Score! Flawless performance!'}
+                      {attempts === 0 && !perfectScore && '✨ Excellent! First try success!'}
+                      {attempts === 1 && '👍 Great job! Completed on second attempt!'}
+                      {attempts === 2 && '💪 Well done! Third time\'s the charm!'}
+                      {attempts > 2 && '🎉 Persistence pays off! Challenge completed!'}
+                      {puzzleType === 'reaction' && perfectScore && '⚡ Lightning reflexes!'}
+                    </p>
+                  </div>
+                </motion.div>
                 
                 {resourceCosts.length > 0 && (
                   <div className="mb-4 p-3 bg-green-50 rounded-lg border border-green-200">

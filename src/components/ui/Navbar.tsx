@@ -11,6 +11,7 @@ interface NavbarProps {
   isInGame: boolean;
   onExitGame?: () => void;
   onStartFreshGame?: () => void;
+  onShowProfile?: () => void;
 }
 
 export default function Navbar({
@@ -21,7 +22,8 @@ export default function Navbar({
   onLogout,
   isInGame,
   onExitGame,
-  onStartFreshGame
+  onStartFreshGame,
+  onShowProfile
 }: NavbarProps) {
   const { user, isAuthenticated } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -95,6 +97,32 @@ export default function Navbar({
                     )}
                   </div>
                   
+                  {!isGuest && onShowProfile && (
+                    <button
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        onShowProfile();
+                      }}
+                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                    >
+                      <User size={16} className="mr-2" />
+                      View Profile
+                    </button>
+                  )}
+
+                  {!isGuest && (
+                    <button
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        onShowProfileSettings();
+                      }}
+                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                    >
+                      <Settings size={16} className="mr-2" />
+                      Profile Settings
+                    </button>
+                  )}
+
                   {!isInGame && onStartFreshGame && !isGuest && (
                     <button
                       onClick={() => {
@@ -107,8 +135,6 @@ export default function Navbar({
                       Start New City
                     </button>
                   )}
-                  
-
                   
                   {isGuest && (
                     <button

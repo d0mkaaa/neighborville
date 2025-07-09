@@ -24,7 +24,7 @@ export default function Footer() {
 
   return (
     <footer className="relative">
-      <div className="absolute inset-0 bg-black/5 backdrop-blur-md border-t border-white/10" />
+      <div className="absolute inset-0 bg-white/20 backdrop-blur-md border-t border-white/20" />
       <div className="relative z-10">
         <div className="container mx-auto px-4 py-6">
           <div className="flex flex-col lg:flex-row items-center justify-between gap-4 text-sm">
@@ -97,7 +97,7 @@ export default function Footer() {
             </div>
           </div>
           
-          <div className="mt-3 pt-3 border-t border-white/10 text-center text-xs text-gray-500">
+          <div className="mt-3 pt-3 border-t border-white/20 text-center text-xs text-gray-500">
             <span>© 2025 NeighborVille • Built for </span>
             <a 
               href="https://neighborhood.hackclub.com" 

@@ -1,6 +1,8 @@
 import { createContext, useContext, useState, useEffect, type ReactNode, useCallback, useRef } from 'react';
 import type { User } from '../services/userService';
 import { getCurrentUser, logout as logoutUser, isRememberMeEnabled } from '../services/userService';
+import socketService from '../services/socketService';
+import { logger } from '../utils/logger';
 
 interface AuthContextType {
   user: User | null;
@@ -15,6 +17,8 @@ interface AuthContextType {
   checkAuthStatus: () => Promise<boolean>;
   showLogin: boolean;
   setShowLogin: (show: boolean) => void;
+  socketStatus: 'connecting' | 'connected' | 'disconnected';
+  isSocketAuthenticated: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -39,7 +43,7 @@ const saveToStorage = (key: string, value: string, persistent: boolean = false) 
       sessionStorage.setItem(key, value);
     }
   } catch (e) {
-    console.warn('Failed to save to storage', e);
+    logger.warn('Failed to save to storage', e);
   }
 };
 
@@ -47,7 +51,7 @@ const getFromStorage = (key: string): string | null => {
   try {
     return localStorage.getItem(key) || sessionStorage.getItem(key);
   } catch (e) {
-    console.warn('Failed to get from storage', e);
+    logger.warn('Failed to get from storage', e);
     return null;
   }
 };
@@ -57,7 +61,7 @@ const removeFromStorage = (key: string) => {
     localStorage.removeItem(key);
     sessionStorage.removeItem(key);
   } catch (e) {
-    console.warn('Failed to remove from storage', e);
+    logger.warn('Failed to remove from storage', e);
   }
 };
 
@@ -70,6 +74,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [isLoading, setIsLoading] = useState(true);
   const [lastAuthCheck, setLastAuthCheck] = useState<number>(0);
   const [showLogin, setShowLogin] = useState<boolean>(false);
+  const [socketStatus, setSocketStatus] = useState<'connecting' | 'connected' | 'disconnected'>('disconnected');
+  const [isSocketAuthenticated, setIsSocketAuthenticated] = useState(false);
   const authCheckTimeoutRef = useRef<number | null>(null);
   const initializationComplete = useRef(false);
   
@@ -159,9 +165,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       if (!document.hidden) {
         const timeSinceLastCheck = Date.now() - lastAuthCheck;
         if (timeSinceLastCheck > 2 * 60 * 1000) {
-          console.log('Tab became visible after', Math.floor(timeSinceLastCheck / 1000), 'seconds, checking auth');
+          logger.debug('Tab became visible after', Math.floor(timeSinceLastCheck / 1000), 'seconds, checking auth');
           refreshAuth().catch(error => {
-            console.warn('Auth refresh failed on visibility change:', error);
+            logger.warn('Auth refresh failed on visibility change:', error);
           });
         }
       }
@@ -198,6 +204,71 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       return false;
     }
   }, [checkAuth, lastAuthCheck]);
+
+  useEffect(() => {
+    console.log('🔌 Setting up socket connection management');
+    
+    const handleConnect = () => {
+      console.log('🔗 Socket connected');
+      setSocketStatus('connected');
+      
+      const token = getFromStorage('token') || localStorage.getItem('token');
+      if (token) {
+        console.log('🔐 Authenticating socket immediately on connect');
+        socketService.authenticate(token);
+      }
+    };
+    
+    const handleDisconnect = (reason?: string) => {
+      console.log('🔌 Socket disconnected, reason:', reason);
+      setSocketStatus('disconnected');
+      setIsSocketAuthenticated(false);
+      
+      if (user && reason !== 'io client disconnect') {
+        console.log('🔄 User still logged in, socket will auto-reconnect');
+        setSocketStatus('connecting');
+      }
+    };
+    
+    const handleAuthenticated = () => {
+      console.log('✅ Socket authenticated');
+      setIsSocketAuthenticated(true);
+    };
+    
+    const handleAuthError = () => {
+      console.log('❌ Socket authentication error');
+      setIsSocketAuthenticated(false);
+    };
+    
+    socketService.on('connect', handleConnect);
+    socketService.on('disconnect', handleDisconnect);
+    socketService.on('authenticated', handleAuthenticated);
+    socketService.on('auth_error', handleAuthError);
+    
+    socketService.connect();
+    setSocketStatus('connecting');
+    
+    return () => {
+      console.log('🔌 Cleaning up socket event listeners');
+      socketService.off('connect', handleConnect);
+      socketService.off('disconnect', handleDisconnect);
+      socketService.off('authenticated', handleAuthenticated);
+      socketService.off('auth_error', handleAuthError);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (user && socketStatus === 'connected' && !isSocketAuthenticated) {
+      console.log('🔐 Authenticating socket for user:', user.username);
+      const token = getFromStorage('token') || localStorage.getItem('token');
+      if (token) {
+        socketService.authenticate(token);
+      }
+    } else if (!user && isSocketAuthenticated) {
+      console.log('🚪 User logged out, socket will disconnect on next auth check');
+      setIsSocketAuthenticated(false);
+    }
+  }, [user, socketStatus, isSocketAuthenticated]);
 
   const forceRefresh = useCallback(async (): Promise<boolean> => {
     console.log('Force refreshing user data...');
@@ -248,9 +319,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       console.error('Error during logout:', e);
     }
     
+    console.log('🚪 Logging out - disconnecting socket');
+    socketService.disconnect();
+    setSocketStatus('disconnected');
+    setIsSocketAuthenticated(false);
+    
     setUser(null);
     removeFromStorage('neighborville_playerName');
     removeFromStorage('neighborville_auth_token');
+    removeFromStorage('token');
     document.cookie = 'neighborville_auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax';
     setShowLogin(true);
   }, []);
@@ -291,7 +368,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     checkAuthStatus,
     refreshUser,
     showLogin,
-    setShowLogin
+    setShowLogin,
+    socketStatus,
+    isSocketAuthenticated
   };
 
   return (

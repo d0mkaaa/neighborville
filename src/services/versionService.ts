@@ -1,3 +1,5 @@
+import { api } from '../utils/api';
+import { buildApiEndpoint } from '../config/apiConfig';
 
 export interface VersionInfo {
   version: string;
@@ -5,6 +7,7 @@ export interface VersionInfo {
   branch: string;
   buildDate: string;
   environment: string;
+  isLive: boolean;
 }
 
 export interface UpdateEntry {
@@ -28,7 +31,8 @@ export const getCurrentVersion = (): VersionInfo => {
     commit: 'unknown',
     branch: 'main',
     buildDate: new Date().toISOString(),
-    environment: import.meta.env.MODE || 'development'
+    environment: import.meta.env.MODE || 'development',
+    isLive: true
   };
 };
 
@@ -323,17 +327,16 @@ export const getChangelog = (fromVersion?: string, toVersion?: string): UpdateEn
 
 export const fetchVersionFromAPI = async (): Promise<VersionInfo> => {
   try {
-    const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/version`);
-    if (response.ok) {
-      const data = await response.json();
-      console.log('✅ Live version data fetched from GitHub:', data.versionInfo.isLive ? 'LIVE' : 'FALLBACK');
-      return data.versionInfo;
+    const response = await fetch(buildApiEndpoint('/api/version'));
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
+    const data = await response.json();
+    return data.versionInfo;
   } catch (error) {
-    console.warn('Failed to fetch version from API:', error);
+    console.error('Failed to fetch version from API:', error);
+    throw error;
   }
-  
-  return getCurrentVersion();
 };
 
 export const fetchUpdatesFromAPI = async (limit?: number): Promise<UpdateEntry[]> => {

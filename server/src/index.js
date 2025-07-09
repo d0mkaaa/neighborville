@@ -3,6 +3,7 @@ import cors from 'cors';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
+import { createServer } from 'http';
 import { connectMongoDB, connectRedis } from './config/database.js';
 import emailRoutes from './routes/email.js';
 import userRoutes from './routes/user.js';
@@ -10,11 +11,15 @@ import profileRoutes from './routes/profile.js';
 import apiRoutes from './routes/api.js';
 import adminRoutes from './routes/admin.js';
 import reportRoutes from './routes/reports.js';
+import messagingRoutes from './routes/messaging.js';
+import { setSocketService } from './routes/messaging.js';
+import SocketService from './services/socketService.js';
 
 
 dotenv.config();
 
 const app = express();
+const server = createServer(app);
 const PORT = process.env.PORT || 3001;
 const isDevelopment = process.env.NODE_ENV === 'development';
 
@@ -58,6 +63,7 @@ app.use('/api/user', userRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/messaging', messagingRoutes);
 
 app.use('/api', apiRoutes);
 
@@ -73,7 +79,14 @@ app.get('/', (req, res) => {
   });
 });
 
-app.listen(PORT, () => {
+const socketService = new SocketService(server);
+
+global.socketService = socketService;
+
+setSocketService(socketService);
+
+server.listen(PORT, () => {
   console.log(`Server running in ${isDevelopment ? 'DEVELOPMENT' : 'PRODUCTION'} mode on port ${PORT}`);
   console.log(`Health check: http://localhost:${PORT}/health`);
+  console.log('WebSocket service initialized');
 }); 

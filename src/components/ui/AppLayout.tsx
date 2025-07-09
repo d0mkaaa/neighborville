@@ -58,12 +58,12 @@ export default function AppLayout({
   };
 
   return (
-    <div className="min-h-screen relative overflow-hidden">
+    <div className="fixed inset-0 w-full h-full overflow-hidden">
       <motion.div 
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.7 }}
-        className={`fixed inset-0 bg-gradient-to-br ${getBackgroundGradient()}`}
+        className={`absolute inset-0 bg-gradient-to-br ${getBackgroundGradient()}`}
       >
         <div 
           className="absolute inset-0"
@@ -74,27 +74,7 @@ export default function AppLayout({
         />
       </motion.div>
 
-      <div className="relative z-10 min-h-screen backdrop-blur-[2px] flex flex-col">
-        {showNavbar && (
-          <motion.div 
-            initial={{ y: -50, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.5 }}
-            className="sticky top-0 z-20"
-          >
-            <Navbar 
-              onShowLeaderboard={onShowLeaderboard}
-              onShowProfileSettings={onShowProfileSettings}
-              onShowSecuritySettings={onShowSecuritySettings}
-              onShowLogin={onShowLogin}
-              onLogout={handleLogout}
-              isInGame={isInGame}
-              onExitGame={onExitGame}
-              onStartFreshGame={onStartFreshGame}
-            />
-          </motion.div>
-        )}
-        
+      <div className="relative z-10 h-full w-full flex flex-col">
         {header && (
           <motion.div 
             initial={{ y: -50, opacity: 0 }}
@@ -106,7 +86,7 @@ export default function AppLayout({
           </motion.div>
         )}
         
-        <main className="flex-grow">
+        <main className="flex-grow w-full">
           {children}
         </main>
         

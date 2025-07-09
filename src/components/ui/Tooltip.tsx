@@ -66,7 +66,7 @@ export default function Tooltip({
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.8 }}
             transition={{ duration: 0.15 }}
-            className="fixed z-50 bg-gray-800 text-white text-xs py-1.5 px-2.5 rounded shadow-lg whitespace-nowrap"
+            className="fixed z-50 bg-white text-gray-800 text-xs py-1.5 px-2.5 rounded shadow-lg whitespace-nowrap border border-gray-200"
             style={{ 
               ...getPosition(),
               width: width !== 'auto' ? width : 'auto',
@@ -75,7 +75,7 @@ export default function Tooltip({
           >
             {content}
             <div 
-              className="absolute w-2 h-2 bg-gray-800 transform rotate-45"
+              className="absolute w-2 h-2 bg-white border border-gray-200 transform rotate-45"
               style={{
                 ...(position === 'top' ? { bottom: '-4px', left: 'calc(50% - 4px)' } :
                    position === 'bottom' ? { top: '-4px', left: 'calc(50% - 4px)' } :

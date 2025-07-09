@@ -1,184 +1,224 @@
-import type { GameProgress } from '../types/game';
-import { API_URL } from '../config/apiConfig';
+import type { GameProgress, SaveGameResponse, LoadGameResponse } from '../types/game';
+import api from '../utils/api';
+import { createContentManager } from '../utils/contentManager';
+import { NORMALIZED_API_URL } from '../config/apiConfig';
 
-const getAuthHeaders = () => ({
-  'Content-Type': 'application/json',
-});
+const contentManager = createContentManager();
 
 export const saveNeighborhoodToServer = async (gameData: GameProgress): Promise<boolean> => {
   try {
-    if (!gameData.playerName) {
-      console.error('Cannot save neighborhood without player name');
+    if (!gameData.playerName || typeof gameData.playerName !== 'string' || gameData.playerName.trim() === '') {
+      console.error('Invalid playerName:', gameData.playerName);
       return false;
     }
-
-    if (!gameData.neighborhoodName) {
-      gameData.neighborhoodName = 'Unnamed City';
+    
+    if (!gameData.grid || !Array.isArray(gameData.grid)) {
+      console.error('Invalid grid:', gameData.grid);
+      return false;
     }
     
-    gameData.lastAutoSave = Date.now();
-
-    console.log(`Attempting to save neighborhood to server at ${API_URL}/api/user/neighborhood/save`);
+    const validatedGameData = {
+      ...gameData,
+      playerName: gameData.playerName.trim(),
+      grid: gameData.grid || [],
+      neighborhoodName: gameData.neighborhoodName || 'Unnamed City',
+      coins: gameData.coins || 0,
+      day: gameData.day || 1,
+      level: gameData.level || 1,
+      experience: gameData.experience || 0,
+      saveId: gameData.saveId || `save_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 15)}_${Math.random().toString(36).substring(2, 10)}`
+    };
     
-    const saveResult = await fetch(`${API_URL}/api/user/neighborhood/save`, {
-      method: 'POST',
-      headers: getAuthHeaders(),
-      credentials: 'include',
-      body: JSON.stringify({ gameData })
+    console.log('Sending game data to server:', {
+      playerName: validatedGameData.playerName,
+      hasGrid: !!validatedGameData.grid,
+      gridLength: validatedGameData.grid?.length,
+      neighborhoodName: validatedGameData.neighborhoodName
     });
-
-    console.log('Neighborhood save request completed with status:', saveResult.status);
-
-    if (!saveResult.ok) {
-      const errorData = await saveResult.json().catch(() => null);
-      
-      if (saveResult.status === 403 && errorData?.suspended) {
-        console.warn('Neighborhood save blocked: User is suspended');
-        return false;
+    
+    const response = await api.post(`${NORMALIZED_API_URL}/api/user/game/save`, { gameData: validatedGameData });
+    
+    console.log('Save response:', response);
+    console.log('Save response type:', typeof response);
+    console.log('Save response keys:', response ? Object.keys(response) : 'null');
+    console.log('Save response.data:', response?.data);
+    console.log('Save response.data type:', typeof response?.data);
+    
+    const responseData = response?.data || response;
+    console.log('Using responseData:', responseData);
+    
+    if (responseData && responseData.success) {
+      if (responseData.saveId) {
+        gameData.saveId = responseData.saveId;
       }
-      
-      const errorText = errorData?.message || `HTTP ${saveResult.status}`;
-      throw new Error(`Failed to save neighborhood: ${errorText}`);
+      if (responseData.timestamp) {
+        gameData.saveTimestamp = responseData.timestamp;
+      }
+      return true;
     }
-
-    const result = await saveResult.json();
-    console.log('Neighborhood save result:', result);
-    return result.success;
+    
+    console.error('Failed to save game:', responseData?.message || 'Unknown error');
+    return false;
   } catch (error) {
-    console.error('Error saving neighborhood to server:', error);
+    console.error('Error saving game:', error);
+    if (error instanceof Error) {
+      console.error('Error details:', error.message);
+    }
     return false;
   }
 };
 
-export const loadNeighborhoodFromServer = async (): Promise<{ success: boolean; gameData?: GameProgress; lastSave?: Date | null; message?: string }> => {
+export const loadNeighborhoodFromServer = async (): Promise<{ success: boolean; gameData: GameProgress | null }> => {
   try {
-    console.log(`Loading neighborhood from server at ${API_URL}/api/user/neighborhood/load`);
+    const response = await api.get(`${NORMALIZED_API_URL}/api/user/neighborhood/load`);
     
-    const response = await fetch(`${API_URL}/api/user/neighborhood/load`, {
-      method: 'GET',
-      headers: getAuthHeaders(),
-      credentials: 'include'
-    });
-
-    console.log('Neighborhood load request completed with status:', response.status);
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => null);
+    if (response.data.success && response.data.gameData) {
+      const gameData = response.data.gameData;
+      const { neighbors, achievements } = contentManager.mergePlayerProgress(
+        contentManager.getNeighbors(),
+        contentManager.getAchievements(),
+        gameData
+      );
       
-      if (response.status === 403 && errorData?.suspended) {
-        return { 
-          success: false, 
-          message: 'Account suspended. Cannot load neighborhood data.' 
-        };
-      }
-      
-      const errorText = errorData?.message || `HTTP ${response.status}`;
-      throw new Error(`Failed to load neighborhood: ${errorText}`);
+      return {
+        success: true,
+        gameData: {
+          ...gameData,
+          neighbors,
+          achievements
+        }
+      };
     }
-
-    const result = await response.json();
-    console.log('Neighborhood load result:', result);
     
-    return {
-      success: result.success,
-      gameData: result.gameData,
-      lastSave: result.lastSave ? new Date(result.lastSave) : null
-    };
+    return { success: true, gameData: null };
   } catch (error) {
-    console.error('Error loading neighborhood from server:', error);
-    return { 
-      success: false, 
-      message: 'Failed to load neighborhood data from server' 
-    };
+    console.error('Error loading game:', error);
+    return { success: false, gameData: null };
   }
 };
 
-export const updateNeighborhoodName = async (neighborhoodName: string): Promise<boolean> => {
+export const loadSpecificSave = async (saveId: string): Promise<GameProgress | null> => {
   try {
-    if (!neighborhoodName.trim()) {
-      console.error('Cannot update neighborhood with empty name');
-      return false;
-    }
-
-    console.log(`Updating neighborhood name to "${neighborhoodName}"`);
+    const response = await api.get(`${NORMALIZED_API_URL}/api/user/game/save/${saveId}`);
     
-    const response = await fetch(`${API_URL}/api/user/neighborhood/name`, {
-      method: 'PUT',
-      headers: getAuthHeaders(),
-      credentials: 'include',
-      body: JSON.stringify({ neighborhoodName })
-    });
-
-    console.log('Neighborhood name update request completed with status:', response.status);
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => null);
-      const errorText = errorData?.message || `HTTP ${response.status}`;
-      throw new Error(`Failed to update neighborhood name: ${errorText}`);
+    if (response.data.success && response.data.gameData) {
+      return response.data.gameData;
     }
+    
+    console.error('Failed to load specific save:', response.data.message);
+    return null;
+  } catch (error) {
+    console.error('Error loading specific save:', error);
+    return null;
+  }
+};
 
-    const result = await response.json();
-    console.log('Neighborhood name update result:', result);
-    return result.success;
+export const getAllSaves = async (): Promise<{ id: string; playerName: string; timestamp: number; data: GameProgress }[]> => {
+  try {
+    const response = await api.get(`${NORMALIZED_API_URL}/api/user/game/saves`);
+    
+    if (response.data.success) {
+      return response.data.saves;
+    }
+    
+    console.error('Failed to get saves:', response.data.message);
+    return [];
+  } catch (error) {
+    console.error('Error getting saves:', error);
+    return [];
+  }
+};
+
+export const deleteSave = async (saveId: string): Promise<boolean> => {
+  try {
+    const response = await api.delete(`${NORMALIZED_API_URL}/api/user/game/save/${saveId}`);
+    
+    if (response.data.success) {
+      return true;
+    }
+    
+    console.error('Failed to delete save:', response.data.message);
+    return false;
+  } catch (error) {
+    console.error('Error deleting save:', error);
+    return false;
+  }
+};
+
+export const updateNeighborhoodName = async (newName: string): Promise<boolean> => {
+  try {
+    const response = await api.post(`${NORMALIZED_API_URL}/api/user/game/update-name`, { name: newName });
+    return response.data.success;
   } catch (error) {
     console.error('Error updating neighborhood name:', error);
     return false;
   }
 };
 
-export const startFreshNeighborhood = async (newNeighborhoodName?: string): Promise<{ success: boolean; gameData?: GameProgress; message?: string }> => {
-  try {
-    console.log(`Starting fresh neighborhood${newNeighborhoodName ? ` with name "${newNeighborhoodName}"` : ''}`);
-    
-    const response = await fetch(`${API_URL}/api/user/neighborhood/reset`, {
-      method: 'POST',
-      headers: getAuthHeaders(),
-      credentials: 'include',
-      body: JSON.stringify({ newNeighborhoodName })
-    });
+export const startFreshNeighborhood = async (): Promise<GameProgress> => {
+  const freshGameData: GameProgress = {
+    playerName: '',
+    neighborhoodName: 'New Neighborhood',
+    coins: 2000,
+    day: 1,
+    level: 1,
+    experience: 0,
+    grid: Array(64).fill(null),
+    gridSize: 16,
+    neighborProgress: {},
+    completedAchievements: [],
+    seenAchievements: [],
+    gameTime: 8,
+    gameMinutes: 0,
+    timeOfDay: 'morning',
+    recentEvents: [],
+    bills: [],
+    energyRate: 2,
+    totalEnergyUsage: 0,
+    lastBillDay: 0,
+    coinHistory: [],
+    weather: 'sunny',
+    powerGrid: {
+      totalPowerProduction: 0,
+      totalPowerConsumption: 0,
+      connectedBuildings: [],
+      powerOutages: []
+    },
+    waterGrid: {
+      totalWaterProduction: 0,
+      totalWaterConsumption: 0,
+      connectedBuildings: [],
+      waterShortages: []
+    },
+    taxPolicies: [],
+    cityBudget: {
+      totalRevenue: 0,
+      totalExpenses: 0,
+      maintenanceCosts: 0,
+      taxRevenue: 0,
+      buildingIncome: 0,
+      balance: 0,
+      dailyBalance: 0,
+      emergencyFund: 0,
+      budgetHealth: 'fair'
+    },
+    playerResources: {},
+    productionQueues: {},
+    activeProductions: {},
+    neighborhoodFoundedDate: Date.now(),
+    neighborhoodMilestones: [],
+    cityEra: 'beginning',
+    lastAutoSave: Date.now()
+  };
 
-    console.log('Fresh neighborhood request completed with status:', response.status);
+  const { neighbors, achievements } = contentManager.mergePlayerProgress(
+    contentManager.getNeighbors(),
+    contentManager.getAchievements(),
+    freshGameData
+  );
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => null);
-      const errorText = errorData?.message || `HTTP ${response.status}`;
-      throw new Error(`Failed to start fresh neighborhood: ${errorText}`);
-    }
+  freshGameData.neighbors = neighbors;
+  freshGameData.achievements = achievements;
 
-    const result = await response.json();
-    console.log('Fresh neighborhood result:', result);
-    
-    return {
-      success: result.success,
-      gameData: result.gameData,
-      message: result.message
-    };
-  } catch (error) {
-    console.error('Error starting fresh neighborhood:', error);
-    return { 
-      success: false, 
-      message: 'Failed to start fresh neighborhood' 
-    };
-  }
-};
-
-export const checkNeighborhoodAccess = async (): Promise<{ success: boolean; authenticated: boolean }> => {
-  try {
-    const response = await fetch(`${API_URL}/api/user/me`, {
-      method: 'GET',
-      headers: getAuthHeaders(),
-      credentials: 'include'
-    });
-
-    return {
-      success: true,
-      authenticated: response.ok
-    };
-  } catch (error) {
-    console.error('Error checking neighborhood access:', error);
-    return { 
-      success: false, 
-      authenticated: false 
-    };
-  }
+  return freshGameData;
 };

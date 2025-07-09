@@ -535,6 +535,29 @@ export default function SettingsModal({
         </div>
       )}
 
+      <div className="bg-gray-50 rounded-lg p-4">
+        <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+          <Heart className="text-red-500" size={18} />
+          Mayor Biography
+        </h4>
+        {profileData?.extendedProfile?.bio && profileData.extendedProfile.bio.trim() ? (
+          <div className="bg-white border border-gray-200 rounded-lg p-4">
+            <p className="text-gray-800 leading-relaxed whitespace-pre-wrap">
+              {profileData.extendedProfile.bio}
+            </p>
+          </div>
+        ) : (
+          <div className="bg-white border border-gray-200 rounded-lg p-4 text-center">
+            <div className="text-gray-400 mb-2">
+              <Sparkles size={24} className="mx-auto mb-2" />
+            </div>
+            <p className="text-gray-600 text-sm">
+              No bio added yet. Click "Edit Profile" below to add your mayor biography!
+            </p>
+          </div>
+        )}
+      </div>
+
       <div className="space-y-3">
         <button
           onClick={() => setShowPublicProfile(true)}
@@ -1056,7 +1079,9 @@ export default function SettingsModal({
       {showProfileSettings && (
         <ProfileSettings 
           onClose={() => setShowProfileSettings(false)}
-          onUpdate={() => {}}
+          onUpdate={() => {
+            loadProfileData();
+          }}
         />
       )}
 

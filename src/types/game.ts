@@ -338,6 +338,9 @@ export interface ActiveProduction {
   cycleCount: number;
 }
 
+export type ProductionQueues = Map<string, ProductionQueueItem[]>;
+export type ActiveProductions = Map<string, ActiveProduction>;
+
 export interface GameProgress {
   playerName: string;
   neighborhoodName: string;
@@ -387,6 +390,22 @@ export interface GameProgress {
   neighbors?: Neighbor[];
   achievements?: Achievement[];
   events?: any[];
+}
+
+export interface SaveGameResponse {
+  success: boolean;
+  message?: string;
+  saveId?: string;
+  timestamp?: number;
+}
+
+export interface LoadGameResponse {
+  success: boolean;
+  message?: string;
+  gameData?: GameProgress;
+  lastSave?: Date | null;
+  saveId?: string;
+  timestamp?: number;
 }
 
 export interface TaxPolicy {
